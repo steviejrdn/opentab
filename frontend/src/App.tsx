@@ -124,7 +124,7 @@ const ThemeToggle: React.FC = () => {
 // ─── Navigation ──────────────────────────────────────────────────────────────
 const Navigation: React.FC<{ onToggleSidebar?: () => void; sidebarVisible?: boolean }> = ({ onToggleSidebar, sidebarVisible }) => {
   const location = useLocation();
-  const { dataLoaded, variables, tables, displayOptions, activeTableId, fileName, rowCount, importState, setDataLoaded } = useStore();
+  const { dataLoaded, variables, tables, displayOptions, activeTableId, fileName, rowCount, importState, setDataLoaded, resetSession } = useStore();
   const openFileRef = useRef<HTMLInputElement>(null);
 
   const handleSave = () => {
@@ -174,9 +174,15 @@ const Navigation: React.FC<{ onToggleSidebar?: () => void; sidebarVisible?: bool
   return (
     <nav className="bg-zinc-50 dark:bg-zinc-950 border-b border-zinc-200 dark:border-zinc-800 px-4 py-3 flex justify-between items-center">
       <div className="flex items-center gap-3">
-        {/* Logo — swaps on theme change via CSS dark variant */}
-        <img src="/logo_black.svg" alt="opentab" className="h-5 block dark:hidden" />
-        <img src="/logo_white.svg" alt="opentab" className="h-5 hidden dark:block" />
+        {/* Logo — click to reset session */}
+        <button
+          onClick={() => { if (window.confirm('Start a new session? All tables and data will be cleared.')) resetSession(); }}
+          className="flex items-center focus:outline-none"
+          title="New session"
+        >
+          <img src="/logo_black.svg" alt="opentab" className="h-5 block dark:hidden" />
+          <img src="/logo_white.svg" alt="opentab" className="h-5 hidden dark:block" />
+        </button>
         <span className="text-xs text-zinc-400 dark:text-zinc-600 border border-zinc-300 dark:border-zinc-700 px-1.5 py-0.5 leading-none">
           alpha
         </span>

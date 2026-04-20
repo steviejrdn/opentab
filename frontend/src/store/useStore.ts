@@ -67,6 +67,7 @@ interface AppState {
   toggleVariableStat: (varName: string, stat: 'showMean' | 'showStdError' | 'showStdDev' | 'showVariance') => void;
   importState: (state: Partial<Pick<AppState, 'variables' | 'tables' | 'displayOptions' | 'activeTableId' | 'fileName' | 'rowCount' | 'folders'>>) => void;
   mergeAndSetVariables: (incoming: Record<string, VariableInfo>) => void;
+  resetSession: () => void;
 }
 
 export const useStore = create<AppState>()((set, get) => ({
@@ -323,6 +324,18 @@ export const useStore = create<AppState>()((set, get) => ({
       };
     }
     return { variables: merged };
+  }),
+
+  resetSession: () => set({
+    dataLoaded: false,
+    variables: {},
+    fileName: null,
+    rowCount: 0,
+    tables: [],
+    activeTableId: null,
+    folders: [],
+    activeTab: 'build',
+    displayOptions: { counts: true, colPct: false, showPctSign: true, decimalPlaces: 1 },
   }),
 
 }));
