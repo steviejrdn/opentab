@@ -643,7 +643,7 @@ const RootDropZone: React.FC<{
 
 // ─── Build Page Layout with Resizable Sidebar ─────────────────────────────────
 const BuildPageLayout: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ onLoadSample, loading }) => {
-  const { sidebarWidth, sidebarVisible, setSidebarWidth, toggleSidebar } = useStore();
+  const { sidebarWidth, sidebarVisible, setSidebarWidth } = useStore();
   const [isResizing, setIsResizing] = useState(false);
 
   useEffect(() => {
@@ -838,7 +838,7 @@ const DraggableZoneItem: React.FC<{
               onPointerDown={(e) => e.stopPropagation()}
               onClick={(e) => { e.stopPropagation(); setShowPicker((v) => !v); }}
               title="Nest a variable under this one"
-              className="text-zinc-300 dark:text-zinc-600 hover:text-blue-500 dark:hover:text-blue-400 text-sm leading-none opacity-0 group-hover:opacity-100 transition-opacity px-0.5"
+              className="text-zinc-400 dark:text-zinc-500 hover:text-blue-500 dark:hover:text-blue-400 text-sm leading-none px-0.5 transition-colors"
             >+</button>
             {showPicker && (
               <div
