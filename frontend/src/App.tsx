@@ -562,7 +562,7 @@ const RootDropZone: React.FC<{
 
 // ─── Build Page Layout with Resizable Sidebar ─────────────────────────────────
 const BuildPageLayout: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ onLoadSample, loading }) => {
-  const { sidebarWidth, sidebarVisible, setSidebarWidth, toggleSidebar } = useStore();
+  const { sidebarWidth, sidebarVisible, setSidebarWidth, toggleSidebar: _toggleSidebar } = useStore();
   const [isResizing, setIsResizing] = useState(false);
 
   useEffect(() => {
@@ -702,25 +702,48 @@ const TableList: React.FC = () => {
 };
 
 // ─── Draggable Zone Item ──────────────────────────────────────────────────────
-const DraggableZoneItem: React.FC<{ zoneType: 'row' | 'col'; item: any; onRemove: (id: string) => void }> = ({ zoneType, item, onRemove }) => {
+const DraggableZoneItem: React.FC<{ zoneType: 'row' | 'col'; item: any; onRemove: (id: string) => void; depth?: number }> = ({ zoneType, item, onRemove, depth = 0 }) => {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: `zone-item:${zoneType}:${item.id}` });
+  const { isOver, setNodeRef: setDroppableRef } = useDroppable({ id: `nest-target:${zoneType}:${item.id}` });
   const { variables } = useStore();
   const displayName = variables[item.variable]?.name || item.variable;
+  const hasChildren = item.children && item.children.length > 0;
+  const children = item.children || [];
+
   return (
-    <div
-      ref={setNodeRef}
-      {...listeners}
-      {...attributes}
-      className={`flex items-center gap-2 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 px-2 py-1.5 cursor-grab select-none transition-colors hover:border-zinc-300 dark:hover:border-zinc-600 ${isDragging ? 'opacity-40' : ''}`}
-    >
-      <span className="text-xs text-emerald-700 dark:text-emerald-400">{displayName}</span>
-      <button
-        onPointerDown={(e) => e.stopPropagation()}
-        onClick={() => onRemove(item.id)}
-        className="text-zinc-400 dark:text-zinc-600 hover:text-red-500 dark:hover:text-red-400 text-sm leading-none"
+    <div>
+      <div
+        ref={(node) => {
+          setNodeRef(node);
+          setDroppableRef(node);
+        }}
+        {...listeners}
+        {...attributes}
+        className={`flex items-center gap-2 border px-2 py-1.5 cursor-grab select-none transition-all ${
+          isOver
+            ? 'border-blue-500 bg-blue-500/10'
+            : 'border-zinc-200 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-800'
+        } ${isDragging ? 'opacity-40' : ''} hover:border-zinc-300 dark:hover:border-zinc-600 rounded`}
       >
-        ×
-      </button>
+        <span className="text-xs text-emerald-700 dark:text-emerald-400">{displayName}</span>
+        {hasChildren && (
+          <span className="text-xs text-zinc-400">({children.length})</span>
+        )}
+        <button
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={() => onRemove(item.id)}
+          className="text-zinc-400 dark:text-zinc-600 hover:text-red-500 dark:hover:text-red-400 text-sm leading-none ml-auto"
+        >
+          ×
+        </button>
+      </div>
+      {hasChildren && (
+        <div className="mt-1 space-y-1 border-l-2 border-zinc-200 dark:border-zinc-700 pl-2">
+          {children.map((child: any) => (
+            <DraggableZoneItem key={child.id} zoneType={zoneType} item={child} onRemove={onRemove} depth={depth + 1} />
+          ))}
+        </div>
+      )}
     </div>
   );
 };
@@ -735,23 +758,28 @@ const DropZone: React.FC<{
 }> = ({ id, label, items, onRemove, orientation }) => {
   const { isOver, setNodeRef } = useDroppable({ id });
   const zoneType = id === 'row-zone' ? 'row' : 'col';
+
+  const renderItems = (itemList: any[]) => {
+    return itemList.map((item) => (
+      <DraggableZoneItem key={item.id} zoneType={zoneType} item={item} onRemove={onRemove} />
+    ));
+  };
+
   return (
     <div
       ref={setNodeRef}
-      className={`border border-dashed p-3 transition-all ${
+      className={`border border-dashed p-3 transition-all overflow-hidden ${
         isOver
           ? 'border-blue-500 bg-blue-500/5'
           : 'border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900'
       } ${orientation === 'horizontal' ? 'min-h-[72px]' : 'min-h-[160px]'}`}
     >
       <div className="text-xs text-zinc-400 dark:text-zinc-600 uppercase tracking-wider mb-2">{label}</div>
-      <div className={`flex gap-2 ${orientation === 'vertical' ? 'flex-col' : 'flex-wrap'}`}>
+      <div className={orientation === 'vertical' ? 'flex flex-col space-y-1' : 'flex flex-wrap gap-2'}>
         {items.length === 0 ? (
           <div className="text-xs text-zinc-300 dark:text-zinc-700 italic">drop here</div>
         ) : (
-          items.map((item) => (
-            <DraggableZoneItem key={item.id} zoneType={zoneType} item={item} onRemove={onRemove} />
-          ))
+          renderItems(items)
         )}
       </div>
     </div>
@@ -777,7 +805,7 @@ const App: React.FC = () => {
   const {
     dataLoaded, setDataLoaded, mergeAndSetVariables, setDataInfo,
     activeTableId, variables, tables,
-    addRowItem, addColItem, removeRowItem, removeColItem, addFilterItem,
+    addRowItem, addColItem, addChildItem, removeRowItem, removeColItem, addFilterItem,
     sidebarVisible, toggleSidebar,
   } = useStore();
   const [loading, setLoading] = useState(false);
@@ -786,6 +814,17 @@ const App: React.FC = () => {
 
   const handleDragStart = (event: DragStartEvent) => setActiveDragId(String(event.active.id));
   const handleDragCancel = () => setActiveDragId(null);
+
+  const findItemInList = (items: any[], itemId: string): any | null => {
+    for (const item of items) {
+      if (item.id === itemId) return item;
+      if (item.children) {
+        const found = findItemInList(item.children, itemId);
+        if (found) return found;
+      }
+    }
+    return null;
+  };
 
   const handleDragEnd = (event: any) => {
     setActiveDragId(null);
@@ -800,10 +839,10 @@ const App: React.FC = () => {
       const activeTable = tables.find(t => t.id === activeTableId);
       if (!activeTable) return;
       if (sourceZone === 'row' && targetZone === 'col') {
-        const item = activeTable.row_items.find((i: any) => i.id === itemId);
+        const item = findItemInList(activeTable.row_items, itemId);
         if (item) { removeRowItem(activeTableId, itemId); addColItem(activeTableId, item); }
       } else if (sourceZone === 'col' && targetZone === 'row') {
-        const item = activeTable.col_items.find((i: any) => i.id === itemId);
+        const item = findItemInList(activeTable.col_items, itemId);
         if (item) { removeColItem(activeTableId, itemId); addRowItem(activeTableId, item); }
       }
       return;
@@ -814,9 +853,15 @@ const App: React.FC = () => {
     if (!varInfo?.codes?.length) return;
     const allCodes = varInfo.codes.map((c: any) => c.code).join(',');
 
-    if (over.id === 'row-zone') addRowItem(activeTableId, { id: uuidv4(), variable: varName, codeDef: allCodes });
-    else if (over.id === 'col-zone') addColItem(activeTableId, { id: uuidv4(), variable: varName, codeDef: allCodes });
-    else if (over.id === 'filter-zone') {
+    if (typeof over.id === 'string' && over.id.startsWith('nest-target:')) {
+      const [, zone, parentId] = over.id.split(':');
+      const newItem = { id: uuidv4(), variable: varName, codeDef: allCodes };
+      addChildItem(activeTableId, parentId, newItem, zone as 'row' | 'col');
+    } else if (over.id === 'row-zone') {
+      addRowItem(activeTableId, { id: uuidv4(), variable: varName, codeDef: allCodes });
+    } else if (over.id === 'col-zone') {
+      addColItem(activeTableId, { id: uuidv4(), variable: varName, codeDef: allCodes });
+    } else if (over.id === 'filter-zone') {
       const filterItem: FilterItem = { id: uuidv4(), variable: varName, condition: 'includes_any', selectedCodes: [] };
       addFilterItem(activeTableId, filterItem);
     }
@@ -912,9 +957,9 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
   const expandCodes = (codeDef: string): string[] => {
     if (codeDef.includes('/')) {
       const [, codesPart] = codeDef.split('/', 2);
-      return codesPart.split(',').map(c => c.trim()).filter(Boolean);
+      return codesPart.split(',').map(c => c.trim()).filter(c => c.length > 0);
     }
-    return codeDef.split(',').map(c => c.trim()).filter(Boolean);
+    return codeDef.split(',').map(c => c.trim()).filter(c => c.length > 0);
   };
 
   const getCodeLabel = (key: string): string => {
@@ -933,23 +978,67 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
     try {
       const meanMappings: { variable: string; codeScores: Record<string, number> }[] = [];
       const seenVars = new Set<string>();
-      for (const item of [...activeTable.row_items, ...activeTable.col_items]) {
-        if (seenVars.has(item.variable)) continue;
-        const v = variables[item.variable];
+
+      const getVisibleCodes = (variable: string, rawCodes: string): string[] =>
+        rawCodes.split(',').map((c: string) => c.trim()).filter((c: string) => {
+          const vis = variables[variable]?.codes.find((vc: any) => vc.code === c)?.visibility ?? 'visible';
+          return vis === 'visible';
+        });
+
+      // Expand items with nested children into individual row/col items
+      const expandItems = (items: any[]): any[] => {
+        const result: any[] = [];
+        for (const item of items) {
+          if (item.children && item.children.length > 0) {
+            const parentCodes = getVisibleCodes(item.variable, item.codeDef);
+            for (const child of item.children) {
+              const childCodes = getVisibleCodes(child.variable, child.codeDef);
+              for (const pc of parentCodes) {
+                for (const cc of childCodes) {
+                  result.push({
+                    variable: `${item.variable}/${pc}.${child.variable}/${cc}`,
+                    codeDef: `${item.variable}/${pc}.${child.variable}/${cc}`,
+                  });
+                }
+              }
+            }
+          } else {
+            const codes = getVisibleCodes(item.variable, item.codeDef);
+            for (const code of codes) {
+              result.push({
+                variable: `${item.variable}/${code}`,
+                codeDef: `${item.variable}/${code}`,
+              });
+            }
+          }
+        }
+        return result;
+      };
+
+      const expandedRows = expandItems(activeTable.row_items);
+      const expandedCols = expandItems(activeTable.col_items);
+
+      // Collect mean score mappings from all unique variables in expanded items
+      const allVars = new Set<string>();
+      for (const item of [...expandedRows, ...expandedCols]) {
+        const vars = item.variable.split('.');
+        for (const v of vars) {
+          const varName = v.split('/')[0];
+          allVars.add(varName);
+        }
+      }
+      for (const varName of allVars) {
+        if (seenVars.has(varName)) continue;
+        const v = variables[varName];
         if (!v) continue;
         const scoredCodes = v.codes.filter((c: any) => c.factor != null);
         if (scoredCodes.length > 0) {
           const codeScores: Record<string, number> = {};
           scoredCodes.forEach((c: any) => { codeScores[c.code] = c.factor; });
-          meanMappings.push({ variable: item.variable, codeScores });
-          seenVars.add(item.variable);
+          meanMappings.push({ variable: varName, codeScores });
+          seenVars.add(varName);
         }
       }
-      const getVisibleCodes = (variable: string, rawCodes: string): string =>
-        rawCodes.split(',').map((c: string) => c.trim()).filter((c: string) => {
-          const vis = variables[variable]?.codes.find((vc: any) => vc.code === c)?.visibility ?? 'visible';
-          return vis === 'visible';
-        }).join(',');
 
       const removedParts: string[] = [];
       Object.entries(variables).forEach(([varKey, info]) => {
@@ -960,12 +1049,8 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
       const effectiveFilter = [...(baseFilter ? [baseFilter] : []), ...removedParts].join('.') || undefined;
 
       const result = await computeApi.crosstab({
-        row_items: activeTable.row_items
-          .map((i: any) => ({ variable: i.variable, codeDef: `${i.variable}/${getVisibleCodes(i.variable, i.codeDef)}` }))
-          .filter((i: any) => (i.codeDef.split('/')[1] ?? '').length > 0),
-        col_items: activeTable.col_items
-          .map((i: any) => ({ variable: i.variable, codeDef: `${i.variable}/${getVisibleCodes(i.variable, i.codeDef)}` }))
-          .filter((i: any) => (i.codeDef.split('/')[1] ?? '').length > 0),
+        row_items: expandedRows.map((i: any) => ({ variable: i.variable, codeDef: i.codeDef })),
+        col_items: expandedCols.map((i: any) => ({ variable: i.variable, codeDef: i.codeDef })),
         filter_def: effectiveFilter,
         mean_score_mappings: meanMappings.length > 0 ? meanMappings : undefined,
       });
@@ -1042,16 +1127,90 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
                         const vis = variables[variable]?.codes.find((c: any) => c.code === code)?.visibility ?? 'visible';
                         return vis === 'visible';
                       };
-                      const previewRows: string[] = [];
-                      activeTable.row_items.forEach((item: any) => {
-                        expandCodes(item.codeDef).filter(code => isCodeVisible(item.variable, code)).forEach(code => previewRows.push(`${item.variable}/${code}`));
-                      });
-                      const previewCols: string[] = [];
-                      activeTable.col_items.forEach((item: any) => {
-                        expandCodes(item.codeDef).filter(code => isCodeVisible(item.variable, code)).forEach(code => previewCols.push(`${item.variable}/${code}`));
-                      });
 
-                      if (previewRows.length === 0 && previewCols.length === 0) {
+                      // Build hierarchical preview structure from nested items
+                      interface PreviewItem {
+                        variable: string;
+                        codeDef: string;
+                        children?: PreviewItem[];
+                        isNested: boolean;
+                      }
+
+                      const buildPreviewStructure = (items: any[]): PreviewItem[] => {
+                        return items.map((item: any) => {
+                          if (item.children && item.children.length > 0) {
+                            return {
+                              variable: item.variable,
+                              codeDef: item.codeDef,
+                              isNested: true,
+                              children: item.children.map((child: any) => ({
+                                variable: child.variable,
+                                codeDef: child.codeDef,
+                                isNested: false,
+                              })),
+                            };
+                          }
+                          return { variable: item.variable, codeDef: item.codeDef, isNested: false };
+                        });
+                      };
+
+                      const rowStructure = buildPreviewStructure(activeTable.row_items);
+                      const colStructure = buildPreviewStructure(activeTable.col_items);
+
+                      // For columns: determine if any are nested (have children)
+                      const hasNestedCols = colStructure.some((c) => c.isNested);
+                      const hasNestedRows = rowStructure.some((r) => r.isNested);
+
+                      // Build column list for header
+                      interface ColDef {
+                        parentCode: string | null;
+                        parentCodeValue: string;
+                        parentLabel: string;
+                        childCode: string;
+                        childLabel: string;
+                        fullKey: string;
+                      }
+
+                      const buildColDefs = (structure: PreviewItem[]): ColDef[] => {
+                        const defs: ColDef[] = [];
+                        for (const item of structure) {
+                          const parentCodes = expandCodes(item.codeDef).filter((c) => isCodeVisible(item.variable, c));
+                          if (item.isNested && item.children) {
+                            for (const pc of parentCodes) {
+                              for (const child of item.children) {
+                                const childCodes = expandCodes(child.codeDef).filter((c) => isCodeVisible(child.variable, c));
+                                for (const cc of childCodes) {
+                                  defs.push({
+                                    parentCode: `${item.variable}/${pc}`,
+                                    parentCodeValue: pc,
+                                    parentLabel: getCodeLabel(`${item.variable}/${pc}`),
+                                    childCode: cc,
+                                    childLabel: getCodeLabel(`${child.variable}/${cc}`),
+                                    fullKey: `${item.variable}/${pc}.${child.variable}/${cc}`,
+                                  });
+                                }
+                              }
+                            }
+                          } else {
+                            for (const cc of parentCodes) {
+                              defs.push({
+                                parentCode: null,
+                                parentCodeValue: '',
+                                parentLabel: '',
+                                childCode: cc,
+                                childLabel: getCodeLabel(`${item.variable}/${cc}`),
+                                fullKey: `${item.variable}/${cc}`,
+                              });
+                            }
+                          }
+                        }
+                        return defs;
+                      };
+
+                      const previewColDefs = buildColDefs(colStructure);
+                      const previewRowDefs = buildColDefs(rowStructure);
+
+                      if (previewRowDefs.length === 0 && previewColDefs.length === 0) {
                         return (
                           <div className="h-full flex items-center justify-center">
                             <span className="text-zinc-300 dark:text-zinc-700 text-xs">drop variables to header and sidebreak to preview</span>
@@ -1059,42 +1218,105 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
                         );
                       }
 
-                      const grouped: { [key: string]: string[] } = {};
-                      previewRows.forEach((row) => {
-                        const prefix = row.split('/')[0];
-                        if (!grouped[prefix]) grouped[prefix] = [];
-                        grouped[prefix].push(row);
-                      });
+                      // Group columns by parent for header rendering
+                      const groupedCols: { parentCodeValue: string; parentLabel: string; cols: ColDef[] }[] = [];
+                      if (hasNestedCols) {
+                        const parentMap: Map<string, ColDef[]> = new Map();
+                        const parentLabels: Map<string, string> = new Map();
+                        const parentCodeValues: Map<string, string> = new Map();
+                        for (const cd of previewColDefs) {
+                          const key = cd.parentCode ?? '__none__';
+                          if (!parentMap.has(key)) {
+                            parentMap.set(key, []);
+                            parentLabels.set(key, cd.parentLabel);
+                            parentCodeValues.set(key, cd.parentCodeValue);
+                          }
+                          parentMap.get(key)!.push(cd);
+                        }
+                        for (const [key, cols] of parentMap) {
+                          groupedCols.push({ parentCodeValue: parentCodeValues.get(key) || '', parentLabel: parentLabels.get(key) || '', cols });
+                        }
+                      } else {
+                        groupedCols.push({ parentCodeValue: '', parentLabel: '', cols: previewColDefs });
+                      }
+
+                      // Group rows by parent for body rendering
+                      const groupedRows: { parentCode: string | null; parentLabel: string; rows: ColDef[] }[] = [];
+                      if (hasNestedRows) {
+                        const parentMap: Map<string, ColDef[]> = new Map();
+                        const parentLabels: Map<string, string> = new Map();
+                        for (const rd of previewRowDefs) {
+                          const key = rd.parentCode ?? '__none__';
+                          if (!parentMap.has(key)) parentMap.set(key, []);
+                          parentMap.get(key)!.push(rd);
+                          parentLabels.set(key, rd.parentLabel);
+                        }
+                        for (const [key, rows] of parentMap) {
+                          groupedRows.push({ parentCode: key === '__none__' ? null : key, parentLabel: parentLabels.get(key) || '', rows });
+                        }
+                      } else {
+                        groupedRows.push({ parentCode: null, parentLabel: '', rows: previewRowDefs });
+                      }
 
                       return (
                         <table className="w-full border-collapse text-xs">
                           <thead className="sticky top-0">
-                            <tr>
-                              <th className="border border-zinc-200 dark:border-zinc-800 px-3 py-2 text-left text-zinc-400 dark:text-zinc-500 bg-zinc-50 dark:bg-zinc-900 w-32"></th>
-                              <th className="border border-zinc-200 dark:border-zinc-800 px-3 py-2 text-center text-zinc-600 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-800 w-24">Total</th>
-                              {previewCols.map((col) => (
-                                <th key={col} className="border border-zinc-200 dark:border-zinc-800 px-3 py-2 text-center text-zinc-500 dark:text-zinc-500 bg-zinc-50 dark:bg-zinc-900 w-24">
-                                  {getCodeLabel(col)}
-                                </th>
-                              ))}
-                            </tr>
+                            {hasNestedCols ? (
+                              <>
+                                <tr>
+                                  <th className="border border-zinc-200 dark:border-zinc-800 px-3 py-2 text-left text-zinc-400 dark:text-zinc-500 bg-zinc-50 dark:bg-zinc-900 w-32"></th>
+                                  <th className="border border-zinc-200 dark:border-zinc-800 px-3 py-2 text-center text-zinc-600 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-800 w-24" rowSpan={2}>Total</th>
+                                  {groupedCols.map((g) => (
+                                    <th key={g.parentCodeValue || 'none'} colSpan={g.cols.length} className="border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-center text-zinc-700 dark:text-zinc-300 bg-zinc-100 dark:bg-zinc-800 font-medium">
+                                      {g.parentCodeValue}
+                                    </th>
+                                  ))}
+                                </tr>
+                                <tr>
+                                  {groupedCols.map((g) =>
+                                    g.cols.map((cd) => (
+                                      <th key={cd.fullKey} className="border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-center text-zinc-500 dark:text-zinc-500 bg-zinc-50 dark:bg-zinc-900 w-24">
+                                        {cd.childLabel}
+                                      </th>
+                                    ))
+                                  )}
+                                </tr>
+                              </>
+                            ) : (
+                              <tr>
+                                <th className="border border-zinc-200 dark:border-zinc-800 px-3 py-2 text-left text-zinc-400 dark:text-zinc-500 bg-zinc-50 dark:bg-zinc-900 w-32"></th>
+                                <th className="border border-zinc-200 dark:border-zinc-800 px-3 py-2 text-center text-zinc-600 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-800 w-24">Total</th>
+                                {previewColDefs.map((cd) => (
+                                  <th key={cd.fullKey} className="border border-zinc-200 dark:border-zinc-800 px-3 py-2 text-center text-zinc-500 dark:text-zinc-500 bg-zinc-50 dark:bg-zinc-900 w-24">
+                                    {cd.childLabel}
+                                  </th>
+                                ))}
+                              </tr>
+                            )}
                           </thead>
                           <tbody>
                             <tr>
                               <td className="border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-zinc-500 bg-zinc-50 dark:bg-zinc-800/50">Base</td>
                               <td className="border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-center text-zinc-400 dark:text-zinc-600 bg-zinc-100 dark:bg-zinc-800">—</td>
-                              {previewCols.map((col) => (
-                                <td key={`base-${col}`} className="border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-center text-zinc-300 dark:text-zinc-700">—</td>
+                              {previewColDefs.map((cd) => (
+                                <td key={`base-${cd.fullKey}`} className="border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-center text-zinc-300 dark:text-zinc-700">—</td>
                               ))}
                             </tr>
-                            {Object.entries(grouped).map(([prefix, codes]) => (
-                              <React.Fragment key={prefix}>
-                                {codes.map((row) => (
-                                  <tr key={row} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/40">
-                                    <td className="border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-zinc-600 dark:text-zinc-400">{getCodeLabel(row)}</td>
+                            {groupedRows.map((g) => (
+                              <React.Fragment key={g.parentCode ?? 'none'}>
+                                {hasNestedRows && (
+                                  <tr className="bg-zinc-100 dark:bg-zinc-800/60">
+                                    <td className="border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-zinc-700 dark:text-zinc-300 font-medium" colSpan={previewColDefs.length + 2}>
+                                      {g.parentLabel}
+                                    </td>
+                                  </tr>
+                                )}
+                                {g.rows.map((rd) => (
+                                  <tr key={rd.fullKey} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/40">
+                                    <td className={`border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 ${hasNestedRows ? 'pl-6 text-zinc-600 dark:text-zinc-400' : 'text-zinc-600 dark:text-zinc-400'}`}>{rd.childLabel}</td>
                                     <td className="border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-center text-zinc-300 dark:text-zinc-700 bg-zinc-50 dark:bg-zinc-800/30">—</td>
-                                    {previewCols.map((col) => (
-                                      <td key={`${row}-${col}`} className="border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-center text-zinc-300 dark:text-zinc-700">—</td>
+                                    {previewColDefs.map((cd) => (
+                                      <td key={`${rd.fullKey}-${cd.fullKey}`} className="border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-center text-zinc-300 dark:text-zinc-700">—</td>
                                     ))}
                                   </tr>
                                 ))}
@@ -1163,16 +1385,159 @@ const ResultTab: React.FC = () => {
     return codeObj?.label || code;
   };
 
-  const groupedRows: { [key: string]: string[] } = {};
-  rowNames.forEach((row) => { const p = row.split('/')[0]; if (!groupedRows[p]) groupedRows[p] = []; groupedRows[p].push(row); });
+  // Parse compound row names like "A1/1.Q2/1" into parent/child structure
+  interface ParsedRowKey {
+    fullKey: string;
+    parentCode: string | null;
+    parentLabel: string;
+    childCode: string;
+    childLabel: string;
+    isCompound: boolean;
+  }
+
+  const parseRowKey = (key: string): ParsedRowKey => {
+    if (key.includes('.')) {
+      const parts = key.split('.');
+      const parentPart = parts[0];
+      const childPart = parts[parts.length - 1];
+      const childCodeValue = childPart.split('/')[1] || '';
+      return {
+        fullKey: key,
+        parentCode: parentPart,
+        parentLabel: getCodeLabel(parentPart),
+        childCode: childCodeValue,
+        childLabel: getCodeLabel(childPart),
+        isCompound: true,
+      };
+    }
+    return {
+      fullKey: key,
+      parentCode: null,
+      parentLabel: '',
+      childCode: key,
+      childLabel: getCodeLabel(key),
+      isCompound: false,
+    };
+  };
+
+  const parsedRows = rowNames.map(parseRowKey).sort((a, b) => {
+    // Sort by parent code, then by child code for consistent grouping
+    if (a.parentCode !== b.parentCode) {
+      return (a.parentCode || '').localeCompare(b.parentCode || '');
+    }
+    return a.childCode.localeCompare(b.childCode);
+  });
+  const hasNestedRows = parsedRows.some((r) => r.isCompound);
+
+  // Parse compound column names similarly
+  interface ParsedColKey {
+    fullKey: string;
+    parentCode: string | null;
+    parentCodeValue: string;
+    parentLabel: string;
+    childCode: string;
+    childLabel: string;
+    isCompound: boolean;
+  }
+
+  const parseColKey = (key: string): ParsedColKey => {
+    if (key.includes('.')) {
+      const parts = key.split('.');
+      const parentPart = parts[0];
+      const childPart = parts[parts.length - 1];
+      const parentCodeValue = parentPart.split('/')[1] || '';
+      const childCodeValue = childPart.split('/')[1] || '';
+      return {
+        fullKey: key,
+        parentCode: parentPart,
+        parentCodeValue,
+        parentLabel: getCodeLabel(parentPart),
+        childCode: childCodeValue,
+        childLabel: getCodeLabel(childPart),
+        isCompound: true,
+      };
+    }
+    return {
+      fullKey: key,
+      parentCode: null,
+      parentCodeValue: '',
+      parentLabel: '',
+      childCode: key,
+      childLabel: getCodeLabel(key),
+      isCompound: false,
+    };
+  };
+
+  const parsedCols = colNames.map(parseColKey).sort((a, b) => {
+    // Sort by parent code, then by child code for consistent grouping
+    if (a.parentCode !== b.parentCode) {
+      return (a.parentCode || '').localeCompare(b.parentCode || '');
+    }
+    return a.childCode.localeCompare(b.childCode);
+  });
+  const hasNestedCols = parsedCols.some((c) => c.isCompound);
+
+  // Group rows by parent code
+  const groupedRows: { parentCode: string | null; parentLabel: string; rows: ParsedRowKey[] }[] = [];
+  if (hasNestedRows) {
+    const parentMap: Map<string, ParsedRowKey[]> = new Map();
+    const parentLabels: Map<string, string> = new Map();
+    for (const pr of parsedRows) {
+      const key = pr.parentCode ?? '__none__';
+      if (!parentMap.has(key)) parentMap.set(key, []);
+      parentMap.get(key)!.push(pr);
+      parentLabels.set(key, pr.parentLabel);
+    }
+    for (const [key, rows] of parentMap) {
+      groupedRows.push({ parentCode: key === '__none__' ? null : key, parentLabel: parentLabels.get(key) || '', rows });
+    }
+  } else {
+    // Fallback to original grouping by variable name
+    const origGrouped: { [key: string]: string[] } = {};
+    rowNames.forEach((row) => { const p = row.split('/')[0]; if (!origGrouped[p]) origGrouped[p] = []; origGrouped[p].push(row); });
+    for (const [prefix, codes] of Object.entries(origGrouped)) {
+      groupedRows.push({
+        parentCode: prefix,
+        parentLabel: variables[prefix]?.label || prefix,
+        rows: codes.map((c) => parseRowKey(c)),
+      });
+    }
+  }
+
+  // Group columns by parent code for 2-level header
+  const groupedCols: { parentCodeValue: string; parentLabel: string; cols: ParsedColKey[] }[] = [];
+  if (hasNestedCols) {
+    const parentMap: Map<string, ParsedColKey[]> = new Map();
+    const parentLabels: Map<string, string> = new Map();
+    const parentCodeValues: Map<string, string> = new Map();
+    for (const pc of parsedCols) {
+      const key = pc.parentCode ?? '__none__';
+      if (!parentMap.has(key)) {
+        parentMap.set(key, []);
+        parentLabels.set(key, pc.parentLabel);
+        parentCodeValues.set(key, pc.parentCodeValue);
+      }
+      parentMap.get(key)!.push(pc);
+    }
+    for (const [key, cols] of parentMap) {
+      groupedCols.push({ parentCodeValue: parentCodeValues.get(key) || '', parentLabel: parentLabels.get(key) || '', cols });
+    }
+  } else {
+    groupedCols.push({ parentCodeValue: '', parentLabel: '', cols: parsedCols });
+  }
 
   const handleCopy = () => {
     const lines: string[] = [];
     lines.push(['', 'Total', ...colNames.map(c => getCodeLabel(c))].join('\t'));
     lines.push(['Base', String(result.base), ...colNames.map(c => String(result.counts['Total']?.[c] ?? 0))].join('\t'));
-    rowNames.forEach((row) => {
-      lines.push([getCodeLabel(row), String(result.counts[row]?.['Total'] ?? 0), ...colNames.map(c => String(result.counts[row]?.[c] ?? 0))].join('\t'));
-    });
+    for (const g of groupedRows) {
+      if (hasNestedRows) {
+        lines.push([g.parentLabel, '', ...colNames.map(() => '')].join('\t'));
+      }
+      for (const pr of g.rows) {
+        lines.push([pr.childLabel, String(result.counts[pr.fullKey]?.['Total'] ?? 0), ...colNames.map(c => String(result.counts[pr.fullKey]?.[c] ?? 0))].join('\t'));
+      }
+    }
     navigator.clipboard.writeText(lines.join('\n'));
     alert('copied!');
   };
@@ -1256,15 +1621,38 @@ const ResultTab: React.FC = () => {
       <div className="flex-1 overflow-auto border border-zinc-200 dark:border-zinc-800">
         <table className="w-full border-collapse text-xs">
           <thead className="sticky top-0">
-            <tr>
-              <th className="border border-zinc-200 dark:border-zinc-800 px-3 py-2 text-left text-zinc-400 dark:text-zinc-500 bg-zinc-50 dark:bg-zinc-900 w-32"></th>
-              <th className="border border-zinc-200 dark:border-zinc-800 px-3 py-2 text-center text-zinc-700 dark:text-zinc-300 bg-zinc-100 dark:bg-zinc-800 w-24">Total</th>
-              {colNames.map((col) => (
-                <th key={col} className="border border-zinc-200 dark:border-zinc-800 px-3 py-2 text-center text-zinc-500 dark:text-zinc-500 bg-zinc-50 dark:bg-zinc-900 w-24">
-                  {getCodeLabel(col)}
-                </th>
-              ))}
-            </tr>
+            {hasNestedCols ? (
+              <>
+                <tr>
+                  <th className="border border-zinc-200 dark:border-zinc-800 px-3 py-2 text-left text-zinc-400 dark:text-zinc-500 bg-zinc-50 dark:bg-zinc-900 w-32"></th>
+                  <th className="border border-zinc-200 dark:border-zinc-800 px-3 py-2 text-center text-zinc-600 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-800 w-24" rowSpan={2}>Total</th>
+                  {groupedCols.map((g) => (
+                    <th key={g.parentCodeValue || 'none'} colSpan={g.cols.length} className="border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-center text-zinc-700 dark:text-zinc-300 bg-zinc-100 dark:bg-zinc-800 font-medium">
+                      {g.parentCodeValue}
+                    </th>
+                  ))}
+                </tr>
+                <tr>
+                  {groupedCols.map((g) =>
+                    g.cols.map((pc) => (
+                      <th key={pc.fullKey} className="border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-center text-zinc-500 dark:text-zinc-500 bg-zinc-50 dark:bg-zinc-900 w-24">
+                        {pc.childLabel}
+                      </th>
+                    ))
+                  )}
+                </tr>
+              </>
+            ) : (
+              <tr>
+                <th className="border border-zinc-200 dark:border-zinc-800 px-3 py-2 text-left text-zinc-400 dark:text-zinc-500 bg-zinc-50 dark:bg-zinc-900 w-32"></th>
+                <th className="border border-zinc-200 dark:border-zinc-800 px-3 py-2 text-center text-zinc-700 dark:text-zinc-300 bg-zinc-100 dark:bg-zinc-800 w-24">Total</th>
+                {colNames.map((col) => (
+                  <th key={col} className="border border-zinc-200 dark:border-zinc-800 px-3 py-2 text-center text-zinc-500 dark:text-zinc-500 bg-zinc-50 dark:bg-zinc-900 w-24">
+                    {getCodeLabel(col)}
+                  </th>
+                ))}
+              </tr>
+            )}
           </thead>
           <tbody>
             <tr className="bg-zinc-50 dark:bg-zinc-800/50">
@@ -1276,29 +1664,35 @@ const ResultTab: React.FC = () => {
                 </td>
               ))}
             </tr>
-            {Object.entries(groupedRows).map(([prefix, codes]) => (
-              <React.Fragment key={prefix}>
-                {codes.map((row) => {
-                  const codeLabel = getCodeLabel(row);
-                  const rowTotal = result.counts[row]?.['Total'] ?? 0;
+            {groupedRows.map((g) => (
+              <React.Fragment key={g.parentCode ?? 'none'}>
+                {hasNestedRows && (
+                  <tr className="bg-zinc-100 dark:bg-zinc-800/60">
+                    <td className="border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-zinc-700 dark:text-zinc-300 font-medium" colSpan={colNames.length + 2}>
+                      {g.parentLabel}
+                    </td>
+                  </tr>
+                )}
+                {g.rows.map((pr) => {
+                  const rowTotal = result.counts[pr.fullKey]?.['Total'] ?? 0;
 
                   if (displayOptions.counts && displayOptions.colPct) {
                     return (
-                      <React.Fragment key={row}>
+                      <React.Fragment key={pr.fullKey}>
                         <tr className="hover:bg-zinc-50 dark:hover:bg-zinc-800/30">
-                          <td rowSpan={2} className="border border-zinc-200 dark:border-zinc-800 px-3 py-1 text-zinc-700 dark:text-zinc-300 align-middle">{codeLabel}</td>
+                          <td className={`border border-zinc-200 dark:border-zinc-800 px-3 py-1 text-zinc-700 dark:text-zinc-300 ${hasNestedRows ? 'pl-6' : ''}`}>{pr.childLabel}</td>
                           <td className="border border-zinc-200 dark:border-zinc-800 px-3 py-1 text-center text-zinc-800 dark:text-zinc-300 bg-zinc-50 dark:bg-zinc-800/40">{rowTotal}</td>
                           {colNames.map((col) => (
                             <td key={col} className="border border-zinc-200 dark:border-zinc-800 px-3 py-1 text-center text-zinc-600 dark:text-zinc-400">
-                              {result.counts[row]?.[col] ?? 0}
+                              {result.counts[pr.fullKey]?.[col] ?? 0}
                             </td>
                           ))}
                         </tr>
                         <tr className="hover:bg-zinc-50 dark:hover:bg-zinc-800/30">
-                          <td className="border border-zinc-200 dark:border-zinc-800 px-3 py-1 text-center text-blue-600 dark:text-blue-400/70 bg-zinc-50 dark:bg-zinc-800/20">{formatPct(result.col_pct[row]?.['Total'] ?? 0)}</td>
+                          <td className="border border-zinc-200 dark:border-zinc-800 px-3 py-1 text-center text-blue-600 dark:text-blue-400/70 bg-zinc-50 dark:bg-zinc-800/20">{formatPct(result.col_pct[pr.fullKey]?.['Total'] ?? 0)}</td>
                           {colNames.map((col) => (
                             <td key={col} className="border border-zinc-200 dark:border-zinc-800 px-3 py-1 text-center text-blue-600 dark:text-blue-400/70">
-                              {formatPct(result.col_pct[row]?.[col] ?? 0)}
+                              {formatPct(result.col_pct[pr.fullKey]?.[col] ?? 0)}
                             </td>
                           ))}
                         </tr>
@@ -1306,24 +1700,24 @@ const ResultTab: React.FC = () => {
                     );
                   } else if (displayOptions.counts) {
                     return (
-                      <tr key={row} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/30">
-                        <td className="border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-zinc-700 dark:text-zinc-300">{codeLabel}</td>
+                      <tr key={pr.fullKey} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/30">
+                        <td className={`border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-zinc-700 dark:text-zinc-300 ${hasNestedRows ? 'pl-6' : ''}`}>{pr.childLabel}</td>
                         <td className="border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-center text-zinc-800 dark:text-zinc-300 bg-zinc-50 dark:bg-zinc-800/40">{rowTotal}</td>
                         {colNames.map((col) => (
                           <td key={col} className="border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-center text-zinc-600 dark:text-zinc-400">
-                            {result.counts[row]?.[col] ?? 0}
+                            {result.counts[pr.fullKey]?.[col] ?? 0}
                           </td>
                         ))}
                       </tr>
                     );
                   } else if (displayOptions.colPct) {
                     return (
-                      <tr key={row} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/30">
-                        <td className="border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-zinc-700 dark:text-zinc-300">{codeLabel}</td>
-                        <td className="border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-center text-blue-600 dark:text-blue-400/70 bg-zinc-50 dark:bg-zinc-800/40">{formatPct(result.col_pct[row]?.['Total'] ?? 0)}</td>
+                      <tr key={pr.fullKey} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/30">
+                        <td className={`border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-zinc-700 dark:text-zinc-300 ${hasNestedRows ? 'pl-6' : ''}`}>{pr.childLabel}</td>
+                        <td className="border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-center text-blue-600 dark:text-blue-400/70 bg-zinc-50 dark:bg-zinc-800/40">{formatPct(result.col_pct[pr.fullKey]?.['Total'] ?? 0)}</td>
                         {colNames.map((col) => (
                           <td key={col} className="border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-center text-blue-600 dark:text-blue-400/70">
-                            {formatPct(result.col_pct[row]?.[col] ?? 0)}
+                            {formatPct(result.col_pct[pr.fullKey]?.[col] ?? 0)}
                           </td>
                         ))}
                       </tr>
@@ -1358,10 +1752,141 @@ const ResultTab: React.FC = () => {
   );
 };
 
+// ─── Merge Multiple Response Dialog ───────────────────────────────────────────
+const MergeMRDialog: React.FC<{ onClose: () => void }> = ({ onClose }) => {
+  const { variables, mergeAndSetVariables } = useStore();
+  const [name, setName] = useState('');
+  const [label, setLabel] = useState('');
+  const [selectedCols, setSelectedCols] = useState<string[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const allColumns = Object.keys(variables);
+
+  // Auto-detect MR groups: columns sharing a prefix like A1_p1, A1_p2 → group "A1"
+  const detectedGroups: Record<string, string[]> = {};
+  for (const col of allColumns) {
+    const m = col.match(/^(.+?)[_](p\d+|f\d+|r\d+)$/i);
+    if (m) {
+      const prefix = m[1];
+      if (!detectedGroups[prefix]) detectedGroups[prefix] = [];
+      detectedGroups[prefix].push(col);
+    }
+  }
+
+  const toggleCol = (col: string) => {
+    setSelectedCols((prev) => prev.includes(col) ? prev.filter((c) => c !== col) : [...prev, col]);
+  };
+
+  const loadGroup = (cols: string[]) => {
+    setSelectedCols(cols);
+    const prefix = cols[0]?.replace(/[_](p\d+|f\d+|r\d+)$/i, '') || '';
+    if (!name) setName(prefix);
+    if (!label) setLabel(prefix);
+  };
+
+  const handleMerge = async () => {
+    if (!name.trim()) { setError('Name is required'); return; }
+    if (selectedCols.length < 2) { setError('Select at least 2 columns'); return; }
+    if (variables[name]) { setError('Variable name already exists'); return; }
+    setLoading(true);
+    setError(null);
+    try {
+      await dataApi.mergeMR(name, selectedCols, label || name);
+      const vars = await dataApi.getVariables();
+      mergeAndSetVariables(vars);
+      onClose();
+    } catch (e: any) {
+      setError(e.response?.data?.detail || 'Merge failed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
+      <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg w-full max-w-2xl max-h-[80vh] flex flex-col shadow-xl" onClick={(e) => e.stopPropagation()}>
+        <div className="flex justify-between items-center px-4 py-3 border-b border-zinc-200 dark:border-zinc-700">
+          <h3 className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Merge Multiple Response Variables</h3>
+          <button onClick={onClose} className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 text-lg leading-none">&times;</button>
+        </div>
+
+        <div className="flex-1 overflow-auto p-4 space-y-4">
+          {/* Name + Label */}
+          <div className="flex gap-3">
+            <div className="flex-1">
+              <label className="text-xs text-zinc-500 block mb-1">merged variable name</label>
+              <input value={name} onChange={(e) => setName(e.target.value)} className="w-full text-xs bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 px-2 py-1.5 text-zinc-700 dark:text-zinc-300 focus:border-blue-400 outline-none" placeholder="e.g. A1" />
+            </div>
+            <div className="flex-1">
+              <label className="text-xs text-zinc-500 block mb-1">label</label>
+              <input value={label} onChange={(e) => setLabel(e.target.value)} className="w-full text-xs bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 px-2 py-1.5 text-zinc-700 dark:text-zinc-300 focus:border-blue-400 outline-none" placeholder="e.g. Brand awareness" />
+            </div>
+          </div>
+
+          {/* Detected groups */}
+          {Object.keys(detectedGroups).length > 0 && (
+            <div>
+              <label className="text-xs text-zinc-500 block mb-2">detected groups (click to load)</label>
+              <div className="flex flex-wrap gap-2">
+                {Object.entries(detectedGroups).map(([prefix, cols]) => (
+                  <button key={prefix} onClick={() => loadGroup(cols)} className="text-xs px-2 py-1 border border-zinc-200 dark:border-zinc-700 rounded hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-600 dark:text-zinc-400">
+                    {prefix} ({cols.length})
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Column picker */}
+          <div>
+            <label className="text-xs text-zinc-500 block mb-2">select columns ({selectedCols.length} selected)</label>
+            <div className="border border-zinc-200 dark:border-zinc-700 rounded max-h-64 overflow-auto">
+              <table className="w-full border-collapse text-xs">
+                <thead className="sticky top-0 bg-zinc-50 dark:bg-zinc-900">
+                  <tr>
+                    <th className="border-b border-zinc-200 dark:border-zinc-700 px-2 py-1.5 text-left text-zinc-500 w-10">#</th>
+                    <th className="border-b border-zinc-200 dark:border-zinc-700 px-2 py-1.5 text-left text-zinc-500">column</th>
+                    <th className="border-b border-zinc-200 dark:border-zinc-700 px-2 py-1.5 text-left text-zinc-500 w-24">label</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {allColumns.map((col) => {
+                    const checked = selectedCols.includes(col);
+                    return (
+                      <tr key={col} className={`cursor-pointer ${checked ? 'bg-blue-50 dark:bg-blue-900/20' : 'hover:bg-zinc-50 dark:hover:bg-zinc-800/30'}`} onClick={() => toggleCol(col)}>
+                        <td className="border-b border-zinc-100 dark:border-zinc-800/60 px-2 py-1">
+                          <input type="checkbox" checked={checked} onChange={() => {}} className="cursor-pointer" />
+                        </td>
+                        <td className="border-b border-zinc-100 dark:border-zinc-800/60 px-2 py-1 font-mono text-zinc-700 dark:text-zinc-300">{col}</td>
+                        <td className="border-b border-zinc-100 dark:border-zinc-800/60 px-2 py-1 text-zinc-500 truncate">{variables[col]?.label || ''}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {error && <div className="text-xs text-red-500">{error}</div>}
+        </div>
+
+        <div className="flex justify-end gap-2 px-4 py-3 border-t border-zinc-200 dark:border-zinc-700">
+          <button onClick={onClose} className="text-xs px-3 py-1.5 border border-zinc-200 dark:border-zinc-700 rounded text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800">cancel</button>
+          <button onClick={handleMerge} disabled={loading} className="text-xs px-3 py-1.5 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50">
+            {loading ? 'merging...' : 'merge'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // ─── Edit Variables Page ──────────────────────────────────────────────────────
 const EditVariablesPage: React.FC = () => {
   const { variables } = useStore();
   const navigate = useNavigate();
+  const [showMergeDialog, setShowMergeDialog] = useState(false);
 
   const variableEntries = Object.entries(variables);
 
@@ -1369,7 +1894,15 @@ const EditVariablesPage: React.FC = () => {
     <div className="h-full flex flex-col p-4 overflow-auto">
       <div className="flex justify-between items-center mb-4">
         <h2 className="text-xs font-medium text-zinc-500 uppercase tracking-wider">variables</h2>
-        <span className="text-xs text-zinc-400 dark:text-zinc-600">{variableEntries.length}</span>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-zinc-400 dark:text-zinc-600">{variableEntries.length}</span>
+          <button
+            onClick={() => setShowMergeDialog(true)}
+            className="text-xs px-2 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
+          >
+            merge multiple response
+          </button>
+        </div>
       </div>
 
       <div className="flex-1 overflow-auto border border-zinc-200 dark:border-zinc-800">
@@ -1411,6 +1944,10 @@ const EditVariablesPage: React.FC = () => {
           </tbody>
         </table>
       </div>
+
+      {showMergeDialog && (
+        <MergeMRDialog onClose={() => setShowMergeDialog(false)} />
+      )}
     </div>
   );
 };
@@ -1422,6 +1959,7 @@ const VariableDetailPage: React.FC = () => {
   const navigate = useNavigate();
   const {
     variables,
+    mergeAndSetVariables,
     updateVariableLabel,
     updateVariableDisplayName,
     updateCodeLabel,
@@ -1431,6 +1969,7 @@ const VariableDetailPage: React.FC = () => {
   } = useStore();
 
   const info: VariableInfo | undefined = variables[varKey];
+  const isMerged = info?.type === 'multiple_response';
 
   if (!info) {
     return (
@@ -1440,6 +1979,18 @@ const VariableDetailPage: React.FC = () => {
       </div>
     );
   }
+
+  const handleDeleteMerged = async () => {
+    if (!confirm(`Delete merged variable "${varKey}"?`)) return;
+    try {
+      await dataApi.deleteMergedVariable(varKey);
+      const vars = await dataApi.getVariables();
+      mergeAndSetVariables(vars);
+      navigate('/edit-variables');
+    } catch (e: any) {
+      alert(e.response?.data?.detail || 'Delete failed');
+    }
+  };
 
   const hiddenCount = info.codes.filter((c: any) => c.visibility === 'hidden').length;
   const removedCount = info.codes.filter((c: any) => c.visibility === 'removed').length;
@@ -1456,12 +2007,16 @@ const VariableDetailPage: React.FC = () => {
         </button>
         <span className="text-xs text-zinc-300 dark:text-zinc-700">/</span>
         <span className="text-xs text-emerald-700 dark:text-emerald-400 font-medium">{varKey}</span>
+        {isMerged && <span className="text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-1.5 py-0.5 rounded">merged</span>}
         {(hiddenCount > 0 || removedCount > 0) && (
           <span className="text-xs text-orange-500 ml-1">
             {hiddenCount > 0 && `${hiddenCount} hidden`}
             {hiddenCount > 0 && removedCount > 0 && ', '}
             {removedCount > 0 && `${removedCount} removed`}
           </span>
+        )}
+        {isMerged && (
+          <button onClick={handleDeleteMerged} className="ml-auto text-xs text-red-500 hover:text-red-600">delete</button>
         )}
       </div>
 

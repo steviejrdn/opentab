@@ -8,7 +8,7 @@ import io
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from core.data_loader import load_csv
+from core.data_loader import load_csv, merge_multiple_response
 from core.mdd_parser import parse_mdd
 
 router = APIRouter()
@@ -17,7 +17,8 @@ data_store = {
     'df': None,
     'metadata': {},
     'mdd': {},
-    'file_name': None
+    'file_name': None,
+    'merged_variables': {}
 }
 
 
@@ -218,6 +219,68 @@ async def upload_zip(file: UploadFile = File(...)):
     )
 
 
+# ─── Merge multiple response ──────────────────────────────────────────────────
+class MergeMRRequest(BaseModel):
+    name: str
+    source_columns: list[str]
+    label: Optional[str] = None
+
+class MergeMRResponse(BaseModel):
+    name: str
+    label: str
+    codes: list[dict]
+    source_columns: list[str]
+
+@router.post("/merge-mr", response_model=MergeMRResponse)
+async def merge_mr(request: MergeMRRequest):
+    if data_store['df'] is None:
+        raise HTTPException(status_code=400, detail="No data loaded.")
+
+    df = data_store['df']
+
+    for col in request.source_columns:
+        if col not in df.columns:
+            raise HTTPException(status_code=400, detail=f"Column '{col}' not found in data.")
+
+    if request.name in df.columns:
+        raise HTTPException(status_code=400, detail=f"Variable '{request.name}' already exists in data.")
+
+    merged_series = merge_multiple_response(df, request.source_columns, request.name)
+    data_store['df'][request.name] = merged_series
+
+    codes = [{'code': str(i + 1), 'label': request.source_columns[i]} for i in range(len(request.source_columns))]
+    label = request.label or request.name
+
+    data_store['merged_variables'][request.name] = {
+        'label': label,
+        'codes': codes,
+        'source_columns': request.source_columns,
+    }
+
+    return MergeMRResponse(name=request.name, label=label, codes=codes, source_columns=request.source_columns)
+
+# ─── List merged variables ────────────────────────────────────────────────────
+class MergedVariablesResponse(BaseModel):
+    variables: dict[str, dict]
+
+@router.get("/merged-variables", response_model=MergedVariablesResponse)
+async def get_merged_variables():
+    return MergedVariablesResponse(variables=data_store['merged_variables'])
+
+# ─── Delete merged variable ───────────────────────────────────────────────────
+@router.delete("/merge-mr/{name}")
+async def delete_merged_variable(name: str):
+    if data_store['df'] is None:
+        raise HTTPException(status_code=400, detail="No data loaded.")
+
+    if name not in data_store['merged_variables']:
+        raise HTTPException(status_code=404, detail=f"Merged variable '{name}' not found.")
+
+    if name in data_store['df'].columns:
+        data_store['df'] = data_store['df'].drop(columns=[name])
+    del data_store['merged_variables'][name]
+    return {"status": "ok"}
+
 # ─── Sample data ──────────────────────────────────────────────────────────────
 @router.post("/load-sample")
 async def load_sample():
@@ -254,6 +317,14 @@ async def get_variables():
 
     variables = {}
     for col in df.columns:
+        if col in data_store['merged_variables']:
+            merged = data_store['merged_variables'][col]
+            variables[col] = VariableInfo(
+                name=col, label=merged['label'], type='multiple_response',
+                codes=merged['codes']
+            )
+            continue
+
         if col in mdd:
             mdd_var = mdd[col]
             codes = mdd_var.get('codes', [])

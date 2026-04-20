@@ -45,6 +45,7 @@ interface AppState {
 
   addRowItem: (tableId: string, item: DropItem) => void;
   addColItem: (tableId: string, item: DropItem) => void;
+  addChildItem: (tableId: string, parentId: string, item: DropItem, zone: 'row' | 'col') => void;
   removeRowItem: (tableId: string, itemId: string) => void;
   removeColItem: (tableId: string, itemId: string) => void;
   addFilterItem: (tableId: string, item: FilterItem) => void;
@@ -141,12 +142,41 @@ export const useStore = create<AppState>()((set, get) => ({
     }
   },
 
+  addChildItem: (tableId, parentId, item, zone: 'row' | 'col') => {
+    const state = get();
+    const table = state.tables.find((t) => t.id === tableId);
+    if (!table) return;
+    const items = zone === 'row' ? table.row_items : table.col_items;
+    const addChild = (list: any[]): any[] => {
+      return list.map((i) => {
+        if (i.id === parentId) {
+          return { ...i, children: [...(i.children || []), item] };
+        }
+        if (i.children) {
+          return { ...i, children: addChild(i.children) };
+        }
+        return i;
+      });
+    };
+    const updated = addChild(items);
+    if (zone === 'row') {
+      get().updateTable(tableId, { row_items: updated });
+    } else {
+      get().updateTable(tableId, { col_items: updated });
+    }
+  },
+
   removeRowItem: (tableId, itemId) => {
     const state = get();
     const table = state.tables.find((t) => t.id === tableId);
     if (table) {
+      const remove = (list: any[]): any[] => {
+        return list
+          .filter((i) => i.id !== itemId)
+          .map((i) => i.children ? { ...i, children: remove(i.children) } : i);
+      };
       get().updateTable(tableId, {
-        row_items: table.row_items.filter((i) => i.id !== itemId),
+        row_items: remove(table.row_items),
       });
     }
   },
@@ -155,8 +185,13 @@ export const useStore = create<AppState>()((set, get) => ({
     const state = get();
     const table = state.tables.find((t) => t.id === tableId);
     if (table) {
+      const remove = (list: any[]): any[] => {
+        return list
+          .filter((i) => i.id !== itemId)
+          .map((i) => i.children ? { ...i, children: remove(i.children) } : i);
+      };
       get().updateTable(tableId, {
-        col_items: table.col_items.filter((i) => i.id !== itemId),
+        col_items: remove(table.col_items),
       });
     }
   },

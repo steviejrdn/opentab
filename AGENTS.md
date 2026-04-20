@@ -1,98 +1,91 @@
 # AGENTS.md
 
 ## Project Overview
-Tabulator is a survey data cross-tabulation tool with React frontend and FastAPI backend.
+Tabulator is a survey data cross-tabulation tool with React frontend and FastAPI backend. Users upload CSV data, optionally pair with MDD metadata, define variables, and build crosstabs via drag-and-drop.
 
 ## Architecture
-- **Frontend**: React 19 + TypeScript + Vite + Zustand (state) + dnd-kit (drag-drop) + Tailwind CSS
-- **Backend**: FastAPI with CORS enabled, three routers: `/api/data`, `/api/tables`, `/api/compute`
-- **Core Logic**: `backend/core/` (current) vs `core/` (legacy Streamlit)
-- **Legacy**: `app.py` is Streamlit-based, may be deprecated
+- **Frontend**: React 19 + TypeScript + Vite + Zustand (state) + dnd-kit (drag-drop) + Tailwind CSS 4 + react-router-dom
+- **Backend**: FastAPI with `allow_origins=["*"]`, three routers: `/api/data`, `/api/tables`, `/api/compute`
+- **Core Logic**: `backend/core/` is active. `core/` and `ui/` at repo root are legacy Streamlit-era copies — do not modify.
+- **Legacy**: `app.py` is Streamlit-based, deprecated.
 
 ## Development Commands
+
+### Both Services (Docker — recommended)
+```bash
+docker-compose up    # Backend :8001, Frontend :5173
+```
+
+### Both Services (local — Windows)
+- `start.sh` starts backend on **port 8000** (background) + frontend — but frontend expects **8001**. Use manual commands below instead.
 
 ### Frontend (port 5173)
 ```bash
 cd frontend
-npm run dev        # Start dev server
-npm run build      # Build (runs tsc -b && vite build)
-npm run lint       # ESLint
-npm run preview    # Preview production build
+npm install          # First time only
+npm run dev          # Dev server
+npm run build        # tsc -b && vite build
+npm run lint         # ESLint
 ```
 
-### Backend (port 8000)
+### Backend (port 8001 — match frontend default)
 ```bash
 cd backend
 pip install -r requirements.txt
-uvicorn main:app --reload    # Start dev server
+uvicorn main:app --reload --port 8001
 ```
 
-### Both Services
-- `start.sh` - Starts backend (background) + frontend
-- `node start-frontend.js` - Starts frontend only
+### Environment Variables
+- `VITE_API_URL` — backend URL for frontend (default: `http://localhost:8001`). See `.env.example`.
+- Docker Compose sets `VITE_API_URL=http://backend:8001` internally.
 
 ### Testing
 ```bash
-python test_phase1.py    # Core module tests (runs from root)
+python test_phase1.py    # Core module tests (run from repo root, imports from `core/`)
 ```
 
 ## Key Patterns
 
-### State Management
-- Zustand store in `frontend/src/store/useStore.ts` is single source of truth
-- All mutations through action functions - no direct state mutation
+### Frontend Structure
+- **All pages are inlined in `App.tsx`** (~1600 lines) — there is no `pages/` directory. BuildPage, WelcomeScreen, ResultTab, EditVariablesPage are local components.
+- Zustand store (`frontend/src/store/useStore.ts`) is single source of truth. Never mutate state directly.
+- Key slices: `variables`, `tables` (each with `row_items`, `col_items`, `filter_items`, `filter_def`, `result`), `activeTableId`, `displayOptions` (`counts`, `colPct`, `showPctSign`, `decimalPlaces`).
+- Session save/load exports `.opentab` files.
 
-### Code Definition Format
-- Format: `variable_name/code1,code2,code3`
-- Examples: `Q1/1`, `Q1/1..3` (range), `Q1/1+Q2/2` (combined)
-- Parsed by `parse_code_def()` into pandas boolean masks
+### Code Definition Syntax (parsed by `backend/core/code_parser.py`)
+- `Q1/1,2,3` — discrete codes
+- `Q1/1..5` — range
+- `Q1/1+Q2/2` — OR (union)
+- `Q1/1.Q2/2` — AND (intersection, uses `.`)
+- `!Q1/1` — negation
+- `Q1/*` — has any value
 
 ### API Communication
-- Frontend: `frontend/src/lib/api.ts` (axios-based)
-- Crosstab endpoint: `POST /api/compute/crosstab`
-- CORS allows all origins (dev setup)
+- Frontend: `frontend/src/lib/api.ts` (axios). Three clients: `dataApi`, `tablesApi`, `computeApi`.
+- Primary call: `computeApi.crosstab()` → `POST /api/compute/crosstab`
+- Backend state: `backend/api/data.py` uses module-level `data_store` dict — **not multi-user safe**.
+- `/api/tables` router exists but is **not actively used by the frontend**.
 
 ### Data Flow
-1. Load CSV (or CSV+MDD) → parse metadata → extract variables
-2. Drag variables to row/column zones
-3. Generate table → compute crosstab → display results
+1. Upload CSV (or CSV+MDD) → backend stores DataFrame in `data_store` → frontend fetches variables
+2. Drag variables to Header (columns) / Sidebreak (rows) / Filter zones
+3. Click Run → `computeApi.crosstab()` sends `row_items`, `col_items`, optional `filter_def`, `weight_col`, `mean_score_mappings`
+4. Result stored in `tables[activeTableId].result` → rendered by ResultTab
 
 ### Data Format Support
-- **CSV/TXT** — only supported data format (auto-detects encoding and delimiter)
-- **MDD** — metadata only (text/XML format, paired with CSV via edit variables page)
+- **Data**: CSV/TXT only (auto-detects encoding via chardet and delimiter)
+- **Metadata**: MDD text/XML format (IBM Dimensions) paired with CSV
 - Binary DDF/DZF, compiled MDD, and ZIP uploads are NOT supported
 
-### Variable Editing
-- Variables can be edited in `/edit-variables` page: edit labels, codes, and mean scores
-- Mean scores per code enable mean/std_error/std_dev/variance computation in crosstab output
-- Stats toggles (`showMean`, `showStdError`, `showStdDev`, `showVariance`) control display per variable
-- Mean score mappings are sent to backend via `mean_score_mappings` in crosstab request
-
-## File Structure
-```
-Tabulator/
-├── frontend/          # React app
-│   ├── src/
-│   │   ├── App.tsx
-│   │   ├── pages/    # BuildPage, EditVariablesPage
-│   │   ├── components/
-│   │   ├── store/    # Zustand
-│   │   └── lib/      # API client
-│   └── package.json
-├── backend/           # FastAPI
-│   ├── main.py
-│   ├── api/          # data.py, tables.py, compute.py
-│   ├── core/         # tabulator.py, code_parser.py, etc.
-│   └── requirements.txt
-├── core/             # Legacy shared modules
-├── app.py            # Legacy Streamlit
-└── test_phase1.py    # Core tests
-```
+### Variable Editing & Statistics
+- Edit variables page: edit labels, codes, and assign mean scores per code
+- Stats toggles (`showMean`, `showStdError`, `showStdDev`, `showVariance`) per variable
+- Mean scores sent as `mean_score_mappings` in crosstab request; backend computes stats per column
 
 ## Important Notes
-- Backend CORS allows `*` origins (development only)
-- Code definitions must maintain backward compatibility
-- Drag-drop logic in `App.tsx` BuildPage component
-- Display options: `counts`, `colPct`, `showPctSign`, `decimalPlaces`
-- Sample data in `sample_data/` directory
-- Log files: `backend.log`, `frontend.log`
+- **Port mismatch**: `start.sh` launches uvicorn on 8000, but `api.ts` defaults to 8001. Always use `--port 8001` manually.
+- Code definitions must maintain backward compatibility.
+- Drag-drop logic lives entirely in `App.tsx`.
+- Sample data in `sample_data/` directory.
+- Log files: `backend.log`, `frontend.log`.
+- See `CLAUDE.md` for more detailed architecture guide.

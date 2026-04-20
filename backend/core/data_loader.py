@@ -49,3 +49,26 @@ def detect_column_types(df):
 def load_mdd(path):
     from core.mdd_parser import parse_mdd
     return parse_mdd(path)
+
+
+def merge_multiple_response(df, source_columns, name):
+    """Merge dichotomous (0/1) columns into a single semicolon-delimited multiple-response variable.
+
+    Args:
+        df: pandas DataFrame
+        source_columns: list of column names in order (index 0 → code "1", index 1 → code "2", ...)
+        name: name for the new merged column
+
+    Returns:
+        pandas Series with semicolon-delimited codes (e.g. "1;3;5") or empty string if none selected.
+    """
+    result = pd.Series(index=df.index, dtype=object)
+    for idx in df.index:
+        selected = []
+        for i, col in enumerate(source_columns):
+            val = str(df.at[idx, col]).strip()
+            if val == '1':
+                selected.append(str(i + 1))
+        result.iloc[idx] = ';'.join(selected) if selected else ''
+
+    return result
