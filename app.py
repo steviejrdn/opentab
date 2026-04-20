@@ -4,9 +4,9 @@ from core.tabulator import create_crosstab, calculate_base
 from core.statistics import calculate_frequencies
 from ui.data_upload import render_data_upload, load_sample_data
 
-st.set_page_config(page_title="Tabulator", page_icon="📊", layout="wide")
+st.set_page_config(page_title="opentab_", page_icon="📊", layout="wide")
 
-st.title("Tabulator")
+st.title("opentab_")
 
 if 'data' not in st.session_state:
     st.session_state['data'] = None

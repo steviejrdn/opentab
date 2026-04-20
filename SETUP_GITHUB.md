@@ -1,12 +1,12 @@
 # Setting Up GitHub Repository
 
-Follow these steps to push Tabulator to GitHub.
+Follow these steps to push opentab_ to GitHub.
 
 ## Step 1: Create GitHub Repository
 
 1. Go to [github.com](https://github.com)
 2. Click **New Repository**
-3. Name: `tabulator`
+3. Name: `opentab`
 4. Description: `Survey data cross-tabulation tool with drag-and-drop interface`
 5. Choose: **Public** (for open source)
 6. **Do NOT** initialize with README (we have one)
@@ -19,7 +19,7 @@ In the project root (`C:\Users\stvjr\Documents\tabulator`):
 ```bash
 git init
 git add .
-git commit -m "Initial commit: Tabulator - survey data crosstab tool"
+git commit -m "Initial commit: opentab_ - survey data crosstab tool"
 git branch -M main
 git remote add origin https://github.com/yourusername/tabulator.git
 git push -u origin main
@@ -55,7 +55,7 @@ In repo **Settings** → **Topics**, add:
 - `docker`
 - `opensource`
 
-This helps people discover Tabulator.
+This helps people discover opentab_.
 
 ## Next Steps
 

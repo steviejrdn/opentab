@@ -1,4 +1,4 @@
-# Tabulator - Full Rebuild Plan (React + FastAPI)
+# opentab_ - Full Rebuild Plan (React + FastAPI)
 
 ## Tech Stack
 - **Backend**: FastAPI (Python) + pandas
@@ -38,7 +38,7 @@ C:\Users\stvjr\Documents\tabulator\
 ## UI Layout
 ```
 ┌─────────────────────────────────────────────────────────┐
-│  Tabulator                            [Load Data] [⚙️]  │
+│  opentab_                             [Load Data] [⚙️]  │
 ├──────────────────────┬──────────────────────────────────┤
 │  📋 Tables           │  [Build]  [Filter]  [Result]    │
 │  Table 1  [●]        │                                   │

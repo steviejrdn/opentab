@@ -4,7 +4,7 @@ from api.data import router as data_router
 from api.tables import router as tables_router
 from api.compute import router as compute_router
 
-app = FastAPI(title="Tabulator API")
+app = FastAPI(title="opentab_ API")
 
 app.add_middleware(
     CORSMiddleware,

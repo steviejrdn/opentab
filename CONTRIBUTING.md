@@ -1,4 +1,4 @@
-# Contributing to Tabulator
+# Contributing to opentab_
 
 Thanks for your interest in contributing! We welcome bug reports, feature requests, and pull requests.
 
@@ -118,4 +118,4 @@ Use [GitHub Issues](https://github.com/yourusername/tabulator/issues) with the f
 
 ---
 
-**Thank you for contributing to Tabulator!** 🎉
+**Thank you for contributing to opentab_!** 🎉

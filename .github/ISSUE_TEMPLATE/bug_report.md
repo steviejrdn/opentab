@@ -1,6 +1,6 @@
 ---
 name: Bug report
-about: Report a bug to help improve Tabulator
+about: Report a bug to help improve opentab_
 title: "[BUG] "
 labels: bug
 assignees: ''

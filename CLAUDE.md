@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Tabulator** is a survey data cross-tabulation tool. Users upload CSV data, optionally pair it with MDD metadata, define variables, and build custom crosstabs with statistical summaries via a drag-and-drop interface.
+**opentab_** is a survey data cross-tabulation tool. Users upload CSV data, optionally pair it with MDD metadata, define variables, and build custom crosstabs with statistical summaries via a drag-and-drop interface.
 
 ## Development Commands
 

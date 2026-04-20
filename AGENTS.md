@@ -1,7 +1,7 @@
 # AGENTS.md
 
 ## Project Overview
-Tabulator is a survey data cross-tabulation tool with React frontend and FastAPI backend. Users upload CSV data, optionally pair with MDD metadata, define variables, and build crosstabs via drag-and-drop.
+opentab_ is a survey data cross-tabulation tool with React frontend and FastAPI backend. Users upload CSV data, optionally pair with MDD metadata, define variables, and build crosstabs via drag-and-drop.
 
 ## Architecture
 - **Frontend**: React 19 + TypeScript + Vite + Zustand (state) + dnd-kit (drag-drop) + Tailwind CSS 4 + react-router-dom

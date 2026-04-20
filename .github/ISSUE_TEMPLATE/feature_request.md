@@ -1,6 +1,6 @@
 ---
 name: Feature request
-about: Suggest an idea for Tabulator
+about: Suggest an idea for opentab_
 title: "[FEATURE] "
 labels: enhancement
 assignees: ''
