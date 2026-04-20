@@ -1,4 +1,4 @@
-# ⧆pentab
+# ⧆pentab_
 
 A modern, interactive survey data cross-tabulation tool. Upload CSV data, define variables, and build custom crosstabs with drag-and-drop interface and statistical summaries.
 
