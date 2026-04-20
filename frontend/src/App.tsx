@@ -1,12 +1,93 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useContext } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useStore } from './store/useStore';
 import { DndContext, useSensor, useSensors, PointerSensor, useDraggable, useDroppable, DragOverlay } from '@dnd-kit/core';
 import type { DragStartEvent, DragEndEvent as DndDragEndEvent } from '@dnd-kit/core';
 import { computeApi, dataApi } from './lib/api';
-import type { FilterItem, CrosstabResult, VariableInfo } from './lib/api';
+import type { FilterItem, CrosstabResult, VariableInfo, DropItem } from './lib/api';
 import FilterTab from './components/FilterTab';
 import { v4 as uuidv4 } from 'uuid';
+
+// ─── Drag State Context ───────────────────────────────────────────────────────
+const DragStateContext = React.createContext<{ activeDragId: string | null }>({ activeDragId: null });
+
+// ─── Nesting Helpers ──────────────────────────────────────────────────────────
+function getTreeMaxDepth(item: DropItem): number {
+  if (!item.children?.length) return 0;
+  return 1 + Math.max(...item.children.map(getTreeMaxDepth));
+}
+
+interface ColHeaderCell { label: string; colSpan: number; rowSpan: number; }
+
+function buildAxisStructure(
+  items: DropItem[],
+  getVisibleCodesList: (v: string, codeDef: string) => string[],
+  getLabel: (varCode: string) => string
+): { headerRows: ColHeaderCell[][]; axisPaths: string[] } {
+  if (items.length === 0) return { headerRows: [[]], axisPaths: [] };
+  const maxDepth = Math.max(...items.map(getTreeMaxDepth));
+  const numRows = maxDepth + 1;
+  const headerRows: ColHeaderCell[][] = Array.from({ length: numRows }, () => []);
+  const axisPaths: string[] = [];
+
+  function getLeafCount(item: DropItem): number {
+    const codes = getVisibleCodesList(item.variable, item.codeDef);
+    if (!item.children?.length) return codes.length;
+    return codes.length * getLeafCount(item.children[0]);
+  }
+
+  function traverse(item: DropItem, depth: number, pathSoFar: string) {
+    const codes = getVisibleCodesList(item.variable, item.codeDef);
+    const childLeafCount = item.children?.length ? getLeafCount(item.children[0]) : 1;
+    for (const code of codes) {
+      const codeKey = `${item.variable}/${code}`;
+      const fullPath = pathSoFar ? `${pathSoFar}.${codeKey}` : codeKey;
+      if (item.children?.length) {
+        headerRows[depth].push({ label: getLabel(codeKey), colSpan: childLeafCount, rowSpan: 1 });
+        traverse(item.children[0], depth + 1, fullPath);
+      } else {
+        headerRows[depth].push({ label: getLabel(codeKey), colSpan: 1, rowSpan: numRows - depth });
+        axisPaths.push(fullPath);
+      }
+    }
+  }
+
+  items.forEach((item) => traverse(item, 0, ''));
+  return { headerRows, axisPaths };
+}
+
+function flattenItemsForBackend(
+  items: DropItem[],
+  getVisibleCodesList: (v: string, codeDef: string) => string[],
+  parentPath = ''
+): { variable: string; codeDef: string }[] {
+  const result: { variable: string; codeDef: string }[] = [];
+  for (const item of items) {
+    const codes = getVisibleCodesList(item.variable, item.codeDef);
+    if (!codes.length) continue;
+    if (item.children?.length) {
+      for (const code of codes) {
+        const codeKey = `${item.variable}/${code}`;
+        const fullPath = parentPath ? `${parentPath}.${codeKey}` : codeKey;
+        result.push(...flattenItemsForBackend(item.children, getVisibleCodesList, fullPath));
+      }
+    } else {
+      for (const code of codes) {
+        const codeKey = `${item.variable}/${code}`;
+        const fullPath = parentPath ? `${parentPath}.${codeKey}` : codeKey;
+        result.push({ variable: item.variable, codeDef: fullPath });
+      }
+    }
+  }
+  return result;
+}
+
+function getAllNestedVars(items: DropItem[]): string[] {
+  return items.flatMap((item) => [
+    item.variable,
+    ...(item.children?.length ? getAllNestedVars(item.children) : []),
+  ]);
+}
 
 // ─── Theme Toggle ────────────────────────────────────────────────────────────
 const ThemeToggle: React.FC = () => {
@@ -702,25 +783,55 @@ const TableList: React.FC = () => {
 };
 
 // ─── Draggable Zone Item ──────────────────────────────────────────────────────
-const DraggableZoneItem: React.FC<{ zoneType: 'row' | 'col'; item: any; onRemove: (id: string) => void }> = ({ zoneType, item, onRemove }) => {
-  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: `zone-item:${zoneType}:${item.id}` });
+const DraggableZoneItem: React.FC<{
+  zoneType: 'row' | 'col';
+  item: DropItem;
+  onRemove: (id: string) => void;
+  depth?: number;
+}> = ({ zoneType, item, onRemove, depth = 0 }) => {
+  const { activeDragId } = useContext(DragStateContext);
   const { variables } = useStore();
+  const { attributes, listeners, setNodeRef: setDragRef, isDragging } = useDraggable({
+    id: `zone-item:${zoneType}:${item.id}`,
+    disabled: depth > 0,
+  });
+  const isZoneItemDrag = !!activeDragId?.startsWith('zone-item:');
+  const { isOver: isNestOver, setNodeRef: setDropRef } = useDroppable({
+    id: `nest-target:${zoneType}:${item.id}`,
+    disabled: isZoneItemDrag || depth >= 3,
+  });
+  const setNodeRef = useCallback((node: HTMLElement | null) => {
+    setDragRef(node);
+    setDropRef(node);
+  }, [setDragRef, setDropRef]);
   const displayName = variables[item.variable]?.name || item.variable;
+  const hasChildren = (item.children?.length || 0) > 0;
   return (
-    <div
-      ref={setNodeRef}
-      {...listeners}
-      {...attributes}
-      className={`flex items-center gap-2 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 px-2 py-1.5 cursor-grab select-none transition-colors hover:border-zinc-300 dark:hover:border-zinc-600 ${isDragging ? 'opacity-40' : ''}`}
-    >
-      <span className="text-xs text-emerald-700 dark:text-emerald-400">{displayName}</span>
-      <button
-        onPointerDown={(e) => e.stopPropagation()}
-        onClick={() => onRemove(item.id)}
-        className="text-zinc-400 dark:text-zinc-600 hover:text-red-500 dark:hover:text-red-400 text-sm leading-none"
+    <div className={depth > 0 ? 'ml-3 pl-2 mt-1 border-l border-zinc-300 dark:border-zinc-700' : ''}>
+      <div
+        ref={setNodeRef}
+        {...(depth === 0 ? listeners : {})}
+        {...(depth === 0 ? attributes : {})}
+        className={`flex items-center gap-1.5 px-2 py-1.5 border select-none transition-colors
+          ${depth === 0 ? 'cursor-grab bg-zinc-100 dark:bg-zinc-800' : 'cursor-default bg-zinc-50 dark:bg-zinc-900'}
+          ${isDragging ? 'opacity-40' : ''}
+          ${isNestOver && !isZoneItemDrag && depth < 3
+            ? 'border-blue-400 dark:border-blue-500 bg-blue-50/30 dark:bg-blue-900/10'
+            : 'border-zinc-200 dark:border-zinc-700 hover:border-zinc-300 dark:hover:border-zinc-600'}`}
       >
-        ×
-      </button>
+        <span className={`text-xs font-medium truncate ${depth === 0 ? 'text-emerald-700 dark:text-emerald-400' : 'text-blue-600 dark:text-blue-400'}`}>
+          {depth > 0 && '↳ '}{displayName}
+        </span>
+        {hasChildren && <span className="text-xs text-zinc-400 shrink-0">({item.children!.length})</span>}
+        <button
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={() => onRemove(item.id)}
+          className="text-zinc-400 dark:text-zinc-600 hover:text-red-500 dark:hover:text-red-400 text-sm leading-none ml-auto"
+        >×</button>
+      </div>
+      {item.children?.map((child) => (
+        <DraggableZoneItem key={child.id} zoneType={zoneType} item={child} onRemove={onRemove} depth={depth + 1} />
+      ))}
     </div>
   );
 };
@@ -777,7 +888,7 @@ const App: React.FC = () => {
   const {
     dataLoaded, setDataLoaded, mergeAndSetVariables, setDataInfo,
     activeTableId, variables, tables,
-    addRowItem, addColItem, removeRowItem, removeColItem, addFilterItem,
+    addRowItem, addColItem, removeRowItem, removeColItem, addFilterItem, nestItem,
     sidebarVisible, toggleSidebar,
   } = useStore();
   const [loading, setLoading] = useState(false);
@@ -819,6 +930,22 @@ const App: React.FC = () => {
     else if (over.id === 'filter-zone') {
       const filterItem: FilterItem = { id: uuidv4(), variable: varName, condition: 'includes_any', selectedCodes: [] };
       addFilterItem(activeTableId, filterItem);
+    } else if (String(over.id).startsWith('nest-target:')) {
+      const parts = String(over.id).split(':');
+      const zone = parts[1] as 'row' | 'col';
+      const parentId = parts[2];
+      const activeTable = tables.find((t) => t.id === activeTableId);
+      if (!activeTable) return;
+      const parentItems = zone === 'col' ? activeTable.col_items : activeTable.row_items;
+      const findDepth = (items: DropItem[], id: string, d = 0): number => {
+        for (const i of items) {
+          if (i.id === id) return d;
+          if (i.children?.length) { const f = findDepth(i.children, id, d + 1); if (f >= 0) return f; }
+        }
+        return -1;
+      };
+      if (findDepth(parentItems, parentId) >= 3) return;
+      nestItem(activeTableId, zone, parentId, { id: uuidv4(), variable: varName, codeDef: allCodes });
     }
   };
 
@@ -838,6 +965,7 @@ const App: React.FC = () => {
   };
 
   return (
+    <DragStateContext.Provider value={{ activeDragId }}>
     <Router>
       <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd} onDragCancel={handleDragCancel}>
         <div className="h-screen flex flex-col bg-white dark:bg-zinc-950 font-mono">
@@ -898,6 +1026,7 @@ const App: React.FC = () => {
         </DragOverlay>
       </DndContext>
     </Router>
+    </DragStateContext.Provider>
   );
 };
 
@@ -909,14 +1038,6 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
 
   const activeTable = tables.find((t) => t.id === activeTableId);
 
-  const expandCodes = (codeDef: string): string[] => {
-    if (codeDef.includes('/')) {
-      const [, codesPart] = codeDef.split('/', 2);
-      return codesPart.split(',').map(c => c.trim()).filter(Boolean);
-    }
-    return codeDef.split(',').map(c => c.trim()).filter(Boolean);
-  };
-
   const getCodeLabel = (key: string): string => {
     const parts = key.split('/');
     if (parts.length !== 2) return key;
@@ -927,29 +1048,33 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
     return codeObj?.label || code;
   };
 
+  const getVisibleCodesList = (variable: string, codeDef: string): string[] => {
+    const rawCodes = codeDef.includes('/') ? codeDef.split('/', 2)[1] : codeDef;
+    return rawCodes.split(',').map((c) => c.trim()).filter((c) => {
+      const vis = variables[variable]?.codes.find((vc: any) => vc.code === c)?.visibility ?? 'visible';
+      return vis === 'visible';
+    });
+  };
+
   const handleGenerate = async () => {
     if (!activeTable?.row_items.length) { alert('Add items to Sidebreak first'); return; }
     setIsComputing(true);
     try {
+      const allVarNames = [...new Set([
+        ...getAllNestedVars(activeTable.row_items),
+        ...getAllNestedVars(activeTable.col_items),
+      ])];
       const meanMappings: { variable: string; codeScores: Record<string, number> }[] = [];
-      const seenVars = new Set<string>();
-      for (const item of [...activeTable.row_items, ...activeTable.col_items]) {
-        if (seenVars.has(item.variable)) continue;
-        const v = variables[item.variable];
+      for (const varName of allVarNames) {
+        const v = variables[varName];
         if (!v) continue;
         const scoredCodes = v.codes.filter((c: any) => c.factor != null);
         if (scoredCodes.length > 0) {
           const codeScores: Record<string, number> = {};
           scoredCodes.forEach((c: any) => { codeScores[c.code] = c.factor; });
-          meanMappings.push({ variable: item.variable, codeScores });
-          seenVars.add(item.variable);
+          meanMappings.push({ variable: varName, codeScores });
         }
       }
-      const getVisibleCodes = (variable: string, rawCodes: string): string =>
-        rawCodes.split(',').map((c: string) => c.trim()).filter((c: string) => {
-          const vis = variables[variable]?.codes.find((vc: any) => vc.code === c)?.visibility ?? 'visible';
-          return vis === 'visible';
-        }).join(',');
 
       const removedParts: string[] = [];
       Object.entries(variables).forEach(([varKey, info]) => {
@@ -960,12 +1085,8 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
       const effectiveFilter = [...(baseFilter ? [baseFilter] : []), ...removedParts].join('.') || undefined;
 
       const result = await computeApi.crosstab({
-        row_items: activeTable.row_items
-          .map((i: any) => ({ variable: i.variable, codeDef: `${i.variable}/${getVisibleCodes(i.variable, i.codeDef)}` }))
-          .filter((i: any) => (i.codeDef.split('/')[1] ?? '').length > 0),
-        col_items: activeTable.col_items
-          .map((i: any) => ({ variable: i.variable, codeDef: `${i.variable}/${getVisibleCodes(i.variable, i.codeDef)}` }))
-          .filter((i: any) => (i.codeDef.split('/')[1] ?? '').length > 0),
+        row_items: flattenItemsForBackend(activeTable.row_items, getVisibleCodesList),
+        col_items: flattenItemsForBackend(activeTable.col_items, getVisibleCodesList),
         filter_def: effectiveFilter,
         mean_score_mappings: meanMappings.length > 0 ? meanMappings : undefined,
       });
@@ -1038,20 +1159,13 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
                   </div>
                   <div className="flex-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 overflow-auto">
                     {(() => {
-                      const isCodeVisible = (variable: string, code: string) => {
-                        const vis = variables[variable]?.codes.find((c: any) => c.code === code)?.visibility ?? 'visible';
-                        return vis === 'visible';
-                      };
-                      const previewRows: string[] = [];
-                      activeTable.row_items.forEach((item: any) => {
-                        expandCodes(item.codeDef).filter(code => isCodeVisible(item.variable, code)).forEach(code => previewRows.push(`${item.variable}/${code}`));
-                      });
-                      const previewCols: string[] = [];
-                      activeTable.col_items.forEach((item: any) => {
-                        expandCodes(item.codeDef).filter(code => isCodeVisible(item.variable, code)).forEach(code => previewCols.push(`${item.variable}/${code}`));
-                      });
+                      const { headerRows: colHeaderRows, axisPaths: previewColPaths } =
+                        buildAxisStructure(activeTable.col_items, getVisibleCodesList, getCodeLabel);
+                      const { axisPaths: previewRowPaths } =
+                        buildAxisStructure(activeTable.row_items, getVisibleCodesList, getCodeLabel);
+                      const numHeaderRows = Math.max(colHeaderRows.length, 1);
 
-                      if (previewRows.length === 0 && previewCols.length === 0) {
+                      if (previewRowPaths.length === 0 && previewColPaths.length === 0) {
                         return (
                           <div className="h-full flex items-center justify-center">
                             <span className="text-zinc-300 dark:text-zinc-700 text-xs">drop variables to header and sidebreak to preview</span>
@@ -1059,46 +1173,55 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
                         );
                       }
 
-                      const grouped: { [key: string]: string[] } = {};
-                      previewRows.forEach((row) => {
-                        const prefix = row.split('/')[0];
-                        if (!grouped[prefix]) grouped[prefix] = [];
-                        grouped[prefix].push(row);
-                      });
+                      const getCompoundLabel = (key: string) =>
+                        key.split('.').map((part) => getCodeLabel(part)).join(' › ');
 
                       return (
                         <table className="w-full border-collapse text-xs">
                           <thead className="sticky top-0">
-                            <tr>
-                              <th className="border border-zinc-200 dark:border-zinc-800 px-3 py-2 text-left text-zinc-400 dark:text-zinc-500 bg-zinc-50 dark:bg-zinc-900 w-32"></th>
-                              <th className="border border-zinc-200 dark:border-zinc-800 px-3 py-2 text-center text-zinc-600 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-800 w-24">Total</th>
-                              {previewCols.map((col) => (
-                                <th key={col} className="border border-zinc-200 dark:border-zinc-800 px-3 py-2 text-center text-zinc-500 dark:text-zinc-500 bg-zinc-50 dark:bg-zinc-900 w-24">
-                                  {getCodeLabel(col)}
-                                </th>
-                              ))}
-                            </tr>
+                            {colHeaderRows.map((row, rowIdx) => (
+                              <tr key={rowIdx}>
+                                {rowIdx === 0 && (
+                                  <>
+                                    <th rowSpan={numHeaderRows} className="border border-zinc-200 dark:border-zinc-800 px-3 py-2 text-left text-zinc-400 dark:text-zinc-500 bg-zinc-50 dark:bg-zinc-900 w-32"></th>
+                                    <th rowSpan={numHeaderRows} className="border border-zinc-200 dark:border-zinc-800 px-3 py-2 text-center text-zinc-600 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-800 w-24">Total</th>
+                                  </>
+                                )}
+                                {row.map((cell, i) => (
+                                  <th
+                                    key={i}
+                                    colSpan={cell.colSpan}
+                                    rowSpan={cell.rowSpan}
+                                    className="border border-zinc-200 dark:border-zinc-800 px-3 py-2 text-center text-zinc-500 dark:text-zinc-500 bg-zinc-50 dark:bg-zinc-900 w-24"
+                                  >
+                                    {cell.label}
+                                  </th>
+                                ))}
+                              </tr>
+                            ))}
+                            {colHeaderRows.length === 0 && (
+                              <tr>
+                                <th className="border border-zinc-200 dark:border-zinc-800 px-3 py-2 text-left text-zinc-400 dark:text-zinc-500 bg-zinc-50 dark:bg-zinc-900 w-32"></th>
+                                <th className="border border-zinc-200 dark:border-zinc-800 px-3 py-2 text-center text-zinc-600 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-800 w-24">Total</th>
+                              </tr>
+                            )}
                           </thead>
                           <tbody>
                             <tr>
                               <td className="border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-zinc-500 bg-zinc-50 dark:bg-zinc-800/50">Base</td>
                               <td className="border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-center text-zinc-400 dark:text-zinc-600 bg-zinc-100 dark:bg-zinc-800">—</td>
-                              {previewCols.map((col) => (
+                              {previewColPaths.map((col) => (
                                 <td key={`base-${col}`} className="border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-center text-zinc-300 dark:text-zinc-700">—</td>
                               ))}
                             </tr>
-                            {Object.entries(grouped).map(([prefix, codes]) => (
-                              <React.Fragment key={prefix}>
-                                {codes.map((row) => (
-                                  <tr key={row} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/40">
-                                    <td className="border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-zinc-600 dark:text-zinc-400">{getCodeLabel(row)}</td>
-                                    <td className="border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-center text-zinc-300 dark:text-zinc-700 bg-zinc-50 dark:bg-zinc-800/30">—</td>
-                                    {previewCols.map((col) => (
-                                      <td key={`${row}-${col}`} className="border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-center text-zinc-300 dark:text-zinc-700">—</td>
-                                    ))}
-                                  </tr>
+                            {previewRowPaths.map((row) => (
+                              <tr key={row} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/40">
+                                <td className="border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-zinc-600 dark:text-zinc-400">{getCompoundLabel(row)}</td>
+                                <td className="border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-center text-zinc-300 dark:text-zinc-700 bg-zinc-50 dark:bg-zinc-800/30">—</td>
+                                {previewColPaths.map((col) => (
+                                  <td key={`${row}-${col}`} className="border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-center text-zinc-300 dark:text-zinc-700">—</td>
                                 ))}
-                              </React.Fragment>
+                              </tr>
                             ))}
                           </tbody>
                         </table>
@@ -1137,21 +1260,6 @@ const ResultTab: React.FC = () => {
   );
 
   const rowNames = Object.keys(result.counts).filter((k) => k !== 'Total');
-  const colNames = Object.keys(result.counts[rowNames[0] || 'Total'] || {}).filter((k) => k !== 'Total');
-
-  const firstRow = rowNames[0] || '';
-  const rowVarName = firstRow.split('/')[0];
-  const firstCol = colNames[0] || '';
-  const colVarName = firstCol.split('/')[0];
-  const rowVarLabel = variables[rowVarName]?.label || rowVarName;
-  const colVarLabel = variables[colVarName]?.label || colVarName;
-
-  const hasStats = result.mean && Object.keys(result.mean).length > 0;
-
-  const formatPct = (val: number) => {
-    const pct = val.toFixed(displayOptions.decimalPlaces);
-    return displayOptions.showPctSign ? `${pct}%` : pct;
-  };
 
   const getCodeLabel = (key: string): string => {
     const parts = key.split('/');
@@ -1163,18 +1271,31 @@ const ResultTab: React.FC = () => {
     return codeObj?.label || code;
   };
 
-  const groupedRows: { [key: string]: string[] } = {};
-  rowNames.forEach((row) => { const p = row.split('/')[0]; if (!groupedRows[p]) groupedRows[p] = []; groupedRows[p].push(row); });
+  const getCompoundLabel = (key: string): string =>
+    key.split('.').map((part) => getCodeLabel(part)).join(' › ');
 
-  const handleCopy = () => {
-    const lines: string[] = [];
-    lines.push(['', 'Total', ...colNames.map(c => getCodeLabel(c))].join('\t'));
-    lines.push(['Base', String(result.base), ...colNames.map(c => String(result.counts['Total']?.[c] ?? 0))].join('\t'));
-    rowNames.forEach((row) => {
-      lines.push([getCodeLabel(row), String(result.counts[row]?.['Total'] ?? 0), ...colNames.map(c => String(result.counts[row]?.[c] ?? 0))].join('\t'));
+  const getVisibleCodesList = (variable: string, codeDef: string): string[] => {
+    const rawCodes = codeDef.includes('/') ? codeDef.split('/', 2)[1] : codeDef;
+    return rawCodes.split(',').map((c) => c.trim()).filter((c) => {
+      const vis = variables[variable]?.codes.find((vc: any) => vc.code === c)?.visibility ?? 'visible';
+      return vis === 'visible';
     });
-    navigator.clipboard.writeText(lines.join('\n'));
-    alert('copied!');
+  };
+
+  const { headerRows: colHeaderRows, axisPaths: colPaths } = activeTable?.col_items.length
+    ? buildAxisStructure(activeTable.col_items, getVisibleCodesList, getCodeLabel)
+    : { headerRows: [[]] as ColHeaderCell[][], axisPaths: Object.keys(result.counts[rowNames[0] || 'Total'] || {}).filter((k) => k !== 'Total') };
+  const numHeaderRows = Math.max(colHeaderRows.length, 1);
+
+  const firstRow = rowNames[0] || '';
+  const rowVarName = firstRow.split('/')[0].split('.')[0];
+  const rowVarLabel = variables[rowVarName]?.label || rowVarName;
+
+  const hasStats = result.mean && Object.keys(result.mean).length > 0;
+
+  const formatPct = (val: number) => {
+    const pct = val.toFixed(displayOptions.decimalPlaces);
+    return displayOptions.showPctSign ? `${pct}%` : pct;
   };
 
   const statRows: { key: 'mean' | 'std_error' | 'std_dev' | 'variance'; label: string }[] = [];
@@ -1189,6 +1310,17 @@ const ResultTab: React.FC = () => {
   const statValue = (statKey: string, col: string) => {
     const statData = result[statKey as keyof CrosstabResult] as Record<string, number> | null | undefined;
     return statData?.[col] ?? '—';
+  };
+
+  const handleCopy = () => {
+    const lines: string[] = [];
+    lines.push(['', 'Total', ...colPaths.map((c) => getCompoundLabel(c))].join('\t'));
+    lines.push(['Base', String(result.base), ...colPaths.map((c) => String(result.counts['Total']?.[c] ?? 0))].join('\t'));
+    rowNames.forEach((row) => {
+      lines.push([getCompoundLabel(row), String(result.counts[row]?.['Total'] ?? 0), ...colPaths.map((c) => String(result.counts[row]?.[c] ?? 0))].join('\t'));
+    });
+    navigator.clipboard.writeText(lines.join('\n'));
+    alert('copied!');
   };
 
   return (
@@ -1235,7 +1367,6 @@ const ResultTab: React.FC = () => {
       {/* Info */}
       <div className="flex flex-wrap gap-6 text-xs text-zinc-500 items-center">
         <span>row: <span className="text-zinc-700 dark:text-zinc-300">{rowVarLabel}</span></span>
-        <span>col: <span className="text-zinc-700 dark:text-zinc-300">{colVarLabel || '—'}</span></span>
         <span>base: <span className="text-zinc-700 dark:text-zinc-300">{result.base}</span></span>
         {(() => {
           const removedSummary: string[] = [];
@@ -1256,101 +1387,110 @@ const ResultTab: React.FC = () => {
       <div className="flex-1 overflow-auto border border-zinc-200 dark:border-zinc-800">
         <table className="w-full border-collapse text-xs">
           <thead className="sticky top-0">
-            <tr>
-              <th className="border border-zinc-200 dark:border-zinc-800 px-3 py-2 text-left text-zinc-400 dark:text-zinc-500 bg-zinc-50 dark:bg-zinc-900 w-32"></th>
-              <th className="border border-zinc-200 dark:border-zinc-800 px-3 py-2 text-center text-zinc-700 dark:text-zinc-300 bg-zinc-100 dark:bg-zinc-800 w-24">Total</th>
-              {colNames.map((col) => (
-                <th key={col} className="border border-zinc-200 dark:border-zinc-800 px-3 py-2 text-center text-zinc-500 dark:text-zinc-500 bg-zinc-50 dark:bg-zinc-900 w-24">
-                  {getCodeLabel(col)}
-                </th>
-              ))}
-            </tr>
+            {colHeaderRows.map((row, rowIdx) => (
+              <tr key={rowIdx}>
+                {rowIdx === 0 && (
+                  <>
+                    <th rowSpan={numHeaderRows} className="border border-zinc-200 dark:border-zinc-800 px-3 py-2 text-left text-zinc-400 dark:text-zinc-500 bg-zinc-50 dark:bg-zinc-900 w-32"></th>
+                    <th rowSpan={numHeaderRows} className="border border-zinc-200 dark:border-zinc-800 px-3 py-2 text-center text-zinc-700 dark:text-zinc-300 bg-zinc-100 dark:bg-zinc-800 w-24">Total</th>
+                  </>
+                )}
+                {row.map((cell, i) => (
+                  <th
+                    key={i}
+                    colSpan={cell.colSpan}
+                    rowSpan={cell.rowSpan}
+                    className="border border-zinc-200 dark:border-zinc-800 px-3 py-2 text-center text-zinc-500 dark:text-zinc-500 bg-zinc-50 dark:bg-zinc-900 w-24"
+                  >
+                    {cell.label}
+                  </th>
+                ))}
+              </tr>
+            ))}
+            {colHeaderRows.length === 0 && (
+              <tr>
+                <th className="border border-zinc-200 dark:border-zinc-800 px-3 py-2 text-left text-zinc-400 dark:text-zinc-500 bg-zinc-50 dark:bg-zinc-900 w-32"></th>
+                <th className="border border-zinc-200 dark:border-zinc-800 px-3 py-2 text-center text-zinc-700 dark:text-zinc-300 bg-zinc-100 dark:bg-zinc-800 w-24">Total</th>
+              </tr>
+            )}
           </thead>
           <tbody>
             <tr className="bg-zinc-50 dark:bg-zinc-800/50">
               <td className="border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-zinc-600 dark:text-zinc-400">Base</td>
               <td className="border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-center text-zinc-800 dark:text-zinc-300 bg-zinc-100 dark:bg-zinc-800">{result.base}</td>
-              {colNames.map((col) => (
+              {colPaths.map((col) => (
                 <td key={col} className="border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-center text-zinc-600 dark:text-zinc-400">
                   {result.counts['Total']?.[col] ?? 0}
                 </td>
               ))}
             </tr>
-            {Object.entries(groupedRows).map(([prefix, codes]) => (
-              <React.Fragment key={prefix}>
-                {codes.map((row) => {
-                  const codeLabel = getCodeLabel(row);
-                  const rowTotal = result.counts[row]?.['Total'] ?? 0;
+            {rowNames.map((row) => {
+              const rowLabel = getCompoundLabel(row);
+              const rowTotal = result.counts[row]?.['Total'] ?? 0;
 
-                  if (displayOptions.counts && displayOptions.colPct) {
-                    return (
-                      <React.Fragment key={row}>
-                        <tr className="hover:bg-zinc-50 dark:hover:bg-zinc-800/30">
-                          <td rowSpan={2} className="border border-zinc-200 dark:border-zinc-800 px-3 py-1 text-zinc-700 dark:text-zinc-300 align-middle">{codeLabel}</td>
-                          <td className="border border-zinc-200 dark:border-zinc-800 px-3 py-1 text-center text-zinc-800 dark:text-zinc-300 bg-zinc-50 dark:bg-zinc-800/40">{rowTotal}</td>
-                          {colNames.map((col) => (
-                            <td key={col} className="border border-zinc-200 dark:border-zinc-800 px-3 py-1 text-center text-zinc-600 dark:text-zinc-400">
-                              {result.counts[row]?.[col] ?? 0}
-                            </td>
-                          ))}
-                        </tr>
-                        <tr className="hover:bg-zinc-50 dark:hover:bg-zinc-800/30">
-                          <td className="border border-zinc-200 dark:border-zinc-800 px-3 py-1 text-center text-blue-600 dark:text-blue-400/70 bg-zinc-50 dark:bg-zinc-800/20">{formatPct(result.col_pct[row]?.['Total'] ?? 0)}</td>
-                          {colNames.map((col) => (
-                            <td key={col} className="border border-zinc-200 dark:border-zinc-800 px-3 py-1 text-center text-blue-600 dark:text-blue-400/70">
-                              {formatPct(result.col_pct[row]?.[col] ?? 0)}
-                            </td>
-                          ))}
-                        </tr>
-                      </React.Fragment>
-                    );
-                  } else if (displayOptions.counts) {
-                    return (
-                      <tr key={row} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/30">
-                        <td className="border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-zinc-700 dark:text-zinc-300">{codeLabel}</td>
-                        <td className="border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-center text-zinc-800 dark:text-zinc-300 bg-zinc-50 dark:bg-zinc-800/40">{rowTotal}</td>
-                        {colNames.map((col) => (
-                          <td key={col} className="border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-center text-zinc-600 dark:text-zinc-400">
-                            {result.counts[row]?.[col] ?? 0}
-                          </td>
-                        ))}
-                      </tr>
-                    );
-                  } else if (displayOptions.colPct) {
-                    return (
-                      <tr key={row} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/30">
-                        <td className="border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-zinc-700 dark:text-zinc-300">{codeLabel}</td>
-                        <td className="border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-center text-blue-600 dark:text-blue-400/70 bg-zinc-50 dark:bg-zinc-800/40">{formatPct(result.col_pct[row]?.['Total'] ?? 0)}</td>
-                        {colNames.map((col) => (
-                          <td key={col} className="border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-center text-blue-600 dark:text-blue-400/70">
-                            {formatPct(result.col_pct[row]?.[col] ?? 0)}
-                          </td>
-                        ))}
-                      </tr>
-                    );
-                  }
-                  return null;
-                })}
-              </React.Fragment>
-            ))}
-            {/* Stats summary rows at bottom */}
-            {statRows.length > 0 && (
-              <>
-                {statRows.map((sr) => (
-                  <tr key={`stat-${sr.key}`} className="bg-amber-50 dark:bg-amber-900/10">
-                    <td className="border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-zinc-500 dark:text-zinc-500 italic font-medium">{sr.label}</td>
-                    <td className="border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-center text-amber-700 dark:text-amber-400/80 bg-zinc-100 dark:bg-zinc-800/40 font-medium">
-                      {statValue(sr.key, 'Total')}
-                    </td>
-                    {colNames.map((col) => (
-                      <td key={`${sr.key}-${col}`} className="border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-center text-amber-700 dark:text-amber-400/80">
-                        {statValue(sr.key, col)}
+              if (displayOptions.counts && displayOptions.colPct) {
+                return (
+                  <React.Fragment key={row}>
+                    <tr className="hover:bg-zinc-50 dark:hover:bg-zinc-800/30">
+                      <td rowSpan={2} className="border border-zinc-200 dark:border-zinc-800 px-3 py-1 text-zinc-700 dark:text-zinc-300 align-middle">{rowLabel}</td>
+                      <td className="border border-zinc-200 dark:border-zinc-800 px-3 py-1 text-center text-zinc-800 dark:text-zinc-300 bg-zinc-50 dark:bg-zinc-800/40">{rowTotal}</td>
+                      {colPaths.map((col) => (
+                        <td key={col} className="border border-zinc-200 dark:border-zinc-800 px-3 py-1 text-center text-zinc-600 dark:text-zinc-400">
+                          {result.counts[row]?.[col] ?? 0}
+                        </td>
+                      ))}
+                    </tr>
+                    <tr className="hover:bg-zinc-50 dark:hover:bg-zinc-800/30">
+                      <td className="border border-zinc-200 dark:border-zinc-800 px-3 py-1 text-center text-blue-600 dark:text-blue-400/70 bg-zinc-50 dark:bg-zinc-800/20">{formatPct(result.col_pct[row]?.['Total'] ?? 0)}</td>
+                      {colPaths.map((col) => (
+                        <td key={col} className="border border-zinc-200 dark:border-zinc-800 px-3 py-1 text-center text-blue-600 dark:text-blue-400/70">
+                          {formatPct(result.col_pct[row]?.[col] ?? 0)}
+                        </td>
+                      ))}
+                    </tr>
+                  </React.Fragment>
+                );
+              } else if (displayOptions.counts) {
+                return (
+                  <tr key={row} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/30">
+                    <td className="border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-zinc-700 dark:text-zinc-300">{rowLabel}</td>
+                    <td className="border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-center text-zinc-800 dark:text-zinc-300 bg-zinc-50 dark:bg-zinc-800/40">{rowTotal}</td>
+                    {colPaths.map((col) => (
+                      <td key={col} className="border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-center text-zinc-600 dark:text-zinc-400">
+                        {result.counts[row]?.[col] ?? 0}
                       </td>
                     ))}
                   </tr>
+                );
+              } else if (displayOptions.colPct) {
+                return (
+                  <tr key={row} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/30">
+                    <td className="border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-zinc-700 dark:text-zinc-300">{rowLabel}</td>
+                    <td className="border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-center text-blue-600 dark:text-blue-400/70 bg-zinc-50 dark:bg-zinc-800/40">{formatPct(result.col_pct[row]?.['Total'] ?? 0)}</td>
+                    {colPaths.map((col) => (
+                      <td key={col} className="border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-center text-blue-600 dark:text-blue-400/70">
+                        {formatPct(result.col_pct[row]?.[col] ?? 0)}
+                      </td>
+                    ))}
+                  </tr>
+                );
+              }
+              return null;
+            })}
+            {/* Stats summary rows at bottom */}
+            {statRows.length > 0 && statRows.map((sr) => (
+              <tr key={`stat-${sr.key}`} className="bg-amber-50 dark:bg-amber-900/10">
+                <td className="border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-zinc-500 dark:text-zinc-500 italic font-medium">{sr.label}</td>
+                <td className="border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-center text-amber-700 dark:text-amber-400/80 bg-zinc-100 dark:bg-zinc-800/40 font-medium">
+                  {statValue(sr.key, 'Total')}
+                </td>
+                {colPaths.map((col) => (
+                  <td key={`${sr.key}-${col}`} className="border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-center text-amber-700 dark:text-amber-400/80">
+                    {statValue(sr.key, col)}
+                  </td>
                 ))}
-              </>
-            )}
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>
