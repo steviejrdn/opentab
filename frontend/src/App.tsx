@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback, useContext } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useStore } from './store/useStore';
 import { DndContext, useSensor, useSensors, PointerSensor, useDraggable, useDroppable, DragOverlay } from '@dnd-kit/core';
@@ -789,21 +789,32 @@ const DraggableZoneItem: React.FC<{
   onRemove: (id: string) => void;
   depth?: number;
 }> = ({ zoneType, item, onRemove, depth = 0 }) => {
-  const { activeDragId } = useContext(DragStateContext);
-  const { variables } = useStore();
-  const { attributes, listeners, setNodeRef: setDragRef, isDragging } = useDraggable({
+  const { variables, activeTableId, nestItem } = useStore();
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: `zone-item:${zoneType}:${item.id}`,
     disabled: depth > 0,
   });
-  const isZoneItemDrag = !!activeDragId?.startsWith('zone-item:');
-  const { isOver: isNestOver, setNodeRef: setDropRef } = useDroppable({
-    id: `nest-target:${zoneType}:${item.id}`,
-    disabled: isZoneItemDrag || depth >= 3,
-  });
-  const setNodeRef = useCallback((node: HTMLElement | null) => {
-    setDragRef(node);
-    setDropRef(node);
-  }, [setDragRef, setDropRef]);
+  const [showPicker, setShowPicker] = useState(false);
+  const pickerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!showPicker) return;
+    const handler = (e: MouseEvent) => {
+      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) setShowPicker(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showPicker]);
+
+  const handleNestVariable = (varName: string) => {
+    if (!activeTableId) return;
+    const varInfo = variables[varName];
+    if (!varInfo?.codes?.length) return;
+    const allCodes = varInfo.codes.map((c: any) => c.code).join(',');
+    nestItem(activeTableId, zoneType, item.id, { id: uuidv4(), variable: varName, codeDef: allCodes });
+    setShowPicker(false);
+  };
+
   const displayName = variables[item.variable]?.name || item.variable;
   const hasChildren = (item.children?.length || 0) > 0;
   return (
@@ -812,21 +823,46 @@ const DraggableZoneItem: React.FC<{
         ref={setNodeRef}
         {...(depth === 0 ? listeners : {})}
         {...(depth === 0 ? attributes : {})}
-        className={`flex items-center gap-1.5 px-2 py-1.5 border select-none transition-colors
+        className={`group flex items-center gap-1.5 px-2 py-1.5 border select-none transition-colors
           ${depth === 0 ? 'cursor-grab bg-zinc-100 dark:bg-zinc-800' : 'cursor-default bg-zinc-50 dark:bg-zinc-900'}
           ${isDragging ? 'opacity-40' : ''}
-          ${isNestOver && !isZoneItemDrag && depth < 3
-            ? 'border-blue-400 dark:border-blue-500 bg-blue-50/30 dark:bg-blue-900/10'
-            : 'border-zinc-200 dark:border-zinc-700 hover:border-zinc-300 dark:hover:border-zinc-600'}`}
+          border-zinc-200 dark:border-zinc-700 hover:border-zinc-300 dark:hover:border-zinc-600`}
       >
-        <span className={`text-xs font-medium truncate ${depth === 0 ? 'text-emerald-700 dark:text-emerald-400' : 'text-blue-600 dark:text-blue-400'}`}>
+        <span className={`text-xs font-medium truncate flex-1 ${depth === 0 ? 'text-emerald-700 dark:text-emerald-400' : 'text-blue-600 dark:text-blue-400'}`}>
           {depth > 0 && '↳ '}{displayName}
         </span>
         {hasChildren && <span className="text-xs text-zinc-400 shrink-0">({item.children!.length})</span>}
+        {depth < 3 && (
+          <div className="relative">
+            <button
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => { e.stopPropagation(); setShowPicker((v) => !v); }}
+              title="Nest a variable under this one"
+              className="text-zinc-300 dark:text-zinc-600 hover:text-blue-500 dark:hover:text-blue-400 text-sm leading-none opacity-0 group-hover:opacity-100 transition-opacity px-0.5"
+            >+</button>
+            {showPicker && (
+              <div
+                ref={pickerRef}
+                className="absolute z-50 left-0 top-5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 shadow-lg py-1 w-44 max-h-52 overflow-y-auto text-xs"
+              >
+                <div className="px-3 py-1 text-zinc-400 dark:text-zinc-600 border-b border-zinc-100 dark:border-zinc-800 mb-1">nest variable under</div>
+                {Object.entries(variables).map(([name, info]) => (
+                  <button
+                    key={name}
+                    className="w-full text-left px-3 py-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+                    onClick={() => handleNestVariable(name)}
+                  >
+                    <span className="text-emerald-700 dark:text-emerald-400 font-medium">{(info as any).name || name}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
         <button
           onPointerDown={(e) => e.stopPropagation()}
           onClick={() => onRemove(item.id)}
-          className="text-zinc-400 dark:text-zinc-600 hover:text-red-500 dark:hover:text-red-400 text-sm leading-none ml-auto"
+          className="text-zinc-400 dark:text-zinc-600 hover:text-red-500 dark:hover:text-red-400 text-sm leading-none"
         >×</button>
       </div>
       {item.children?.map((child) => (
