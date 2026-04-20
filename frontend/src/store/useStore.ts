@@ -45,13 +45,13 @@ interface AppState {
 
   addRowItem: (tableId: string, item: DropItem) => void;
   addColItem: (tableId: string, item: DropItem) => void;
-  addChildItem: (tableId: string, parentId: string, item: DropItem, zone: 'row' | 'col') => void;
   removeRowItem: (tableId: string, itemId: string) => void;
   removeColItem: (tableId: string, itemId: string) => void;
   addFilterItem: (tableId: string, item: FilterItem) => void;
   updateFilterItem: (tableId: string, itemId: string, updates: Partial<FilterItem>) => void;
   removeFilterItem: (tableId: string, itemId: string) => void;
   setTableResult: (tableId: string, result: CrosstabResult) => void;
+  nestItem: (tableId: string, zone: 'row' | 'col', parentId: string, newItem: DropItem) => void;
 
   setActiveTab: (tab: 'build' | 'filter' | 'result') => void;
   setDisplayOptions: (options: Partial<AppState['displayOptions']>) => void;
@@ -142,58 +142,24 @@ export const useStore = create<AppState>()((set, get) => ({
     }
   },
 
-  addChildItem: (tableId, parentId, item, zone: 'row' | 'col') => {
-    const state = get();
-    const table = state.tables.find((t) => t.id === tableId);
-    if (!table) return;
-    const items = zone === 'row' ? table.row_items : table.col_items;
-    const addChild = (list: any[]): any[] => {
-      return list.map((i) => {
-        if (i.id === parentId) {
-          return { ...i, children: [...(i.children || []), item] };
-        }
-        if (i.children) {
-          return { ...i, children: addChild(i.children) };
-        }
-        return i;
-      });
-    };
-    const updated = addChild(items);
-    if (zone === 'row') {
-      get().updateTable(tableId, { row_items: updated });
-    } else {
-      get().updateTable(tableId, { col_items: updated });
-    }
-  },
-
   removeRowItem: (tableId, itemId) => {
-    const state = get();
-    const table = state.tables.find((t) => t.id === tableId);
-    if (table) {
-      const remove = (list: any[]): any[] => {
-        return list
-          .filter((i) => i.id !== itemId)
-          .map((i) => i.children ? { ...i, children: remove(i.children) } : i);
-      };
-      get().updateTable(tableId, {
-        row_items: remove(table.row_items),
-      });
-    }
+    const table = get().tables.find((t) => t.id === tableId);
+    if (!table) return;
+    const removeFrom = (items: DropItem[]): DropItem[] =>
+      items.filter((i) => i.id !== itemId).map((i) => ({
+        ...i, children: i.children ? removeFrom(i.children) : undefined,
+      }));
+    get().updateTable(tableId, { row_items: removeFrom(table.row_items) });
   },
 
   removeColItem: (tableId, itemId) => {
-    const state = get();
-    const table = state.tables.find((t) => t.id === tableId);
-    if (table) {
-      const remove = (list: any[]): any[] => {
-        return list
-          .filter((i) => i.id !== itemId)
-          .map((i) => i.children ? { ...i, children: remove(i.children) } : i);
-      };
-      get().updateTable(tableId, {
-        col_items: remove(table.col_items),
-      });
-    }
+    const table = get().tables.find((t) => t.id === tableId);
+    if (!table) return;
+    const removeFrom = (items: DropItem[]): DropItem[] =>
+      items.filter((i) => i.id !== itemId).map((i) => ({
+        ...i, children: i.children ? removeFrom(i.children) : undefined,
+      }));
+    get().updateTable(tableId, { col_items: removeFrom(table.col_items) });
   },
 
   addFilterItem: (tableId, item) => {
@@ -221,6 +187,19 @@ export const useStore = create<AppState>()((set, get) => ({
 
   setTableResult: (tableId, result) => {
     get().updateTable(tableId, { result });
+  },
+
+  nestItem: (tableId, zone, parentId, newItem) => {
+    const table = get().tables.find((t) => t.id === tableId);
+    if (!table) return;
+    const nestInItems = (items: DropItem[]): DropItem[] =>
+      items.map((item) => {
+        if (item.id === parentId) return { ...item, children: [...(item.children || []), newItem] };
+        if (item.children?.length) return { ...item, children: nestInItems(item.children) };
+        return item;
+      });
+    const key = zone === 'col' ? 'col_items' : 'row_items';
+    get().updateTable(tableId, { [key]: nestInItems(table[key]) });
   },
 
   setActiveTab: (tab) => set({ activeTab: tab }),
