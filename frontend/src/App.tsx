@@ -404,22 +404,37 @@ const DraggableVariable: React.FC<{ name: string; displayName: string; label: st
 // ─── Variable List ────────────────────────────────────────────────────────────
 const VariableList: React.FC = () => {
   const { variables, dataLoaded } = useStore();
+  const [search, setSearch] = useState('');
   if (!dataLoaded) return (
     <div className="flex flex-col h-full px-3 py-3">
       <span className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-3">variables</span>
       <div className="flex-1 flex items-center justify-center text-zinc-400 dark:text-zinc-600 text-xs">load data first</div>
     </div>
   );
+  const q = search.toLowerCase();
+  const filtered = Object.entries(variables).filter(([name, info]) =>
+    name.toLowerCase().includes(q) || (info.name || '').toLowerCase().includes(q) || (info.label || '').toLowerCase().includes(q)
+  );
   return (
     <div className="flex flex-col h-full px-3 py-3">
-      <div className="flex justify-between items-center mb-3">
+      <div className="flex justify-between items-center mb-2">
         <span className="text-xs font-medium text-zinc-500 uppercase tracking-wider">variables</span>
-        <span className="text-xs text-zinc-400 dark:text-zinc-600">{Object.keys(variables).length}</span>
+        <span className="text-xs text-zinc-400 dark:text-zinc-600">{filtered.length}/{Object.keys(variables).length}</span>
       </div>
+      <input
+        type="text"
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        placeholder="search..."
+        className="mb-2 px-2 py-1 text-xs bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 placeholder-zinc-400 dark:placeholder-zinc-600 outline-none focus:border-zinc-400 dark:focus:border-zinc-500 w-full"
+      />
       <div className="flex-1 overflow-y-auto space-y-1">
-        {Object.entries(variables).map(([name, info]) => (
+        {filtered.map(([name, info]) => (
           <DraggableVariable key={name} name={name} displayName={info.name || name} label={info.label} codeCount={info.codes.length} />
         ))}
+        {filtered.length === 0 && (
+          <div className="text-xs text-zinc-400 dark:text-zinc-600 italic px-1">no match</div>
+        )}
       </div>
     </div>
   );
@@ -795,7 +810,9 @@ const DraggableZoneItem: React.FC<{
     disabled: depth > 0,
   });
   const [showPicker, setShowPicker] = useState(false);
+  const [nestSearch, setNestSearch] = useState('');
   const pickerRef = useRef<HTMLDivElement>(null);
+  const nestSearchRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!showPicker) return;
@@ -836,25 +853,51 @@ const DraggableZoneItem: React.FC<{
           <div className="relative">
             <button
               onPointerDown={(e) => e.stopPropagation()}
-              onClick={(e) => { e.stopPropagation(); setShowPicker((v) => !v); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowPicker((v) => !v);
+                setNestSearch('');
+                setTimeout(() => nestSearchRef.current?.focus(), 50);
+              }}
               title="Nest a variable under this one"
               className="text-zinc-400 dark:text-zinc-500 hover:text-blue-500 dark:hover:text-blue-400 text-sm leading-none px-0.5 transition-colors"
             >+</button>
             {showPicker && (
               <div
                 ref={pickerRef}
-                className="absolute z-50 left-0 top-5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 shadow-lg py-1 w-44 max-h-52 overflow-y-auto text-xs"
+                className="absolute z-50 left-0 top-5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 shadow-lg text-xs"
+                style={{ width: '180px' }}
               >
-                <div className="px-3 py-1 text-zinc-400 dark:text-zinc-600 border-b border-zinc-100 dark:border-zinc-800 mb-1">nest variable under</div>
-                {Object.entries(variables).map(([name, info]) => (
-                  <button
-                    key={name}
-                    className="w-full text-left px-3 py-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
-                    onClick={() => handleNestVariable(name)}
-                  >
-                    <span className="text-emerald-700 dark:text-emerald-400 font-medium">{(info as any).name || name}</span>
-                  </button>
-                ))}
+                <div className="p-2 border-b border-zinc-100 dark:border-zinc-800">
+                  <input
+                    ref={nestSearchRef}
+                    type="text"
+                    value={nestSearch}
+                    onChange={(e) => setNestSearch(e.target.value)}
+                    onPointerDown={(e) => e.stopPropagation()}
+                    placeholder="search variable..."
+                    className="w-full px-2 py-1 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 placeholder-zinc-400 dark:placeholder-zinc-600 outline-none focus:border-zinc-400 dark:focus:border-zinc-500"
+                  />
+                </div>
+                <div className="max-h-48 overflow-y-auto py-1">
+                  {(() => {
+                    const q = nestSearch.toLowerCase();
+                    const matches = Object.entries(variables).filter(([name, info]) =>
+                      name.toLowerCase().includes(q) || ((info as any).name || '').toLowerCase().includes(q)
+                    );
+                    if (matches.length === 0) return <div className="px-3 py-2 text-zinc-400 dark:text-zinc-600 italic">no match</div>;
+                    return matches.map(([name, info]) => (
+                      <button
+                        key={name}
+                        className="w-full text-left px-3 py-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onClick={() => { handleNestVariable(name); setNestSearch(''); }}
+                      >
+                        <span className="text-emerald-700 dark:text-emerald-400 font-medium">{(info as any).name || name}</span>
+                      </button>
+                    ));
+                  })()}
+                </div>
               </div>
             )}
           </div>
