@@ -1,0 +1,490 @@
+INFO:     Will watch for changes in these directories: ['C:\\Users\\stvjr\\Documents\\tabulator\\backend']
+INFO:     Uvicorn running on http://127.0.0.1:8001 (Press CTRL+C to quit)
+INFO:     Started reloader process [7000] using StatReload
+INFO:     Started server process [17444]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     127.0.0.1:55739 - "GET /openapi.json HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56573 - "POST /api/data/upload-zip HTTP/1.1" 422 Unprocessable Content
+INFO:     127.0.0.1:59671 - "POST /api/data/upload-zip HTTP/1.1" 422 Unprocessable Content
+INFO:     127.0.0.1:64485 - "POST /api/data/upload-zip HTTP/1.1" 422 Unprocessable Content
+INFO:     127.0.0.1:64485 - "POST /api/data/upload-mdd HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58533 - "POST /api/data/upload-zip HTTP/1.1" 400 Bad Request
+INFO:     127.0.0.1:57914 - "POST /api/data/upload-zip HTTP/1.1" 422 Unprocessable Content
+WARNING:  StatReload detected changes in 'core\data_loader.py'. Reloading...
+ INFO:     127.0.0.1:55529 - "POST /api/data/upload-zip HTTP/1.1" 422 Unprocessable Content
+INFO:     127.0.0.1:49671 - "POST /api/data/load-sample HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49671 - "GET /api/data/variables HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63413 - "POST /api/data/load-sample HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63413 - "GET /api/data/variables HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60925 - "OPTIONS /api/compute/crosstab HTTP/1.1" 200 OK
+DEBUG: row_defs=[{'name': 'Age', 'label': 'Age/1', 'code_def': 'Age/1'}, {'name': 'Age', 'label': 'Age/2', 'code_def': 'Age/2'}, {'name': 'Age', 'label': 'Age/3', 'code_def': 'Age/3'}]
+DEBUG: col_defs=[{'name': 'Age', 'label': 'Age/1', 'code_def': 'Age/1'}, {'name': 'Age', 'label': 'Age/2', 'code_def': 'Age/2'}, {'name': 'Age', 'label': 'Age/3', 'code_def': 'Age/3'}]
+DEBUG: row count=3, col count=3
+INFO:     127.0.0.1:60925 - "POST /api/compute/crosstab HTTP/1.1" 200 OK
+DEBUG: row_defs=[{'name': 'Q1', 'label': 'Q1/1', 'code_def': 'Q1/1'}, {'name': 'Q1', 'label': 'Q1/2', 'code_def': 'Q1/2'}, {'name': 'Q1', 'label': 'Q1/3', 'code_def': 'Q1/3'}]
+DEBUG: col_defs=[{'name': 'Age', 'label': 'Age/1', 'code_def': 'Age/1'}, {'name': 'Age', 'label': 'Age/2', 'code_def': 'Age/2'}, {'name': 'Age', 'label': 'Age/3', 'code_def': 'Age/3'}]
+DEBUG: row count=3, col count=3
+INFO:     127.0.0.1:61087 - "POST /api/compute/crosstab HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54984 - "POST /api/data/load-sample HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54984 - "GET /api/data/variables HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56799 - "OPTIONS /api/compute/crosstab HTTP/1.1" 200 OK
+DEBUG: row_defs=[{'name': 'Q1', 'label': 'Q1/1', 'code_def': 'Q1/1'}, {'name': 'Q1', 'label': 'Q1/2', 'code_def': 'Q1/2'}, {'name': 'Q1', 'label': 'Q1/3', 'code_def': 'Q1/3'}]
+DEBUG: col_defs=[{'name': 'Gender', 'label': 'Gender/M', 'code_def': 'Gender/M'}, {'name': 'Gender', 'label': 'Gender/F', 'code_def': 'Gender/F'}]
+DEBUG: row count=3, col count=2
+INFO:     127.0.0.1:56799 - "POST /api/compute/crosstab HTTP/1.1" 200 OK
+DEBUG: row_defs=[{'name': 'Q1', 'label': 'Q1/1', 'code_def': 'Q1/1'}, {'name': 'Q1', 'label': 'Q1/2', 'code_def': 'Q1/2'}, {'name': 'Q1', 'label': 'Q1/3', 'code_def': 'Q1/3'}]
+DEBUG: col_defs=[{'name': 'Gender', 'label': 'Gender/M', 'code_def': 'Gender/M'}, {'name': 'Gender', 'label': 'Gender/F', 'code_def': 'Gender/F'}]
+DEBUG: row count=3, col count=2
+INFO:     127.0.0.1:52792 - "POST /api/compute/crosstab HTTP/1.1" 200 OK
+DEBUG: row_defs=[{'name': 'Q1', 'label': 'Q1/1', 'code_def': 'Q1/1'}, {'name': 'Q1', 'label': 'Q1/2', 'code_def': 'Q1/2'}, {'name': 'Q1', 'label': 'Q1/3', 'code_def': 'Q1/3'}]
+DEBUG: col_defs=[{'name': 'Gender', 'label': 'Gender/M', 'code_def': 'Gender/M'}, {'name': 'Gender', 'label': 'Gender/F', 'code_def': 'Gender/F'}]
+DEBUG: row count=3, col count=2
+INFO:     127.0.0.1:60915 - "POST /api/compute/crosstab HTTP/1.1" 200 OK
+DEBUG: row_defs=[{'name': 'Q1', 'label': 'Q1/1', 'code_def': 'Q1/1'}, {'name': 'Q1', 'label': 'Q1/2', 'code_def': 'Q1/2'}, {'name': 'Q1', 'label': 'Q1/3', 'code_def': 'Q1/3'}]
+DEBUG: col_defs=[{'name': 'Gender', 'label': 'Gender/M', 'code_def': 'Gender/M'}, {'name': 'Gender', 'label': 'Gender/F', 'code_def': 'Gender/F'}]
+DEBUG: row count=3, col count=2
+INFO:     127.0.0.1:64375 - "POST /api/compute/crosstab HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55046 - "POST /api/data/upload HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55046 - "GET /api/data/variables HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52601 - "OPTIONS /api/compute/crosstab HTTP/1.1" 200 OK
+Traceback (most recent call last):
+  File "C:\Users\stvjr\AppData\Roaming\Python\Python314\site-packages\pandas\core\internals\blocks.py", line 1115, in setitem
+    casted = np_can_hold_element(values.dtype, value)
+  File "C:\Users\stvjr\AppData\Roaming\Python\Python314\site-packages\pandas\core\dtypes\cast.py", line 1725, in np_can_hold_element
+    raise LossySetitemError
+pandas.errors.LossySetitemError
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\stvjr\Documents\tabulator\backend\api\compute.py", line 82, in compute_crosstab
+    if df is None:
+                ^^
+  File "C:\Users\stvjr\Documents\tabulator\backend\core\statistics.py", line 9, in calculate_frequencies
+    row_pct = _calculate_row_percentages(crosstab_df)
+  File "C:\Users\stvjr\Documents\tabulator\backend\core\statistics.py", line 26, in _calculate_row_percentages
+    row_pct.loc[idx] = (crosstab_df.loc[idx] / row_total) * 100
+    ~~~~~~~~~~~^^^^^
+  File "C:\Users\stvjr\AppData\Roaming\Python\Python314\site-packages\pandas\core\indexing.py", line 938, in __setitem__
+    iloc._setitem_with_indexer(indexer, value, self.name)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\stvjr\AppData\Roaming\Python\Python314\site-packages\pandas\core\indexing.py", line 1953, in _setitem_with_indexer
+    self._setitem_with_indexer_split_path(indexer, value, name)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\stvjr\AppData\Roaming\Python\Python314\site-packages\pandas\core\indexing.py", line 2026, in _setitem_with_indexer_split_path
+    self._setitem_single_column(loc, v, pi)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+  File "C:\Users\stvjr\AppData\Roaming\Python\Python314\site-packages\pandas\core\indexing.py", line 2181, in _setitem_single_column
+    self.obj._mgr.column_setitem(loc, plane_indexer, value)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\stvjr\AppData\Roaming\Python\Python314\site-packages\pandas\core\internals\managers.py", line 1520, in column_setitem
+    new_mgr = col_mgr.setitem((idx,), value)
+  File "C:\Users\stvjr\AppData\Roaming\Python\Python314\site-packages\pandas\core\internals\managers.py", line 604, in setitem
+    return self.apply("setitem", indexer=indexer, value=value)
+           ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\stvjr\AppData\Roaming\Python\Python314\site-packages\pandas\core\internals\managers.py", line 442, in apply
+    applied = getattr(b, f)(**kwargs)
+  File "C:\Users\stvjr\AppData\Roaming\Python\Python314\site-packages\pandas\core\internals\blocks.py", line 1118, in setitem
+    nb = self.coerce_to_target_dtype(value, raise_on_upcast=True)
+  File "C:\Users\stvjr\AppData\Roaming\Python\Python314\site-packages\pandas\core\internals\blocks.py", line 468, in coerce_to_target_dtype
+    raise TypeError(f"Invalid value '{other}' for dtype '{self.values.dtype}'")
+TypeError: Invalid value '17.24137931034483' for dtype 'int64'
+DEBUG: row_defs=[{'name': 'smoothness', 'label': 'smoothness/1', 'code_def': 'smoothness/1'}, {'name': 'smoothness', 'label': 'smoothness/2', 'code_def': 'smoothness/2'}, {'name': 'smoothness', 'label': 'smoothness/3', 'code_def': 'smoothness/3'}, {'name': 'smoothness', 'label': 'smoothness/4', 'code_def': 'smoothness/4'}, {'name': 'smoothness', 'label': 'smoothness/5', 'code_def': 'smoothness/5'}, {'name': 'smoothness', 'label': 'smoothness/6', 'code_def': 'smoothness/6'}, {'name': 'smoothness', 'label': 'smoothness/7', 'code_def': 'smoothness/7'}, {'name': 'smoothness', 'label': 'smoothness/8', 'code_def': 'smoothness/8'}, {'name': 'smoothness', 'label': 'smoothness/9', 'code_def': 'smoothness/9'}]
+DEBUG: col_defs=[{'name': 'product', 'label': 'product/RAN00', 'code_def': 'product/RAN00'}, {'name': 'product', 'label': 'product/RAN01', 'code_def': 'product/RAN01'}, {'name': 'product', 'label': 'product/RAN02', 'code_def': 'product/RAN02'}, {'name': 'product', 'label': 'product/RAN03', 'code_def': 'product/RAN03'}, {'name': 'product', 'label': 'product/RAN04', 'code_def': 'product/RAN04'}]
+DEBUG: row count=9, col count=5
+ERROR Exception: Invalid value '17.24137931034483' for dtype 'int64'
+INFO:     127.0.0.1:52601 - "POST /api/compute/crosstab HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:54422 - "POST /api/data/upload HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54422 - "GET /api/data/variables HTTP/1.1" 200 OK
+Traceback (most recent call last):
+  File "C:\Users\stvjr\AppData\Roaming\Python\Python314\site-packages\pandas\core\internals\blocks.py", line 1115, in setitem
+    casted = np_can_hold_element(values.dtype, value)
+  File "C:\Users\stvjr\AppData\Roaming\Python\Python314\site-packages\pandas\core\dtypes\cast.py", line 1725, in np_can_hold_element
+    raise LossySetitemError
+pandas.errors.LossySetitemError
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\stvjr\Documents\tabulator\backend\api\compute.py", line 82, in compute_crosstab
+    if df is None:
+                ^^
+  File "C:\Users\stvjr\Documents\tabulator\backend\core\statistics.py", line 9, in calculate_frequencies
+    row_pct = _calculate_row_percentages(crosstab_df)
+  File "C:\Users\stvjr\Documents\tabulator\backend\core\statistics.py", line 26, in _calculate_row_percentages
+    row_pct.loc[idx] = (crosstab_df.loc[idx] / row_total) * 100
+    ~~~~~~~~~~~^^^^^
+  File "C:\Users\stvjr\AppData\Roaming\Python\Python314\site-packages\pandas\core\indexing.py", line 938, in __setitem__
+    iloc._setitem_with_indexer(indexer, value, self.name)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\stvjr\AppData\Roaming\Python\Python314\site-packages\pandas\core\indexing.py", line 1953, in _setitem_with_indexer
+    self._setitem_with_indexer_split_path(indexer, value, name)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\stvjr\AppData\Roaming\Python\Python314\site-packages\pandas\core\indexing.py", line 2026, in _setitem_with_indexer_split_path
+    self._setitem_single_column(loc, v, pi)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+  File "C:\Users\stvjr\AppData\Roaming\Python\Python314\site-packages\pandas\core\indexing.py", line 2181, in _setitem_single_column
+    self.obj._mgr.column_setitem(loc, plane_indexer, value)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\stvjr\AppData\Roaming\Python\Python314\site-packages\pandas\core\internals\managers.py", line 1520, in column_setitem
+    new_mgr = col_mgr.setitem((idx,), value)
+  File "C:\Users\stvjr\AppData\Roaming\Python\Python314\site-packages\pandas\core\internals\managers.py", line 604, in setitem
+    return self.apply("setitem", indexer=indexer, value=value)
+           ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\stvjr\AppData\Roaming\Python\Python314\site-packages\pandas\core\internals\managers.py", line 442, in apply
+    applied = getattr(b, f)(**kwargs)
+  File "C:\Users\stvjr\AppData\Roaming\Python\Python314\site-packages\pandas\core\internals\blocks.py", line 1118, in setitem
+    nb = self.coerce_to_target_dtype(value, raise_on_upcast=True)
+  File "C:\Users\stvjr\AppData\Roaming\Python\Python314\site-packages\pandas\core\internals\blocks.py", line 468, in coerce_to_target_dtype
+    raise TypeError(f"Invalid value '{other}' for dtype '{self.values.dtype}'")
+TypeError: Invalid value '12.903225806451612' for dtype 'int64'
+DEBUG: row_defs=[{'name': 'overall_liking', 'label': 'overall_liking/1', 'code_def': 'overall_liking/1'}, {'name': 'overall_liking', 'label': 'overall_liking/2', 'code_def': 'overall_liking/2'}, {'name': 'overall_liking', 'label': 'overall_liking/3', 'code_def': 'overall_liking/3'}, {'name': 'overall_liking', 'label': 'overall_liking/4', 'code_def': 'overall_liking/4'}, {'name': 'overall_liking', 'label': 'overall_liking/5', 'code_def': 'overall_liking/5'}, {'name': 'overall_liking', 'label': 'overall_liking/6', 'code_def': 'overall_liking/6'}, {'name': 'overall_liking', 'label': 'overall_liking/7', 'code_def': 'overall_liking/7'}, {'name': 'overall_liking', 'label': 'overall_liking/8', 'code_def': 'overall_liking/8'}, {'name': 'overall_liking', 'label': 'overall_liking/9', 'code_def': 'overall_liking/9'}]
+DEBUG: col_defs=[{'name': 'product', 'label': 'product/RAN00', 'code_def': 'product/RAN00'}, {'name': 'product', 'label': 'product/RAN01', 'code_def': 'product/RAN01'}, {'name': 'product', 'label': 'product/RAN02', 'code_def': 'product/RAN02'}, {'name': 'product', 'label': 'product/RAN03', 'code_def': 'product/RAN03'}, {'name': 'product', 'label': 'product/RAN04', 'code_def': 'product/RAN04'}]
+DEBUG: row count=9, col count=5
+ERROR Exception: Invalid value '12.903225806451612' for dtype 'int64'
+INFO:     127.0.0.1:51680 - "POST /api/compute/crosstab HTTP/1.1" 500 Internal Server Error
+Traceback (most recent call last):
+  File "C:\Users\stvjr\AppData\Roaming\Python\Python314\site-packages\pandas\core\internals\blocks.py", line 1115, in setitem
+    casted = np_can_hold_element(values.dtype, value)
+  File "C:\Users\stvjr\AppData\Roaming\Python\Python314\site-packages\pandas\core\dtypes\cast.py", line 1725, in np_can_hold_element
+    raise LossySetitemError
+pandas.errors.LossySetitemError
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\stvjr\Documents\tabulator\backend\api\compute.py", line 82, in compute_crosstab
+    if df is None:
+                ^^
+  File "C:\Users\stvjr\Documents\tabulator\backend\core\statistics.py", line 9, in calculate_frequencies
+    row_pct = _calculate_row_percentages(crosstab_df)
+  File "C:\Users\stvjr\Documents\tabulator\backend\core\statistics.py", line 26, in _calculate_row_percentages
+    row_pct.loc[idx] = (crosstab_df.loc[idx] / row_total) * 100
+    ~~~~~~~~~~~^^^^^
+  File "C:\Users\stvjr\AppData\Roaming\Python\Python314\site-packages\pandas\core\indexing.py", line 938, in __setitem__
+    iloc._setitem_with_indexer(indexer, value, self.name)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\stvjr\AppData\Roaming\Python\Python314\site-packages\pandas\core\indexing.py", line 1953, in _setitem_with_indexer
+    self._setitem_with_indexer_split_path(indexer, value, name)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\stvjr\AppData\Roaming\Python\Python314\site-packages\pandas\core\indexing.py", line 2026, in _setitem_with_indexer_split_path
+    self._setitem_single_column(loc, v, pi)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+  File "C:\Users\stvjr\AppData\Roaming\Python\Python314\site-packages\pandas\core\indexing.py", line 2181, in _setitem_single_column
+    self.obj._mgr.column_setitem(loc, plane_indexer, value)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\stvjr\AppData\Roaming\Python\Python314\site-packages\pandas\core\internals\managers.py", line 1520, in column_setitem
+    new_mgr = col_mgr.setitem((idx,), value)
+  File "C:\Users\stvjr\AppData\Roaming\Python\Python314\site-packages\pandas\core\internals\managers.py", line 604, in setitem
+    return self.apply("setitem", indexer=indexer, value=value)
+           ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\stvjr\AppData\Roaming\Python\Python314\site-packages\pandas\core\internals\managers.py", line 442, in apply
+    applied = getattr(b, f)(**kwargs)
+  File "C:\Users\stvjr\AppData\Roaming\Python\Python314\site-packages\pandas\core\internals\blocks.py", line 1118, in setitem
+    nb = self.coerce_to_target_dtype(value, raise_on_upcast=True)
+  File "C:\Users\stvjr\AppData\Roaming\Python\Python314\site-packages\pandas\core\internals\blocks.py", line 468, in coerce_to_target_dtype
+    raise TypeError(f"Invalid value '{other}' for dtype '{self.values.dtype}'")
+TypeError: Invalid value '12.903225806451612' for dtype 'int64'
+DEBUG: row_defs=[{'name': 'overall_liking', 'label': 'overall_liking/1', 'code_def': 'overall_liking/1'}, {'name': 'overall_liking', 'label': 'overall_liking/2', 'code_def': 'overall_liking/2'}, {'name': 'overall_liking', 'label': 'overall_liking/3', 'code_def': 'overall_liking/3'}, {'name': 'overall_liking', 'label': 'overall_liking/4', 'code_def': 'overall_liking/4'}, {'name': 'overall_liking', 'label': 'overall_liking/5', 'code_def': 'overall_liking/5'}, {'name': 'overall_liking', 'label': 'overall_liking/6', 'code_def': 'overall_liking/6'}, {'name': 'overall_liking', 'label': 'overall_liking/7', 'code_def': 'overall_liking/7'}, {'name': 'overall_liking', 'label': 'overall_liking/8', 'code_def': 'overall_liking/8'}, {'name': 'overall_liking', 'label': 'overall_liking/9', 'code_def': 'overall_liking/9'}]
+DEBUG: col_defs=[{'name': 'product', 'label': 'product/RAN00', 'code_def': 'product/RAN00'}, {'name': 'product', 'label': 'product/RAN01', 'code_def': 'product/RAN01'}, {'name': 'product', 'label': 'product/RAN02', 'code_def': 'product/RAN02'}, {'name': 'product', 'label': 'product/RAN03', 'code_def': 'product/RAN03'}, {'name': 'product', 'label': 'product/RAN04', 'code_def': 'product/RAN04'}]
+DEBUG: row count=9, col count=5
+ERROR Exception: Invalid value '12.903225806451612' for dtype 'int64'
+INFO:     127.0.0.1:51680 - "POST /api/compute/crosstab HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:49867 - "POST /api/data/load-sample HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49867 - "GET /api/data/variables HTTP/1.1" 200 OK
+DEBUG: row_defs=[{'name': 'Q1', 'label': 'Q1/1', 'code_def': 'Q1/1'}, {'name': 'Q1', 'label': 'Q1/2', 'code_def': 'Q1/2'}, {'name': 'Q1', 'label': 'Q1/3', 'code_def': 'Q1/3'}]
+DEBUG: col_defs=[{'name': 'Age', 'label': 'Age/1', 'code_def': 'Age/1'}, {'name': 'Age', 'label': 'Age/2', 'code_def': 'Age/2'}, {'name': 'Age', 'label': 'Age/3', 'code_def': 'Age/3'}]
+DEBUG: row count=3, col count=3
+INFO:     127.0.0.1:60147 - "POST /api/compute/crosstab HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65011 - "POST /api/data/upload HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65011 - "GET /api/data/variables HTTP/1.1" 200 OK
+Traceback (most recent call last):
+  File "C:\Users\stvjr\AppData\Roaming\Python\Python314\site-packages\pandas\core\internals\blocks.py", line 1115, in setitem
+    casted = np_can_hold_element(values.dtype, value)
+  File "C:\Users\stvjr\AppData\Roaming\Python\Python314\site-packages\pandas\core\dtypes\cast.py", line 1725, in np_can_hold_element
+    raise LossySetitemError
+pandas.errors.LossySetitemError
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\stvjr\Documents\tabulator\backend\api\compute.py", line 82, in compute_crosstab
+    if df is None:
+                ^^
+  File "C:\Users\stvjr\Documents\tabulator\backend\core\statistics.py", line 9, in calculate_frequencies
+    row_pct = _calculate_row_percentages(crosstab_df)
+  File "C:\Users\stvjr\Documents\tabulator\backend\core\statistics.py", line 26, in _calculate_row_percentages
+    row_pct.loc[idx] = (crosstab_df.loc[idx] / row_total) * 100
+    ~~~~~~~~~~~^^^^^
+  File "C:\Users\stvjr\AppData\Roaming\Python\Python314\site-packages\pandas\core\indexing.py", line 938, in __setitem__
+    iloc._setitem_with_indexer(indexer, value, self.name)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\stvjr\AppData\Roaming\Python\Python314\site-packages\pandas\core\indexing.py", line 1953, in _setitem_with_indexer
+    self._setitem_with_indexer_split_path(indexer, value, name)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\stvjr\AppData\Roaming\Python\Python314\site-packages\pandas\core\indexing.py", line 2026, in _setitem_with_indexer_split_path
+    self._setitem_single_column(loc, v, pi)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+  File "C:\Users\stvjr\AppData\Roaming\Python\Python314\site-packages\pandas\core\indexing.py", line 2181, in _setitem_single_column
+    self.obj._mgr.column_setitem(loc, plane_indexer, value)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\stvjr\AppData\Roaming\Python\Python314\site-packages\pandas\core\internals\managers.py", line 1520, in column_setitem
+    new_mgr = col_mgr.setitem((idx,), value)
+  File "C:\Users\stvjr\AppData\Roaming\Python\Python314\site-packages\pandas\core\internals\managers.py", line 604, in setitem
+    return self.apply("setitem", indexer=indexer, value=value)
+           ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\stvjr\AppData\Roaming\Python\Python314\site-packages\pandas\core\internals\managers.py", line 442, in apply
+    applied = getattr(b, f)(**kwargs)
+  File "C:\Users\stvjr\AppData\Roaming\Python\Python314\site-packages\pandas\core\internals\blocks.py", line 1118, in setitem
+    nb = self.coerce_to_target_dtype(value, raise_on_upcast=True)
+  File "C:\Users\stvjr\AppData\Roaming\Python\Python314\site-packages\pandas\core\internals\blocks.py", line 468, in coerce_to_target_dtype
+    raise TypeError(f"Invalid value '{other}' for dtype '{self.values.dtype}'")
+TypeError: Invalid value '12.903225806451612' for dtype 'int64'
+DEBUG: row_defs=[{'name': 'overall_liking', 'label': 'overall_liking/1', 'code_def': 'overall_liking/1'}, {'name': 'overall_liking', 'label': 'overall_liking/2', 'code_def': 'overall_liking/2'}, {'name': 'overall_liking', 'label': 'overall_liking/3', 'code_def': 'overall_liking/3'}, {'name': 'overall_liking', 'label': 'overall_liking/4', 'code_def': 'overall_liking/4'}, {'name': 'overall_liking', 'label': 'overall_liking/5', 'code_def': 'overall_liking/5'}, {'name': 'overall_liking', 'label': 'overall_liking/6', 'code_def': 'overall_liking/6'}, {'name': 'overall_liking', 'label': 'overall_liking/7', 'code_def': 'overall_liking/7'}, {'name': 'overall_liking', 'label': 'overall_liking/8', 'code_def': 'overall_liking/8'}, {'name': 'overall_liking', 'label': 'overall_liking/9', 'code_def': 'overall_liking/9'}]
+DEBUG: col_defs=[{'name': 'product', 'label': 'product/RAN00', 'code_def': 'product/RAN00'}, {'name': 'product', 'label': 'product/RAN01', 'code_def': 'product/RAN01'}, {'name': 'product', 'label': 'product/RAN02', 'code_def': 'product/RAN02'}, {'name': 'product', 'label': 'product/RAN03', 'code_def': 'product/RAN03'}, {'name': 'product', 'label': 'product/RAN04', 'code_def': 'product/RAN04'}]
+DEBUG: row count=9, col count=5
+ERROR Exception: Invalid value '12.903225806451612' for dtype 'int64'
+INFO:     127.0.0.1:61834 - "POST /api/compute/crosstab HTTP/1.1" 500 Internal Server Error
+Traceback (most recent call last):
+  File "C:\Users\stvjr\AppData\Roaming\Python\Python314\site-packages\pandas\core\internals\blocks.py", line 1115, in setitem
+    casted = np_can_hold_element(values.dtype, value)
+  File "C:\Users\stvjr\AppData\Roaming\Python\Python314\site-packages\pandas\core\dtypes\cast.py", line 1725, in np_can_hold_element
+    raise LossySetitemError
+pandas.errors.LossySetitemError
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\stvjr\Documents\tabulator\backend\api\compute.py", line 82, in compute_crosstab
+    if df is None:
+                ^^
+  File "C:\Users\stvjr\Documents\tabulator\backend\core\statistics.py", line 9, in calculate_frequencies
+    row_pct = _calculate_row_percentages(crosstab_df)
+  File "C:\Users\stvjr\Documents\tabulator\backend\core\statistics.py", line 26, in _calculate_row_percentages
+    row_pct.loc[idx] = (crosstab_df.loc[idx] / row_total) * 100
+    ~~~~~~~~~~~^^^^^
+  File "C:\Users\stvjr\AppData\Roaming\Python\Python314\site-packages\pandas\core\indexing.py", line 938, in __setitem__
+    iloc._setitem_with_indexer(indexer, value, self.name)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\stvjr\AppData\Roaming\Python\Python314\site-packages\pandas\core\indexing.py", line 1953, in _setitem_with_indexer
+    self._setitem_with_indexer_split_path(indexer, value, name)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\stvjr\AppData\Roaming\Python\Python314\site-packages\pandas\core\indexing.py", line 2026, in _setitem_with_indexer_split_path
+    self._setitem_single_column(loc, v, pi)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+  File "C:\Users\stvjr\AppData\Roaming\Python\Python314\site-packages\pandas\core\indexing.py", line 2181, in _setitem_single_column
+    self.obj._mgr.column_setitem(loc, plane_indexer, value)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\stvjr\AppData\Roaming\Python\Python314\site-packages\pandas\core\internals\managers.py", line 1520, in column_setitem
+    new_mgr = col_mgr.setitem((idx,), value)
+  File "C:\Users\stvjr\AppData\Roaming\Python\Python314\site-packages\pandas\core\internals\managers.py", line 604, in setitem
+    return self.apply("setitem", indexer=indexer, value=value)
+           ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\stvjr\AppData\Roaming\Python\Python314\site-packages\pandas\core\internals\managers.py", line 442, in apply
+    applied = getattr(b, f)(**kwargs)
+  File "C:\Users\stvjr\AppData\Roaming\Python\Python314\site-packages\pandas\core\internals\blocks.py", line 1118, in setitem
+    nb = self.coerce_to_target_dtype(value, raise_on_upcast=True)
+  File "C:\Users\stvjr\AppData\Roaming\Python\Python314\site-packages\pandas\core\internals\blocks.py", line 468, in coerce_to_target_dtype
+    raise TypeError(f"Invalid value '{other}' for dtype '{self.values.dtype}'")
+TypeError: Invalid value '12.903225806451612' for dtype 'int64'
+DEBUG: row_defs=[{'name': 'overall_liking', 'label': 'overall_liking/1', 'code_def': 'overall_liking/1'}, {'name': 'overall_liking', 'label': 'overall_liking/2', 'code_def': 'overall_liking/2'}, {'name': 'overall_liking', 'label': 'overall_liking/3', 'code_def': 'overall_liking/3'}, {'name': 'overall_liking', 'label': 'overall_liking/4', 'code_def': 'overall_liking/4'}, {'name': 'overall_liking', 'label': 'overall_liking/5', 'code_def': 'overall_liking/5'}, {'name': 'overall_liking', 'label': 'overall_liking/6', 'code_def': 'overall_liking/6'}, {'name': 'overall_liking', 'label': 'overall_liking/7', 'code_def': 'overall_liking/7'}, {'name': 'overall_liking', 'label': 'overall_liking/8', 'code_def': 'overall_liking/8'}, {'name': 'overall_liking', 'label': 'overall_liking/9', 'code_def': 'overall_liking/9'}]
+DEBUG: col_defs=[{'name': 'product', 'label': 'product/RAN00', 'code_def': 'product/RAN00'}, {'name': 'product', 'label': 'product/RAN01', 'code_def': 'product/RAN01'}, {'name': 'product', 'label': 'product/RAN02', 'code_def': 'product/RAN02'}, {'name': 'product', 'label': 'product/RAN03', 'code_def': 'product/RAN03'}, {'name': 'product', 'label': 'product/RAN04', 'code_def': 'product/RAN04'}]
+DEBUG: row count=9, col count=5
+ERROR Exception: Invalid value '12.903225806451612' for dtype 'int64'
+INFO:     127.0.0.1:52841 - "POST /api/compute/crosstab HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:57984 - "POST /api/data/upload HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57984 - "GET /api/data/variables HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63235 - "OPTIONS /api/compute/crosstab HTTP/1.1" 200 OK
+Traceback (most recent call last):
+  File "C:\Users\stvjr\AppData\Roaming\Python\Python314\site-packages\pandas\core\internals\blocks.py", line 1115, in setitem
+    casted = np_can_hold_element(values.dtype, value)
+  File "C:\Users\stvjr\AppData\Roaming\Python\Python314\site-packages\pandas\core\dtypes\cast.py", line 1725, in np_can_hold_element
+    raise LossySetitemError
+pandas.errors.LossySetitemError
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\stvjr\Documents\tabulator\backend\api\compute.py", line 82, in compute_crosstab
+    if df is None:
+                ^^
+  File "C:\Users\stvjr\Documents\tabulator\backend\core\statistics.py", line 9, in calculate_frequencies
+    row_pct = _calculate_row_percentages(crosstab_df)
+  File "C:\Users\stvjr\Documents\tabulator\backend\core\statistics.py", line 26, in _calculate_row_percentages
+    if row_total > 0:
+        ^^^^^^^^^^^^^
+  File "C:\Users\stvjr\AppData\Roaming\Python\Python314\site-packages\pandas\core\indexing.py", line 938, in __setitem__
+    iloc._setitem_with_indexer(indexer, value, self.name)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\stvjr\AppData\Roaming\Python\Python314\site-packages\pandas\core\indexing.py", line 1953, in _setitem_with_indexer
+    self._setitem_with_indexer_split_path(indexer, value, name)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\stvjr\AppData\Roaming\Python\Python314\site-packages\pandas\core\indexing.py", line 2026, in _setitem_with_indexer_split_path
+    self._setitem_single_column(loc, v, pi)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+  File "C:\Users\stvjr\AppData\Roaming\Python\Python314\site-packages\pandas\core\indexing.py", line 2181, in _setitem_single_column
+    self.obj._mgr.column_setitem(loc, plane_indexer, value)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\stvjr\AppData\Roaming\Python\Python314\site-packages\pandas\core\internals\managers.py", line 1520, in column_setitem
+    new_mgr = col_mgr.setitem((idx,), value)
+  File "C:\Users\stvjr\AppData\Roaming\Python\Python314\site-packages\pandas\core\internals\managers.py", line 604, in setitem
+    return self.apply("setitem", indexer=indexer, value=value)
+           ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\stvjr\AppData\Roaming\Python\Python314\site-packages\pandas\core\internals\managers.py", line 442, in apply
+    applied = getattr(b, f)(**kwargs)
+  File "C:\Users\stvjr\AppData\Roaming\Python\Python314\site-packages\pandas\core\internals\blocks.py", line 1118, in setitem
+    nb = self.coerce_to_target_dtype(value, raise_on_upcast=True)
+  File "C:\Users\stvjr\AppData\Roaming\Python\Python314\site-packages\pandas\core\internals\blocks.py", line 468, in coerce_to_target_dtype
+    raise TypeError(f"Invalid value '{other}' for dtype '{self.values.dtype}'")
+TypeError: Invalid value '12.903225806451612' for dtype 'int64'
+DEBUG: row_defs=[{'name': 'overall_liking', 'label': 'overall_liking/1', 'code_def': 'overall_liking/1'}, {'name': 'overall_liking', 'label': 'overall_liking/2', 'code_def': 'overall_liking/2'}, {'name': 'overall_liking', 'label': 'overall_liking/3', 'code_def': 'overall_liking/3'}, {'name': 'overall_liking', 'label': 'overall_liking/4', 'code_def': 'overall_liking/4'}, {'name': 'overall_liking', 'label': 'overall_liking/5', 'code_def': 'overall_liking/5'}, {'name': 'overall_liking', 'label': 'overall_liking/6', 'code_def': 'overall_liking/6'}, {'name': 'overall_liking', 'label': 'overall_liking/7', 'code_def': 'overall_liking/7'}, {'name': 'overall_liking', 'label': 'overall_liking/8', 'code_def': 'overall_liking/8'}, {'name': 'overall_liking', 'label': 'overall_liking/9', 'code_def': 'overall_liking/9'}]
+DEBUG: col_defs=[{'name': 'product', 'label': 'product/RAN00', 'code_def': 'product/RAN00'}, {'name': 'product', 'label': 'product/RAN01', 'code_def': 'product/RAN01'}, {'name': 'product', 'label': 'product/RAN02', 'code_def': 'product/RAN02'}, {'name': 'product', 'label': 'product/RAN03', 'code_def': 'product/RAN03'}, {'name': 'product', 'label': 'product/RAN04', 'code_def': 'product/RAN04'}]
+DEBUG: row count=9, col count=5
+ERROR Exception: Invalid value '12.903225806451612' for dtype 'int64'
+INFO:     127.0.0.1:63235 - "POST /api/compute/crosstab HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:51304 - "POST /api/data/upload HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51304 - "GET /api/data/variables HTTP/1.1" 200 OK
+Traceback (most recent call last):
+  File "C:\Users\stvjr\AppData\Roaming\Python\Python314\site-packages\pandas\core\internals\blocks.py", line 1115, in setitem
+    casted = np_can_hold_element(values.dtype, value)
+  File "C:\Users\stvjr\AppData\Roaming\Python\Python314\site-packages\pandas\core\dtypes\cast.py", line 1725, in np_can_hold_element
+    raise LossySetitemError
+pandas.errors.LossySetitemError
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\stvjr\Documents\tabulator\backend\api\compute.py", line 82, in compute_crosstab
+    if df is None:
+                ^^
+  File "C:\Users\stvjr\Documents\tabulator\backend\core\statistics.py", line 9, in calculate_frequencies
+    row_pct = _calculate_row_percentages(crosstab_df)
+  File "C:\Users\stvjr\Documents\tabulator\backend\core\statistics.py", line 26, in _calculate_row_percentages
+    if row_total > 0:
+        ^^^^^^^^^^^^^
+  File "C:\Users\stvjr\AppData\Roaming\Python\Python314\site-packages\pandas\core\indexing.py", line 938, in __setitem__
+    iloc._setitem_with_indexer(indexer, value, self.name)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\stvjr\AppData\Roaming\Python\Python314\site-packages\pandas\core\indexing.py", line 1953, in _setitem_with_indexer
+    self._setitem_with_indexer_split_path(indexer, value, name)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\stvjr\AppData\Roaming\Python\Python314\site-packages\pandas\core\indexing.py", line 2026, in _setitem_with_indexer_split_path
+    self._setitem_single_column(loc, v, pi)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+  File "C:\Users\stvjr\AppData\Roaming\Python\Python314\site-packages\pandas\core\indexing.py", line 2181, in _setitem_single_column
+    self.obj._mgr.column_setitem(loc, plane_indexer, value)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\stvjr\AppData\Roaming\Python\Python314\site-packages\pandas\core\internals\managers.py", line 1520, in column_setitem
+    new_mgr = col_mgr.setitem((idx,), value)
+  File "C:\Users\stvjr\AppData\Roaming\Python\Python314\site-packages\pandas\core\internals\managers.py", line 604, in setitem
+    return self.apply("setitem", indexer=indexer, value=value)
+           ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\stvjr\AppData\Roaming\Python\Python314\site-packages\pandas\core\internals\managers.py", line 442, in apply
+    applied = getattr(b, f)(**kwargs)
+  File "C:\Users\stvjr\AppData\Roaming\Python\Python314\site-packages\pandas\core\internals\blocks.py", line 1118, in setitem
+    nb = self.coerce_to_target_dtype(value, raise_on_upcast=True)
+  File "C:\Users\stvjr\AppData\Roaming\Python\Python314\site-packages\pandas\core\internals\blocks.py", line 468, in coerce_to_target_dtype
+    raise TypeError(f"Invalid value '{other}' for dtype '{self.values.dtype}'")
+TypeError: Invalid value '12.903225806451612' for dtype 'int64'
+DEBUG: row_defs=[{'name': 'overall_liking', 'label': 'overall_liking/1', 'code_def': 'overall_liking/1'}, {'name': 'overall_liking', 'label': 'overall_liking/2', 'code_def': 'overall_liking/2'}, {'name': 'overall_liking', 'label': 'overall_liking/3', 'code_def': 'overall_liking/3'}, {'name': 'overall_liking', 'label': 'overall_liking/4', 'code_def': 'overall_liking/4'}, {'name': 'overall_liking', 'label': 'overall_liking/5', 'code_def': 'overall_liking/5'}, {'name': 'overall_liking', 'label': 'overall_liking/6', 'code_def': 'overall_liking/6'}, {'name': 'overall_liking', 'label': 'overall_liking/7', 'code_def': 'overall_liking/7'}, {'name': 'overall_liking', 'label': 'overall_liking/8', 'code_def': 'overall_liking/8'}, {'name': 'overall_liking', 'label': 'overall_liking/9', 'code_def': 'overall_liking/9'}]
+DEBUG: col_defs=[{'name': 'product', 'label': 'product/RAN00', 'code_def': 'product/RAN00'}, {'name': 'product', 'label': 'product/RAN01', 'code_def': 'product/RAN01'}, {'name': 'product', 'label': 'product/RAN02', 'code_def': 'product/RAN02'}, {'name': 'product', 'label': 'product/RAN03', 'code_def': 'product/RAN03'}, {'name': 'product', 'label': 'product/RAN04', 'code_def': 'product/RAN04'}]
+DEBUG: row count=9, col count=5
+ERROR Exception: Invalid value '12.903225806451612' for dtype 'int64'
+INFO:     127.0.0.1:59273 - "POST /api/compute/crosstab HTTP/1.1" 500 Internal Server Error
+Traceback (most recent call last):
+  File "C:\Users\stvjr\AppData\Roaming\Python\Python314\site-packages\pandas\core\internals\blocks.py", line 1115, in setitem
+    casted = np_can_hold_element(values.dtype, value)
+  File "C:\Users\stvjr\AppData\Roaming\Python\Python314\site-packages\pandas\core\dtypes\cast.py", line 1725, in np_can_hold_element
+    raise LossySetitemError
+pandas.errors.LossySetitemError
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\stvjr\Documents\tabulator\backend\api\compute.py", line 82, in compute_crosstab
+    if df is None:
+                ^^
+  File "C:\Users\stvjr\Documents\tabulator\backend\core\statistics.py", line 9, in calculate_frequencies
+    row_pct = _calculate_row_percentages(crosstab_df)
+  File "C:\Users\stvjr\Documents\tabulator\backend\core\statistics.py", line 26, in _calculate_row_percentages
+    if row_total > 0:
+        ^^^^^^^^^^^^^
+  File "C:\Users\stvjr\AppData\Roaming\Python\Python314\site-packages\pandas\core\indexing.py", line 938, in __setitem__
+    iloc._setitem_with_indexer(indexer, value, self.name)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\stvjr\AppData\Roaming\Python\Python314\site-packages\pandas\core\indexing.py", line 1953, in _setitem_with_indexer
+    self._setitem_with_indexer_split_path(indexer, value, name)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\stvjr\AppData\Roaming\Python\Python314\site-packages\pandas\core\indexing.py", line 2026, in _setitem_with_indexer_split_path
+    self._setitem_single_column(loc, v, pi)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+  File "C:\Users\stvjr\AppData\Roaming\Python\Python314\site-packages\pandas\core\indexing.py", line 2181, in _setitem_single_column
+    self.obj._mgr.column_setitem(loc, plane_indexer, value)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\stvjr\AppData\Roaming\Python\Python314\site-packages\pandas\core\internals\managers.py", line 1520, in column_setitem
+    new_mgr = col_mgr.setitem((idx,), value)
+  File "C:\Users\stvjr\AppData\Roaming\Python\Python314\site-packages\pandas\core\internals\managers.py", line 604, in setitem
+    return self.apply("setitem", indexer=indexer, value=value)
+           ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\stvjr\AppData\Roaming\Python\Python314\site-packages\pandas\core\internals\managers.py", line 442, in apply
+    applied = getattr(b, f)(**kwargs)
+  File "C:\Users\stvjr\AppData\Roaming\Python\Python314\site-packages\pandas\core\internals\blocks.py", line 1118, in setitem
+    nb = self.coerce_to_target_dtype(value, raise_on_upcast=True)
+  File "C:\Users\stvjr\AppData\Roaming\Python\Python314\site-packages\pandas\core\internals\blocks.py", line 468, in coerce_to_target_dtype
+    raise TypeError(f"Invalid value '{other}' for dtype '{self.values.dtype}'")
+TypeError: Invalid value '12.903225806451612' for dtype 'int64'
+DEBUG: row_defs=[{'name': 'overall_liking', 'label': 'overall_liking/1', 'code_def': 'overall_liking/1'}, {'name': 'overall_liking', 'label': 'overall_liking/2', 'code_def': 'overall_liking/2'}, {'name': 'overall_liking', 'label': 'overall_liking/3', 'code_def': 'overall_liking/3'}, {'name': 'overall_liking', 'label': 'overall_liking/4', 'code_def': 'overall_liking/4'}, {'name': 'overall_liking', 'label': 'overall_liking/5', 'code_def': 'overall_liking/5'}, {'name': 'overall_liking', 'label': 'overall_liking/6', 'code_def': 'overall_liking/6'}, {'name': 'overall_liking', 'label': 'overall_liking/7', 'code_def': 'overall_liking/7'}, {'name': 'overall_liking', 'label': 'overall_liking/8', 'code_def': 'overall_liking/8'}, {'name': 'overall_liking', 'label': 'overall_liking/9', 'code_def': 'overall_liking/9'}]
+DEBUG: col_defs=[{'name': 'product', 'label': 'product/RAN00', 'code_def': 'product/RAN00'}, {'name': 'product', 'label': 'product/RAN01', 'code_def': 'product/RAN01'}, {'name': 'product', 'label': 'product/RAN02', 'code_def': 'product/RAN02'}, {'name': 'product', 'label': 'product/RAN03', 'code_def': 'product/RAN03'}, {'name': 'product', 'label': 'product/RAN04', 'code_def': 'product/RAN04'}]
+DEBUG: row count=9, col count=5
+ERROR Exception: Invalid value '12.903225806451612' for dtype 'int64'
+INFO:     127.0.0.1:59273 - "POST /api/compute/crosstab HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:54999 - "POST /api/data/upload HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54999 - "GET /api/data/variables HTTP/1.1" 200 OK
+Traceback (most recent call last):
+  File "C:\Users\stvjr\AppData\Roaming\Python\Python314\site-packages\pandas\core\internals\blocks.py", line 1115, in setitem
+    casted = np_can_hold_element(values.dtype, value)
+  File "C:\Users\stvjr\AppData\Roaming\Python\Python314\site-packages\pandas\core\dtypes\cast.py", line 1725, in np_can_hold_element
+    raise LossySetitemError
+pandas.errors.LossySetitemError
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\stvjr\Documents\tabulator\backend\api\compute.py", line 82, in compute_crosstab
+    if df is None:
+                ^^
+  File "C:\Users\stvjr\Documents\tabulator\backend\core\statistics.py", line 9, in calculate_frequencies
+    row_pct = _calculate_row_percentages(crosstab_df)
+  File "C:\Users\stvjr\Documents\tabulator\backend\core\statistics.py", line 26, in _calculate_row_percentages
+    if row_total > 0:
+        ^^^^^^^^^^^^^
+  File "C:\Users\stvjr\AppData\Roaming\Python\Python314\site-packages\pandas\core\indexing.py", line 938, in __setitem__
+    iloc._setitem_with_indexer(indexer, value, self.name)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\stvjr\AppData\Roaming\Python\Python314\site-packages\pandas\core\indexing.py", line 1953, in _setitem_with_indexer
+    self._setitem_with_indexer_split_path(indexer, value, name)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\stvjr\AppData\Roaming\Python\Python314\site-packages\pandas\core\indexing.py", line 2026, in _setitem_with_indexer_split_path
+    self._setitem_single_column(loc, v, pi)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+  File "C:\Users\stvjr\AppData\Roaming\Python\Python314\site-packages\pandas\core\indexing.py", line 2181, in _setitem_single_column
+    self.obj._mgr.column_setitem(loc, plane_indexer, value)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\stvjr\AppData\Roaming\Python\Python314\site-packages\pandas\core\internals\managers.py", line 1520, in column_setitem
+    new_mgr = col_mgr.setitem((idx,), value)
+  File "C:\Users\stvjr\AppData\Roaming\Python\Python314\site-packages\pandas\core\internals\managers.py", line 604, in setitem
+    return self.apply("setitem", indexer=indexer, value=value)
+           ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\stvjr\AppData\Roaming\Python\Python314\site-packages\pandas\core\internals\managers.py", line 442, in apply
+    applied = getattr(b, f)(**kwargs)
+  File "C:\Users\stvjr\AppData\Roaming\Python\Python314\site-packages\pandas\core\internals\blocks.py", line 1118, in setitem
+    nb = self.coerce_to_target_dtype(value, raise_on_upcast=True)
+  File "C:\Users\stvjr\AppData\Roaming\Python\Python314\site-packages\pandas\core\internals\blocks.py", line 468, in coerce_to_target_dtype
+    raise TypeError(f"Invalid value '{other}' for dtype '{self.values.dtype}'")
+TypeError: Invalid value '12.903225806451612' for dtype 'int64'
+DEBUG: row_defs=[{'name': 'overall_liking', 'label': 'overall_liking/1', 'code_def': 'overall_liking/1'}, {'name': 'overall_liking', 'label': 'overall_liking/2', 'code_def': 'overall_liking/2'}, {'name': 'overall_liking', 'label': 'overall_liking/3', 'code_def': 'overall_liking/3'}, {'name': 'overall_liking', 'label': 'overall_liking/4', 'code_def': 'overall_liking/4'}, {'name': 'overall_liking', 'label': 'overall_liking/5', 'code_def': 'overall_liking/5'}, {'name': 'overall_liking', 'label': 'overall_liking/6', 'code_def': 'overall_liking/6'}, {'name': 'overall_liking', 'label': 'overall_liking/7', 'code_def': 'overall_liking/7'}, {'name': 'overall_liking', 'label': 'overall_liking/8', 'code_def': 'overall_liking/8'}, {'name': 'overall_liking', 'label': 'overall_liking/9', 'code_def': 'overall_liking/9'}]
+DEBUG: col_defs=[{'name': 'product', 'label': 'product/RAN00', 'code_def': 'product/RAN00'}, {'name': 'product', 'label': 'product/RAN01', 'code_def': 'product/RAN01'}, {'name': 'product', 'label': 'product/RAN02', 'code_def': 'product/RAN02'}, {'name': 'product', 'label': 'product/RAN03', 'code_def': 'product/RAN03'}, {'name': 'product', 'label': 'product/RAN04', 'code_def': 'product/RAN04'}]
+DEBUG: row count=9, col count=5
+ERROR Exception: Invalid value '12.903225806451612' for dtype 'int64'
+INFO:     127.0.0.1:50847 - "POST /api/compute/crosstab HTTP/1.1" 500 Internal Server Error
