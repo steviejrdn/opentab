@@ -19,8 +19,8 @@ A modern, interactive survey data cross-tabulation tool. Upload CSV data, define
 ### Run with Docker Compose
 
 ```bash
-git clone https://github.com/yourusername/tabulator.git
-cd tabulator
+git clone https://github.com/steviejrdn/opentab.git
+cd opentab
 docker-compose up
 ```
 
@@ -83,7 +83,7 @@ Frontend runs on http://localhost:5173
 ## File Structure
 
 ```
-tabulator/
+opentab/
 ├── backend/
 │   ├── main.py              # FastAPI entry
 │   ├── requirements.txt
@@ -161,7 +161,7 @@ MIT License — see LICENSE file
 ## Support
 
 - 📖 [Project Docs](./CLAUDE.md) — Architecture & development guide
-- 🐛 [Issues](https://github.com/yourusername/tabulator/issues) — Report bugs or request features
+- 🐛 [Issues](https://github.com/steviejrdn/opentab/issues) — Report bugs or request features
 - 💬 Discussions — Ask questions
 
 ---

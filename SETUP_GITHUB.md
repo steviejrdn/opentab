@@ -21,15 +21,15 @@ git init
 git add .
 git commit -m "Initial commit: opentab_ - survey data crosstab tool"
 git branch -M main
-git remote add origin https://github.com/yourusername/tabulator.git
+git remote add origin https://github.com/steviejrdn/opentab.git
 git push -u origin main
 ```
 
-Replace `yourusername` with your actual GitHub username.
+
 
 ## Step 3: Verify
 
-1. Go to `https://github.com/yourusername/tabulator`
+1. Go to `https://github.com/steviejrdn/opentab`
 2. Check that all files are uploaded
 3. README.md should display nicely
 
@@ -42,7 +42,7 @@ For documentation site:
 3. Branch: **main** / **/(root)**
 4. Save
 
-Docs will be at `https://yourusername.github.io/tabulator/`
+Docs will be at `https://steviejrdn.github.io/opentab/`
 
 ## Step 5: Add Topics (GitHub)
 

@@ -7,7 +7,7 @@ Thanks for your interest in contributing! We welcome bug reports, feature reques
 1. **Fork the repository** on GitHub
 2. **Clone your fork**:
    ```bash
-   git clone https://github.com/yourusername/tabulator.git
+   git clone https://github.com/steviejrdn/opentab.git
    cd tabulator
    ```
 3. **Create a feature branch**:
@@ -93,7 +93,7 @@ npm run lint
 
 ## Reporting Bugs
 
-Use [GitHub Issues](https://github.com/yourusername/tabulator/issues) with the bug report template.
+Use [GitHub Issues](https://github.com/steviejrdn/opentab/issues) with the bug report template.
 
 **Include:**
 - Steps to reproduce
@@ -103,7 +103,7 @@ Use [GitHub Issues](https://github.com/yourusername/tabulator/issues) with the b
 
 ## Feature Requests
 
-Use [GitHub Issues](https://github.com/yourusername/tabulator/issues) with the feature request template.
+Use [GitHub Issues](https://github.com/steviejrdn/opentab/issues) with the feature request template.
 
 **Include:**
 - Clear description of the feature
