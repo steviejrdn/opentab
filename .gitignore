@@ -43,7 +43,10 @@ dist/
 # Project specific
 .claude/
 .opencode/
+AGENTS.md
+CLAUDE.md
 *.opentab
 uploads/
 backend/temp/
+opentab/temp/
 *.log
