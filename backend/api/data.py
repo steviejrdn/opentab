@@ -18,7 +18,9 @@ data_store = {
     'metadata': {},
     'mdd': {},
     'file_name': None,
-    'merged_variables': {}
+    'merged_variables': {},
+    'net_registry': {},  # {net_code_name: {variable: str, netOf: list[str], syntax: str}}
+    'name_to_key': {},  # {display_name: column_key}
 }
 
 
@@ -587,3 +589,30 @@ async def register_merged(request: RegisterMergedRequest):
         raise HTTPException(status_code=400, detail=f"Column '{request.name}' not found in data.")
     data_store['merged_variables'][request.name] = request.metadata
     return {"status": "ok", "name": request.name}
+
+
+# ─── Register net code ─────────────────────────────────────────────────────────
+class RegisterNetRequest(BaseModel):
+    code: str
+    variable: str
+    label: str
+    netOf: list[str]
+    syntax: str
+
+
+@router.post("/register-net")
+async def register_net(request: RegisterNetRequest):
+    if data_store['df'] is None:
+        raise HTTPException(status_code=400, detail="No data loaded.")
+    data_store['net_registry'][request.code] = {
+        'variable': request.variable,
+        'label': request.label,
+        'netOf': request.netOf,
+        'syntax': request.syntax,
+    }
+    return {"status": "ok", "code": request.code}
+
+
+@router.get("/net-registry")
+async def get_net_registry():
+    return {"net_registry": data_store['net_registry'], "name_to_key": data_store['name_to_key']}

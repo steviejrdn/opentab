@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { VariableInfo, Table, CrosstabResult, DropItem, FilterItem } from '../lib/api';
+import { dataApi } from '../lib/api';
 
 export interface Folder {
   id: string;
@@ -23,6 +24,7 @@ interface AppState {
     colPct: boolean;
     showPctSign: boolean;
     decimalPlaces: number;
+    statDecimalPlaces: number;
   };
 
   sidebarWidth: number;
@@ -65,6 +67,10 @@ interface AppState {
   updateCodeFactor: (varName: string, code: string, factor: number | null) => void;
   updateCodeSyntax: (varName: string, code: string, syntax: string) => void;
   removeCode: (varName: string, code: string) => void;
+  addNetCode: (varName: string, netOf: string[], label: string) => void;
+  addCode: (varName: string, label: string, syntax: string, factor?: number | null) => void;
+  reorderCodes: (varName: string, orderedCodes: string[]) => void;
+  addVariable: (key: string, name: string, label: string, type: string) => void;
   toggleVariableStat: (varName: string, stat: 'showMean' | 'showStdError' | 'showStdDev' | 'showVariance') => void;
   deleteVariable: (varName: string) => void;
   importState: (state: Partial<Pick<AppState, 'variables' | 'tables' | 'displayOptions' | 'activeTableId' | 'fileName' | 'rowCount' | 'folders'>>) => void;
@@ -88,6 +94,7 @@ export const useStore = create<AppState>()((set, get) => ({
     colPct: false,
     showPctSign: true,
     decimalPlaces: 1,
+    statDecimalPlaces: 2,
   },
   sidebarWidth: 256,
   sidebarVisible: true,
@@ -277,10 +284,10 @@ export const useStore = create<AppState>()((set, get) => ({
   updateCodeSyntax: (varName, code, syntax) =>
     set((state) => {
       const v = state.variables[varName];
-      if (!v || !v.code_syntax) return state;
+      if (!v) return state;
       const codeIdx = v.codes.findIndex((c) => c.code === code);
       if (codeIdx === -1) return state;
-      const newCodeSyntax = [...v.code_syntax];
+      const newCodeSyntax = [...(v.code_syntax || Array(v.codes.length).fill(''))];
       newCodeSyntax[codeIdx] = syntax;
       return {
         variables: {
@@ -294,13 +301,73 @@ export const useStore = create<AppState>()((set, get) => ({
     set((state) => {
       const v = state.variables[varName];
       if (!v) return state;
+      const codeIdx = v.codes.findIndex((c) => c.code === code);
+      const newCodes = v.codes.filter((c) => c.code !== code);
+      const newCodeSyntax = v.code_syntax ? v.code_syntax.filter((_, i) => i !== codeIdx) : undefined;
       return {
         variables: {
           ...state.variables,
           [varName]: {
             ...v,
-            codes: v.codes.filter((c) => c.code !== code),
+            codes: newCodes,
+            code_syntax: newCodeSyntax,
           },
+        },
+      };
+    }),
+
+  addNetCode: (varName, netOf, label) =>
+    set((state) => {
+      const v = state.variables[varName];
+      if (!v) return state;
+      // Find next numeric code
+      const numericCodes = v.codes
+        .map((c) => parseInt(c.code, 10))
+        .filter((n) => !isNaN(n) && n > 0);
+      const nextCode = numericCodes.length > 0 ? Math.max(...numericCodes) + 1 : 1;
+      const code = String(nextCode);
+      // Use display name for variable in syntax
+      const varDisplayName = v.label || v.name || varName;
+      const syntax = netOf.map((nc) => `${varDisplayName}/${nc}`).join('+');
+      const newCode = { code, label, isNet: true, isNew: true, netOf, syntax, factor: null, visibility: 'visible' as const };
+      // Register with backend
+      dataApi.registerNet(code, varName, label, netOf, syntax).catch(console.error);
+      return { variables: { ...state.variables, [varName]: { ...v, codes: [...v.codes, newCode] } } };
+    }),
+
+  addCode: (varName: string, label: string, syntax: string, factor: number | null = null) =>
+    set((state) => {
+      const v = state.variables[varName];
+      if (!v) return state;
+      // Auto-generate next numeric code
+      const numericCodes = v.codes
+        .map((c) => parseInt(c.code, 10))
+        .filter((n) => !isNaN(n) && n > 0);
+      const nextCode = numericCodes.length > 0 ? Math.max(...numericCodes) + 1 : 1;
+      const code = String(nextCode);
+      const newCode = { code, label, syntax, factor, isNew: true, visibility: 'visible' as const };
+      const newCodeSyntax = [...(v.code_syntax || []), syntax];
+      return { variables: { ...state.variables, [varName]: { ...v, codes: [...v.codes, newCode], code_syntax: newCodeSyntax } } };
+    }),
+
+  reorderCodes: (varName, orderedCodes) =>
+    set((state) => {
+      const v = state.variables[varName];
+      if (!v) return state;
+      const codeMap = Object.fromEntries(v.codes.map((c) => [c.code, c]));
+      const reordered = orderedCodes.map((code) => codeMap[code]).filter(Boolean);
+      const codeSyntaxMap = v.code_syntax ? Object.fromEntries(v.codes.map((c, i) => [c.code, v.code_syntax?.[i] || ''])) : {};
+      const reorderedCodeSyntax = v.code_syntax ? orderedCodes.map((code) => codeSyntaxMap[code] || '') : undefined;
+      return { variables: { ...state.variables, [varName]: { ...v, codes: reordered, code_syntax: reorderedCodeSyntax } } };
+    }),
+
+  addVariable: (key, name, label, type) =>
+    set((state) => {
+      if (state.variables[key]) return state;
+      return {
+        variables: {
+          ...state.variables,
+          [key]: { name, label, type, codes: [], isCustom: true, showMean: false, showStdError: false, showStdDev: false, showVariance: false },
         },
       };
     }),
@@ -317,7 +384,13 @@ export const useStore = create<AppState>()((set, get) => ({
       };
     }),
 
-  importState: (incoming) => set((state) => ({ ...state, ...incoming })),
+  importState: (incoming) => set((state) => ({
+    ...state,
+    ...incoming,
+    displayOptions: incoming.displayOptions
+      ? { ...state.displayOptions, ...incoming.displayOptions }
+      : state.displayOptions,
+  })),
 
   mergeAndSetVariables: (incoming) => set((state) => {
     const merged: Record<string, VariableInfo> = {};
@@ -360,7 +433,7 @@ export const useStore = create<AppState>()((set, get) => ({
     activeTableId: null,
     folders: [],
     activeTab: 'build',
-    displayOptions: { counts: true, colPct: false, showPctSign: true, decimalPlaces: 1 },
+    displayOptions: { counts: true, colPct: false, showPctSign: true, decimalPlaces: 1, statDecimalPlaces: 2 },
   }),
 
 }));

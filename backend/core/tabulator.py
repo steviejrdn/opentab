@@ -2,23 +2,23 @@ import pandas as pd
 from core.code_parser import parse_code_def, evaluate_code_def
 
 
-def create_crosstab(df, row_defs, col_defs, weight_col=None, filter_def=None):
+def create_crosstab(df, row_defs, col_defs, weight_col=None, filter_def=None, name_to_key=None, net_registry=None, code_registry=None):
     if filter_def:
-        filter_mask = parse_code_def(filter_def, df)
+        filter_mask = parse_code_def(filter_def, df, name_to_key, net_registry, code_registry)
         df = df[filter_mask]
 
     row_masks = []
     for i, row_def in enumerate(row_defs):
         name = row_def.get('label', row_def['name'])
         code_def = row_def['code_def']
-        mask = evaluate_code_def(code_def, df)
+        mask = evaluate_code_def(code_def, df, name_to_key, net_registry, code_registry)
         row_masks.append((name, mask))
 
     col_masks = []
     for i, col_def in enumerate(col_defs):
         name = col_def.get('label', col_def['name'])
         code_def = col_def['code_def']
-        mask = evaluate_code_def(code_def, df)
+        mask = evaluate_code_def(code_def, df, name_to_key, net_registry, code_registry)
         col_masks.append((name, mask))
 
     # Build crosstab matrix
@@ -74,8 +74,8 @@ def build_mask(code_def, df):
     return parse_code_def(code_def, df)
 
 
-def calculate_base(df, filter_def=None):
+def calculate_base(df, filter_def=None, name_to_key=None, net_registry=None, code_registry=None):
     if filter_def:
-        mask = parse_code_def(filter_def, df)
+        mask = parse_code_def(filter_def, df, name_to_key, net_registry, code_registry)
         return mask.sum()
     return len(df)

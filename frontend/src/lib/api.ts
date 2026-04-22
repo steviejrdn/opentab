@@ -14,6 +14,10 @@ export interface VariableCode {
   label: string;
   factor: number | null;
   visibility?: 'visible' | 'hidden' | 'removed';
+  isNet?: boolean;
+  netOf?: string[];
+  isNew?: boolean;
+  syntax?: string;
 }
 
 export interface VariableInfo {
@@ -65,6 +69,9 @@ export interface CrosstabRequest {
   filter_def?: string;
   weight_col?: string;
   mean_score_mappings?: { variable: string; codeScores: Record<string, number> }[];
+  name_to_key?: Record<string, string>;
+  net_registry?: Record<string, { variable: string; label: string; netOf: string[]; syntax: string }>;
+  code_registry?: Record<string, { variable: string; code: string; syntax: string }>;
 }
 
 export interface CrosstabResult {
@@ -179,6 +186,16 @@ export const dataApi = {
 
   registerMerged: async (name: string, metadata: object) => {
     const response = await api.post('/api/data/register-merged', { name, metadata });
+    return response.data;
+  },
+
+  registerNet: async (code: string, variable: string, label: string, netOf: string[], syntax: string) => {
+    const response = await api.post('/api/data/register-net', { code, variable, label, netOf, syntax });
+    return response.data;
+  },
+
+  getNetRegistry: async (): Promise<{ net_registry: Record<string, any>; name_to_key: Record<string, string> }> => {
+    const response = await api.get('/api/data/net-registry');
     return response.data;
   },
 };

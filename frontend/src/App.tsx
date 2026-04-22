@@ -1,8 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useStore } from './store/useStore';
-import { DndContext, useSensor, useSensors, PointerSensor, useDraggable, useDroppable, DragOverlay } from '@dnd-kit/core';
+import { DndContext, useSensor, useSensors, PointerSensor, useDraggable, useDroppable, DragOverlay, closestCenter } from '@dnd-kit/core';
 import type { DragStartEvent, DragEndEvent as DndDragEndEvent } from '@dnd-kit/core';
+import { SortableContext, useSortable, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { computeApi, dataApi } from './lib/api';
 import type { FilterItem, CrosstabResult, VariableInfo, DropItem } from './lib/api';
 import FilterTab from './components/FilterTab';
@@ -10,6 +12,16 @@ import { v4 as uuidv4 } from 'uuid';
 
 // ─── Drag State Context ───────────────────────────────────────────────────────
 const DragStateContext = React.createContext<{ activeDragId: string | null }>({ activeDragId: null });
+
+// ─── Helper Functions ─────────────────────────────────────────────────────────
+function buildNameToKeyMap(vars: Record<string, VariableInfo>): Record<string, string> {
+  const map: Record<string, string> = {};
+  Object.entries(vars).forEach(([key, info]) => {
+    const displayName = info.name || info.label || key;
+    map[displayName] = key;
+  });
+  return map;
+}
 
 // ─── Nesting Helpers ──────────────────────────────────────────────────────────
 function getTreeMaxDepth(item: DropItem): number {
@@ -21,8 +33,9 @@ interface ColHeaderCell { label: string; colSpan: number; rowSpan: number; }
 
 function buildAxisStructure(
   items: DropItem[],
-  getVisibleCodesList: (v: string, codeDef: string) => string[],
-  getLabel: (varCode: string) => string
+  getVisibleCodesList: (v: string) => string[],
+  getLabel: (varCode: string) => string,
+  resolveCode: (v: string, c: string) => string = (v, c) => `${v}/${c}`
 ): { headerRows: ColHeaderCell[][]; axisPaths: string[] } {
   if (items.length === 0) return { headerRows: [[]], axisPaths: [] };
   const maxDepth = Math.max(...items.map(getTreeMaxDepth));
@@ -31,16 +44,16 @@ function buildAxisStructure(
   const axisPaths: string[] = [];
 
   function getLeafCount(item: DropItem): number {
-    const codes = getVisibleCodesList(item.variable, item.codeDef);
+    const codes = getVisibleCodesList(item.variable);
     if (!item.children?.length) return codes.length;
     return codes.length * getLeafCount(item.children[0]);
   }
 
   function traverse(item: DropItem, depth: number, pathSoFar: string) {
-    const codes = getVisibleCodesList(item.variable, item.codeDef);
+    const codes = getVisibleCodesList(item.variable);
     const childLeafCount = item.children?.length ? getLeafCount(item.children[0]) : 1;
     for (const code of codes) {
-      const codeKey = `${item.variable}/${code}`;
+      const codeKey = resolveCode(item.variable, code);
       const fullPath = pathSoFar ? `${pathSoFar}.${codeKey}` : codeKey;
       if (item.children?.length) {
         headerRows[depth].push({ label: getLabel(codeKey), colSpan: childLeafCount, rowSpan: 1 });
@@ -58,22 +71,23 @@ function buildAxisStructure(
 
 function flattenItemsForBackend(
   items: DropItem[],
-  getVisibleCodesList: (v: string, codeDef: string) => string[],
-  parentPath = ''
+  getVisibleCodesList: (v: string) => string[],
+  parentPath = '',
+  resolveCode: (v: string, c: string) => string = (v, c) => `${v}/${c}`
 ): { variable: string; codeDef: string }[] {
   const result: { variable: string; codeDef: string }[] = [];
   for (const item of items) {
-    const codes = getVisibleCodesList(item.variable, item.codeDef);
+    const codes = getVisibleCodesList(item.variable);
     if (!codes.length) continue;
     if (item.children?.length) {
       for (const code of codes) {
-        const codeKey = `${item.variable}/${code}`;
+        const codeKey = resolveCode(item.variable, code);
         const fullPath = parentPath ? `${parentPath}.${codeKey}` : codeKey;
-        result.push(...flattenItemsForBackend(item.children, getVisibleCodesList, fullPath));
+        result.push(...flattenItemsForBackend(item.children, getVisibleCodesList, fullPath, resolveCode));
       }
     } else {
       for (const code of codes) {
-        const codeKey = `${item.variable}/${code}`;
+        const codeKey = resolveCode(item.variable, code);
         const fullPath = parentPath ? `${parentPath}.${codeKey}` : codeKey;
         result.push({ variable: item.variable, codeDef: fullPath });
       }
@@ -125,7 +139,7 @@ const ThemeToggle: React.FC = () => {
 const Navigation: React.FC = () => {
   const location = useLocation();
   const { dataLoaded, variables, tables, folders, displayOptions, activeTableId, fileName, rowCount,
-          importState, setDataLoaded, resetSession, mergeAndSetVariables, setDataInfo } = useStore();
+          importState, setDataLoaded, resetSession } = useStore();
   const openFileRef = useRef<HTMLInputElement>(null);
   const opentabHandle = useRef<FileSystemFileHandle | null>(null);
   const [restoreStatus, setRestoreStatus] = useState<{ loading: boolean; message: string } | null>(null);
@@ -158,7 +172,8 @@ const Navigation: React.FC = () => {
       if (fsaSupported) {
         if (!opentabHandle.current) {
           // First save — ask user where to save
-          opentabHandle.current = await (window as Window & { showSaveFilePicker: (o: object) => Promise<FileSystemFileHandle> }).showSaveFilePicker({
+          const showSaveFilePicker = (window as unknown as { showSaveFilePicker: (o: object) => Promise<FileSystemFileHandle> }).showSaveFilePicker;
+          opentabHandle.current = await showSaveFilePicker({
             suggestedName: `${fileName?.replace(/\.[^.]+$/, '') || 'session'}.opentab`,
             types: [{ description: 'opentab session', accept: { 'application/json': ['.opentab'] } }],
           });
@@ -187,7 +202,8 @@ const Navigation: React.FC = () => {
     if (!fsaSupported) { handleSave(); return; }
     try {
       const payload = await buildPayload();
-      const handle = await (window as Window & { showSaveFilePicker: (o: object) => Promise<FileSystemFileHandle> }).showSaveFilePicker({
+      const showSaveFilePicker = (window as unknown as { showSaveFilePicker: (o: object) => Promise<FileSystemFileHandle> }).showSaveFilePicker;
+      const handle = await showSaveFilePicker({
         suggestedName: `${fileName?.replace(/\.[^.]+$/, '') || 'session'}.opentab`,
         types: [{ description: 'opentab session', accept: { 'application/json': ['.opentab'] } }],
       });
@@ -212,15 +228,13 @@ const Navigation: React.FC = () => {
       for (const [name, meta] of mergedEntries) {
         try { await dataApi.registerMerged(name, meta as object); } catch { /* skip bad entry */ }
       }
-      const vars = await dataApi.getVariables();
+      // Use saved variables directly - don't fetch from backend which loses custom codes
       importState({
         variables: data.variables, tables: data.tables,
         displayOptions: data.displayOptions ?? {}, activeTableId: data.activeTableId ?? null,
-        fileName: data.fileName ?? null, rowCount: data.rowCount ?? 0,
+        fileName: data.fileName ?? null, rowCount: uploadResult.row_count,
         folders: data.folders ?? [],
       });
-      mergeAndSetVariables(vars);
-      setDataInfo(data.fileName || 'restored.csv', uploadResult.row_count);
       setDataLoaded(true);
       setRestoreStatus({ loading: false, message: `Restored: ${data.fileName || fallbackName}` });
       setTimeout(() => setRestoreStatus(null), 3000);
@@ -238,7 +252,8 @@ const Navigation: React.FC = () => {
     opentabHandle.current = null;
     if (fsaSupported) {
       try {
-        const [handle] = await (window as Window & { showOpenFilePicker: (o: object) => Promise<FileSystemFileHandle[]> }).showOpenFilePicker({
+        const showOpenFilePicker = (window as unknown as { showOpenFilePicker: (o: object) => Promise<FileSystemFileHandle[]> }).showOpenFilePicker;
+        const [handle] = await showOpenFilePicker({
           types: [{ description: 'opentab session', accept: { 'application/json': ['.opentab'] } }],
         });
         opentabHandle.current = handle;
@@ -1213,7 +1228,6 @@ const App: React.FC = () => {
     dataLoaded, setDataLoaded, mergeAndSetVariables, setDataInfo,
     activeTableId, variables, tables,
     addRowItem, addColItem, removeRowItem, removeColItem, addFilterItem, nestItem,
-    sidebarVisible, toggleSidebar,
   } = useStore();
   const [loading, setLoading] = useState(false);
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
@@ -1362,7 +1376,17 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
 
   const activeTable = tables.find((t) => t.id === activeTableId);
 
+  const resolveCode = (variable: string, code: string): string => {
+    const codeObj = variables[variable]?.codes.find((c: any) => c.code === code);
+    if (codeObj?.syntax) return codeObj.syntax;
+    return `${variable}/${code}`;
+  };
+
   const getCodeLabel = (key: string): string => {
+    for (const [, vInfo] of Object.entries(variables)) {
+      const m = (vInfo.codes as any[]).find((c) => c.syntax && c.syntax === key);
+      if (m) return m.label;
+    }
     const parts = key.split('/');
     if (parts.length !== 2) return key;
     const [varName, code] = parts;
@@ -1372,12 +1396,46 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
     return codeObj?.label || code;
   };
 
-  const getVisibleCodesList = (variable: string, codeDef: string): string[] => {
-    const rawCodes = codeDef.includes('/') ? codeDef.split('/', 2)[1] : codeDef;
-    return rawCodes.split(',').map((c) => c.trim()).filter((c) => {
-      const vis = variables[variable]?.codes.find((vc: any) => vc.code === c)?.visibility ?? 'visible';
-      return vis === 'visible';
+  const getVisibleCodesList = (variable: string): string[] => {
+    const v = variables[variable];
+    if (!v) return [];
+    return v.codes
+      .filter((c: any) => c.visibility !== 'removed')
+      .map((c: any) => c.code);
+  };
+
+  const buildNetRegistry = (vars: Record<string, VariableInfo>): Record<string, { variable: string; label: string; netOf: string[]; syntax: string }> => {
+    const registry: Record<string, { variable: string; label: string; netOf: string[]; syntax: string }> = {};
+    Object.entries(vars).forEach(([varKey, info]) => {
+      info.codes.forEach((code: any) => {
+        if (code.isNet && code.code) {
+          registry[code.code] = {
+            variable: varKey,
+            label: code.label || code.code,
+            netOf: code.netOf || [],
+            syntax: code.syntax || '',
+          };
+        }
+      });
     });
+    return registry;
+  };
+
+  const buildCodeRegistry = (vars: Record<string, VariableInfo>): Record<string, { variable: string; code: string; syntax: string }> => {
+    const registry: Record<string, { variable: string; code: string; syntax: string }> = {};
+    Object.entries(vars).forEach(([varKey, info]) => {
+      info.codes.forEach((code: any) => {
+        // Only register non-net codes that have custom syntax
+        if (!code.isNet && code.syntax && code.code) {
+          registry[`${varKey}/${code.code}`] = {
+            variable: varKey,
+            code: code.code,
+            syntax: code.syntax,
+          };
+        }
+      });
+    });
+    return registry;
   };
 
   const handleGenerate = async () => {
@@ -1402,17 +1460,20 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
 
       const removedParts: string[] = [];
       Object.entries(variables).forEach(([varKey, info]) => {
-        const removed = info.codes.filter((c: any) => c.visibility === 'removed').map((c: any) => c.code);
+        const removed = info.codes.filter((c: any) => c.visibility === 'removed' && !c.isNet).map((c: any) => c.code);
         if (removed.length > 0) removedParts.push(`!${varKey}/${removed.join(',')}`);
       });
       const baseFilter = buildFilterDef(activeTable.filter_items);
       const effectiveFilter = [...(baseFilter ? [baseFilter] : []), ...removedParts].join('.') || undefined;
 
       const result = await computeApi.crosstab({
-        row_items: flattenItemsForBackend(activeTable.row_items, getVisibleCodesList),
-        col_items: flattenItemsForBackend(activeTable.col_items, getVisibleCodesList),
+        row_items: flattenItemsForBackend(activeTable.row_items, getVisibleCodesList, '', resolveCode),
+        col_items: flattenItemsForBackend(activeTable.col_items, getVisibleCodesList, '', resolveCode),
         filter_def: effectiveFilter,
         mean_score_mappings: meanMappings.length > 0 ? meanMappings : undefined,
+        name_to_key: buildNameToKeyMap(variables),
+        net_registry: buildNetRegistry(variables),
+        code_registry: buildCodeRegistry(variables),
       });
       if (activeTableId) setTableResult(activeTableId, result);
       setLocalTab('result');
@@ -1484,9 +1545,9 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
                   <div className="flex-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 overflow-auto">
                     {(() => {
                       const { headerRows: colHeaderRows, axisPaths: previewColPaths } =
-                        buildAxisStructure(activeTable.col_items, getVisibleCodesList, getCodeLabel);
+                        buildAxisStructure(activeTable.col_items, getVisibleCodesList, getCodeLabel, resolveCode);
                       const { axisPaths: previewRowPaths } =
-                        buildAxisStructure(activeTable.row_items, getVisibleCodesList, getCodeLabel);
+                        buildAxisStructure(activeTable.row_items, getVisibleCodesList, getCodeLabel, resolveCode);
                       const numHeaderRows = Math.max(colHeaderRows.length, 1);
 
                       if (previewRowPaths.length === 0 && previewColPaths.length === 0) {
@@ -1585,7 +1646,17 @@ const ResultTab: React.FC = () => {
 
   const rowNames = Object.keys(result.counts).filter((k) => k !== 'Total');
 
+  const resolveCode = (variable: string, code: string): string => {
+    const codeObj = variables[variable]?.codes.find((c: any) => c.code === code);
+    if (codeObj?.syntax) return codeObj.syntax;
+    return `${variable}/${code}`;
+  };
+
   const getCodeLabel = (key: string): string => {
+    for (const [, vInfo] of Object.entries(variables)) {
+      const m = (vInfo.codes as any[]).find((c) => c.syntax && c.syntax === key);
+      if (m) return m.label;
+    }
     const parts = key.split('/');
     if (parts.length !== 2) return key;
     const [varName, code] = parts;
@@ -1598,16 +1669,16 @@ const ResultTab: React.FC = () => {
   const getCompoundLabel = (key: string): string =>
     key.split('.').map((part) => getCodeLabel(part)).join(' › ');
 
-  const getVisibleCodesList = (variable: string, codeDef: string): string[] => {
-    const rawCodes = codeDef.includes('/') ? codeDef.split('/', 2)[1] : codeDef;
-    return rawCodes.split(',').map((c) => c.trim()).filter((c) => {
-      const vis = variables[variable]?.codes.find((vc: any) => vc.code === c)?.visibility ?? 'visible';
-      return vis === 'visible';
-    });
+  const getVisibleCodesList = (variable: string): string[] => {
+    const v = variables[variable];
+    if (!v) return [];
+    return v.codes
+      .filter((c: any) => c.visibility !== 'removed')
+      .map((c: any) => c.code);
   };
 
   const { headerRows: colHeaderRows, axisPaths: colPaths } = activeTable?.col_items.length
-    ? buildAxisStructure(activeTable.col_items, getVisibleCodesList, getCodeLabel)
+    ? buildAxisStructure(activeTable.col_items, getVisibleCodesList, getCodeLabel, resolveCode)
     : { headerRows: [[]] as ColHeaderCell[][], axisPaths: Object.keys(result.counts[rowNames[0] || 'Total'] || {}).filter((k) => k !== 'Total') };
   const numHeaderRows = Math.max(colHeaderRows.length, 1);
 
@@ -1633,7 +1704,9 @@ const ResultTab: React.FC = () => {
 
   const statValue = (statKey: string, col: string) => {
     const statData = result[statKey as keyof CrosstabResult] as Record<string, number> | null | undefined;
-    return statData?.[col] ?? '—';
+    const val = statData?.[col];
+    if (val == null) return '—';
+    return typeof val === 'number' ? val.toFixed(displayOptions.statDecimalPlaces) : val;
   };
 
   const buildTableHtml = (): string => {
@@ -1810,9 +1883,29 @@ const ResultTab: React.FC = () => {
                 <option value={0}>0</option>
                 <option value={1}>1</option>
                 <option value={2}>2</option>
+                <option value={3}>3</option>
+                <option value={4}>4</option>
+                <option value={5}>5</option>
+                <option value={6}>6</option>
               </select>
             </div>
           </>
+        )}
+        {hasStats && statRows.length > 0 && (
+          <div className="flex items-center gap-2 pl-4 border-l border-zinc-200 dark:border-zinc-800">
+            <span className="text-xs text-zinc-500">stats dec:</span>
+            <select
+              value={displayOptions.statDecimalPlaces}
+              onChange={(e) => setDisplayOptions({ statDecimalPlaces: parseInt(e.target.value) })}
+              className="text-xs bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 px-2 py-1 font-mono"
+            >
+              <option value={0}>0</option>
+              <option value={1}>1</option>
+              <option value={2}>2</option>
+              <option value={3}>3</option>
+              <option value={4}>4</option>
+            </select>
+          </div>
         )}
         <button
           onClick={handleCopy}
@@ -2191,11 +2284,28 @@ const MergeVariablesModal: React.FC<MergeVariablesModalProps> = ({ onClose }) =>
 
 // ─── Edit Variables Page ──────────────────────────────────────────────────────
 const EditVariablesPage: React.FC = () => {
-  const { variables } = useStore();
+  const { variables, addVariable } = useStore();
   const navigate = useNavigate();
   const [showMergeModal, setShowMergeModal] = useState(false);
+  const [showAddVar, setShowAddVar] = useState(false);
+  const [newVarKey, setNewVarKey] = useState('');
+  const [newVarName, setNewVarName] = useState('');
+  const [newVarLabel, setNewVarLabel] = useState('');
+  const [newVarType, setNewVarType] = useState('categorical');
+  const [addVarError, setAddVarError] = useState('');
 
   const variableEntries = Object.entries(variables);
+
+  const handleAddVariable = () => {
+    const key = newVarKey.trim();
+    const name = newVarName.trim();
+    if (!key) { setAddVarError('key is required'); return; }
+    if (variables[key]) { setAddVarError(`variable '${key}' already exists`); return; }
+    addVariable(key, name || key, newVarLabel.trim(), newVarType);
+    setShowAddVar(false);
+    setNewVarKey(''); setNewVarName(''); setNewVarLabel(''); setNewVarType('categorical'); setAddVarError('');
+    navigate(`/edit-variables/${encodeURIComponent(key)}`);
+  };
 
   return (
     <div className="h-full flex flex-col p-4 overflow-auto">
@@ -2213,8 +2323,14 @@ const EditVariablesPage: React.FC = () => {
         </div>
         <div className="flex items-center gap-2">
           <button
+            onClick={() => setShowAddVar((v) => !v)}
+            className="px-3 py-1.5 text-xs bg-emerald-500 text-white hover:bg-emerald-600 transition-colors"
+          >
+            + variable
+          </button>
+          <button
             onClick={() => setShowMergeModal(true)}
-            className="px-3 py-1.5 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
+            className="px-3 py-1.5 text-xs bg-blue-500 text-white hover:bg-blue-600 transition-colors"
           >
             Merge
           </button>
@@ -2222,16 +2338,74 @@ const EditVariablesPage: React.FC = () => {
         </div>
       </div>
 
+      {showAddVar && (
+        <div className="mb-4 border border-emerald-300 dark:border-emerald-700 p-3 bg-emerald-50 dark:bg-emerald-900/10 space-y-2">
+          <div className="flex items-center gap-2">
+            <div className="flex flex-col gap-0.5">
+              <span className="text-[10px] text-zinc-400 dark:text-zinc-500">key *</span>
+              <input
+                autoFocus
+                type="text"
+                placeholder="e.g. MySeg"
+                value={newVarKey}
+                onChange={(e) => { setNewVarKey(e.target.value); setAddVarError(''); }}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleAddVariable(); if (e.key === 'Escape') setShowAddVar(false); }}
+                className="text-xs bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 px-2 py-1 text-zinc-700 dark:text-zinc-300 outline-none w-28 font-mono"
+              />
+            </div>
+            <div className="flex flex-col gap-0.5 flex-1">
+              <span className="text-[10px] text-zinc-400 dark:text-zinc-500">display name</span>
+              <input
+                type="text"
+                placeholder="optional"
+                value={newVarName}
+                onChange={(e) => setNewVarName(e.target.value)}
+                className="text-xs bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 px-2 py-1 text-zinc-700 dark:text-zinc-300 outline-none w-full"
+              />
+            </div>
+            <div className="flex flex-col gap-0.5 flex-1">
+              <span className="text-[10px] text-zinc-400 dark:text-zinc-500">definition</span>
+              <input
+                type="text"
+                placeholder="optional"
+                value={newVarLabel}
+                onChange={(e) => setNewVarLabel(e.target.value)}
+                className="text-xs bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 px-2 py-1 text-zinc-700 dark:text-zinc-300 outline-none w-full"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="flex flex-col gap-0.5">
+                <span className="text-[10px] text-zinc-400 dark:text-zinc-500">type</span>
+                <select
+                  value={newVarType}
+                  onChange={(e) => setNewVarType(e.target.value)}
+                  className="text-xs bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 px-2 py-1 text-zinc-700 dark:text-zinc-300 outline-none"
+                >
+                  <option value="categorical">categorical</option>
+                  <option value="multiple_response">multiple_response</option>
+                  <option value="numeric">numeric</option>
+                </select>
+              </div>
+              <div className="flex flex-col items-center gap-1">
+                <button onClick={handleAddVariable} className="text-xs px-3 py-1 bg-emerald-500 hover:bg-emerald-600 text-white transition-colors">create</button>
+                <button onClick={() => { setShowAddVar(false); setAddVarError(''); }} className="text-xs px-3 py-1 text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-300 transition-colors">cancel</button>
+              </div>
+            </div>
+          </div>
+          {addVarError && <p className="text-[10px] text-red-500 dark:text-red-400">{addVarError}</p>}
+        </div>
+      )}
+
       <div className="flex-1 overflow-auto border border-zinc-200 dark:border-zinc-800">
-        <table className="w-full border-collapse text-xs">
+        <table className="w-full border-collapse text-xs table-fixed">
           <thead className="sticky top-0">
             <tr className="bg-zinc-50 dark:bg-zinc-900">
-              <th className="border-b border-zinc-200 dark:border-zinc-800 px-2 py-2 text-left text-zinc-500 font-medium w-6" />
-              <th className="border-b border-zinc-200 dark:border-zinc-800 px-3 py-2 text-left text-zinc-500 font-medium w-28">key</th>
-              <th className="border-b border-zinc-200 dark:border-zinc-800 px-3 py-2 text-left text-zinc-500 font-medium w-32">name</th>
-              <th className="border-b border-zinc-200 dark:border-zinc-800 px-3 py-2 text-left text-zinc-500 font-medium">definition</th>
-              <th className="border-b border-zinc-200 dark:border-zinc-800 px-3 py-2 text-left text-zinc-500 font-medium w-16">type</th>
-              <th className="border-b border-zinc-200 dark:border-zinc-800 px-3 py-2 text-right text-zinc-500 font-medium w-16">codes</th>
+              <th className="border-b border-zinc-200 dark:border-zinc-800 px-2 py-2 text-left text-zinc-500 dark:text-zinc-400 font-medium w-7" />
+              <th className="border-b border-zinc-200 dark:border-zinc-800 px-3 py-2 text-left text-zinc-500 dark:text-zinc-400 font-medium w-36">key</th>
+              <th className="border-b border-zinc-200 dark:border-zinc-800 px-3 py-2 text-left text-zinc-500 dark:text-zinc-400 font-medium w-44">name</th>
+              <th className="border-b border-zinc-200 dark:border-zinc-800 px-3 py-2 text-left text-zinc-500 dark:text-zinc-400 font-medium">definition</th>
+              <th className="border-b border-zinc-200 dark:border-zinc-800 px-3 py-2 text-left text-zinc-500 dark:text-zinc-400 font-medium w-24">type</th>
+              <th className="border-b border-zinc-200 dark:border-zinc-800 px-3 py-2 text-right text-zinc-500 dark:text-zinc-400 font-medium w-14">codes</th>
             </tr>
           </thead>
           <tbody>
@@ -2251,14 +2425,14 @@ const EditVariablesPage: React.FC = () => {
                       : <span className="inline-block w-2 h-2 rounded-full bg-zinc-300 dark:bg-zinc-600" title="Original variable" />
                     }
                   </td>
-                  <td className="border-b border-zinc-100 dark:border-zinc-800/60 px-3 py-2 text-emerald-700 dark:text-emerald-400 font-medium truncate max-w-[7rem]">{key}</td>
-                  <td className="border-b border-zinc-100 dark:border-zinc-800/60 px-3 py-2 text-zinc-700 dark:text-zinc-300 truncate max-w-[8rem]">{info.name || key}</td>
-                  <td className="border-b border-zinc-100 dark:border-zinc-800/60 px-3 py-2 text-zinc-500 truncate">{info.label}</td>
-                  <td className="border-b border-zinc-100 dark:border-zinc-800/60 px-3 py-2 text-zinc-400">{info.type}</td>
-                  <td className="border-b border-zinc-100 dark:border-zinc-800/60 px-3 py-2 text-right text-zinc-400">
+                  <td className="border-b border-zinc-100 dark:border-zinc-800/60 px-3 py-2 text-emerald-700 dark:text-emerald-400 font-medium truncate">{key}</td>
+                  <td className="border-b border-zinc-100 dark:border-zinc-800/60 px-3 py-2 text-zinc-700 dark:text-zinc-300 truncate">{info.name || key}</td>
+                  <td className="border-b border-zinc-100 dark:border-zinc-800/60 px-3 py-2 text-zinc-500 dark:text-zinc-400 truncate">{info.label}</td>
+                  <td className="border-b border-zinc-100 dark:border-zinc-800/60 px-3 py-2 text-zinc-400 dark:text-zinc-500">{info.type}</td>
+                  <td className="border-b border-zinc-100 dark:border-zinc-800/60 px-3 py-2 text-right text-zinc-400 dark:text-zinc-500">
                     {info.codes.length}
                     {(hiddenCount > 0 || removedCount > 0) && (
-                      <span className="ml-1 text-orange-500">
+                      <span className="ml-1 text-orange-500 dark:text-orange-400">
                         {hiddenCount > 0 && `−${hiddenCount}`}{removedCount > 0 && ` ✕${removedCount}`}
                       </span>
                     )}
@@ -2275,6 +2449,139 @@ const EditVariablesPage: React.FC = () => {
   );
 };
 
+// ─── Sortable Code Row ────────────────────────────────────────────────────────
+interface SortableCodeRowProps {
+  code: NonNullable<VariableInfo['codes']>[number];
+  varKey: string;
+  varName: string;
+  isCustom: boolean;
+  code_syntax?: string[];
+  codeIndex: number;
+  isSelected: boolean;
+  onToggleSelect: (code: string) => void;
+  onDelete: (varName: string, code: string) => void;
+  updateCodeLabel: (varName: string, code: string, label: string) => void;
+  updateCodeFactor: (varName: string, code: string, factor: number | null) => void;
+  updateCodeVisibility: (varName: string, code: string, visibility: 'visible' | 'hidden' | 'removed') => void;
+  updateCodeSyntax: (varName: string, code: string, syntax: string) => void;
+}
+
+const SortableCodeRow: React.FC<SortableCodeRowProps> = ({
+  code, varKey, varName, isCustom, code_syntax, codeIndex,
+  isSelected, onToggleSelect, onDelete,
+  updateCodeLabel, updateCodeFactor, updateCodeVisibility, updateCodeSyntax,
+}) => {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: code.code });
+  const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 };
+  const vis = code.visibility ?? 'visible';
+  const rowClass = vis === 'removed'
+    ? 'bg-red-50 dark:bg-red-900/10 opacity-50'
+    : vis === 'hidden' ? 'opacity-60' : '';
+
+  const netSyntax = code.isNet && code.netOf
+    ? code.netOf.map((nc) => `${varName}/${nc}`).join('+')
+    : null;
+
+  return (
+    <tr ref={setNodeRef} style={style} className={`${rowClass} hover:bg-zinc-50 dark:hover:bg-zinc-800/30`}>
+      {/* Drag handle */}
+      <td className="border border-zinc-200 dark:border-zinc-700 px-1 py-1 w-6 text-center">
+        <span
+          {...attributes}
+          {...listeners}
+          className="cursor-grab active:cursor-grabbing text-zinc-300 dark:text-zinc-600 hover:text-zinc-500 dark:hover:text-zinc-400 select-none text-xs"
+          title="drag to reorder"
+        >⠿</span>
+      </td>
+      {/* Checkbox */}
+      <td className="border border-zinc-200 dark:border-zinc-700 px-1 py-1 w-6 text-center">
+        <input
+          type="checkbox"
+          checked={isSelected}
+          onChange={() => onToggleSelect(code.code)}
+          className="cursor-pointer"
+        />
+      </td>
+      {/* Code value */}
+      <td className="border border-zinc-200 dark:border-zinc-700 px-2 py-1 w-24 text-zinc-700 dark:text-zinc-300 font-medium font-mono text-[10px]">
+        {code.isNet ? (
+          <span className="inline-flex items-center gap-1">
+            <span className="bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 text-[9px] px-1 py-0.5 font-bold">NET</span>
+            <span className="text-purple-500">{code.code}</span>
+          </span>
+        ) : code.isNew ? (
+          <span className="inline-flex items-center gap-1">
+            <span className="bg-cyan-100 dark:bg-cyan-900/30 text-cyan-600 dark:text-cyan-400 text-[9px] px-1 py-0.5 font-bold">C</span>
+            <span className="text-cyan-600 dark:text-cyan-400">{code.code}</span>
+          </span>
+        ) : code.code}
+      </td>
+      {/* Label */}
+      <td className="border border-zinc-200 dark:border-zinc-700 px-2 py-1">
+        <input
+          type="text"
+          value={code.label}
+          onChange={(e) => updateCodeLabel(varKey, code.code, e.target.value)}
+          className="w-full text-xs bg-transparent border border-transparent hover:border-zinc-200 dark:hover:border-zinc-700 focus:border-blue-400 dark:focus:border-blue-500 px-1.5 py-0.5 text-zinc-600 dark:text-zinc-400 outline-none"
+        />
+      </td>
+      {/* Syntax */}
+      <td className="border border-zinc-200 dark:border-zinc-700 px-2 py-1 text-zinc-400 dark:text-zinc-500 font-mono text-[10px]">
+        {netSyntax ? (
+          <span className="text-purple-500 dark:text-purple-400">{netSyntax}</span>
+        ) : isCustom && code_syntax ? (
+          <input
+            type="text"
+            value={code_syntax[codeIndex] || `${varName}/${code.code}`}
+            onChange={(e) => updateCodeSyntax(varKey, code.code, e.target.value)}
+            className="w-full text-xs bg-zinc-50 dark:bg-zinc-800 border border-transparent hover:border-zinc-200 dark:hover:border-zinc-700 focus:border-blue-400 dark:focus:border-blue-500 px-1 py-0.5 text-zinc-600 dark:text-zinc-300 outline-none font-mono"
+          />
+        ) : `${varName}/${code.code}`}
+      </td>
+      {/* Factor */}
+      <td className="border border-zinc-200 dark:border-zinc-700 px-2 py-1">
+        <input
+          type="number"
+          step="any"
+          value={code.factor ?? ''}
+          placeholder="—"
+          onChange={(e) => {
+            const val = e.target.value === '' ? null : parseFloat(e.target.value);
+            updateCodeFactor(varKey, code.code, val);
+          }}
+          className="w-full text-xs bg-transparent border border-transparent hover:border-zinc-200 dark:hover:border-zinc-700 focus:border-blue-400 dark:focus:border-blue-500 px-1.5 py-0.5 text-zinc-700 dark:text-zinc-300 outline-none"
+        />
+      </td>
+      {/* Visibility */}
+      <td className="border border-zinc-200 dark:border-zinc-700 px-2 py-1">
+        <select
+          value={vis}
+          onChange={(e) => updateCodeVisibility(varKey, code.code, e.target.value as 'visible' | 'hidden' | 'removed')}
+          className={`w-full text-xs bg-transparent border border-transparent hover:border-zinc-200 dark:hover:border-zinc-700 focus:border-blue-400 dark:focus:border-blue-500 px-1 py-0.5 outline-none cursor-pointer ${
+            vis === 'removed' ? 'text-red-500 dark:text-red-400' :
+            vis === 'hidden' ? 'text-zinc-400' :
+            'text-zinc-600 dark:text-zinc-400'
+          }`}
+        >
+          <option value="visible">visible</option>
+          <option value="hidden">hide</option>
+          <option value="removed">remove</option>
+        </select>
+      </td>
+      {/* Delete — only for user-added codes */}
+      <td className="border border-zinc-200 dark:border-zinc-700 px-1 py-1 text-center w-6">
+        {code.isNew && (
+          <button
+            onClick={() => onDelete(varKey, code.code)}
+            title="delete code"
+            className="text-red-400 hover:text-red-600 dark:hover:text-red-300 text-xs leading-none"
+          >✕</button>
+        )}
+      </td>
+    </tr>
+  );
+};
+
 // ─── Variable Detail Page ─────────────────────────────────────────────────────
 const VariableDetailPage: React.FC = () => {
   const { varName: encodedVarName } = useParams<{ varName: string }>();
@@ -2286,10 +2593,23 @@ const VariableDetailPage: React.FC = () => {
     updateVariableDisplayName,
     updateCodeLabel,
     updateCodeFactor,
-  updateCodeVisibility,
-  updateCodeSyntax,
-  toggleVariableStat,
-} = useStore();
+    updateCodeVisibility,
+    updateCodeSyntax,
+    toggleVariableStat,
+    addNetCode,
+    addCode,
+    removeCode,
+    reorderCodes,
+  } = useStore();
+
+  const [selectedForNet, setSelectedForNet] = useState<Set<string>>(new Set());
+  const [showNetInput, setShowNetInput] = useState(false);
+  const [netLabelInput, setNetLabelInput] = useState('');
+  const [showAddCode, setShowAddCode] = useState(false);
+  const [newCodeLabel, setNewCodeLabel] = useState('');
+  const [newCodeSyntax, setNewCodeSyntax] = useState('');
+  const [syntaxErrors, setSyntaxErrors] = useState<string[]>([]);
+  const sortSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
   const info: VariableInfo | undefined = variables[varKey];
 
@@ -2304,6 +2624,73 @@ const VariableDetailPage: React.FC = () => {
 
   const hiddenCount = info.codes.filter((c: any) => c.visibility === 'hidden').length;
   const removedCount = info.codes.filter((c: any) => c.visibility === 'removed').length;
+  const varName = info.name || varKey;
+
+  const validateSyntax = (syntax: string): string[] => {
+    const errors: string[] = [];
+    const atomRe = /([A-Za-z_][A-Za-z0-9_]*)\/([^+()\s!]+)/g;
+    const nameToKey = buildNameToKeyMap(variables);
+    let match;
+    while ((match = atomRe.exec(syntax)) !== null) {
+      const [, vName, codePart] = match;
+      // Resolve display name to column key
+      const resolvedKey = nameToKey[vName] || vName;
+      const vInfo = variables[resolvedKey];
+      if (!vInfo) { errors.push(`variable '${vName}' not found`); continue; }
+      if (codePart === '*') continue;
+      if (codePart.includes('..')) {
+        const [from, to] = codePart.split('..');
+        for (const c of [from, to]) {
+          if (!vInfo.codes.find((vc: any) => vc.code === c)) errors.push(`code '${c}' not found in '${vName}'`);
+        }
+      } else {
+        for (const c of codePart.split(',')) {
+          if (!vInfo.codes.find((vc: any) => vc.code === c.trim())) errors.push(`code '${c.trim()}' not found in '${vName}'`);
+        }
+      }
+    }
+    return errors;
+  };
+
+  const handleConfirmAddCode = () => {
+    const label = newCodeLabel.trim();
+    const syntax = newCodeSyntax.trim();
+    if (!label || !syntax) return;
+    const errs = validateSyntax(syntax);
+    if (errs.length > 0) { setSyntaxErrors(errs); return; }
+    addCode(varKey, label, syntax);
+    setNewCodeLabel(''); setNewCodeSyntax('');
+    setSyntaxErrors([]);
+    setShowAddCode(false);
+  };
+
+  const handleToggleSelect = (code: string) => {
+    setSelectedForNet((prev) => {
+      const next = new Set(prev);
+      if (next.has(code)) next.delete(code); else next.add(code);
+      return next;
+    });
+  };
+
+  const handleConfirmNet = () => {
+    const label = netLabelInput.trim();
+    if (!label || selectedForNet.size < 2) return;
+    addNetCode(varKey, [...selectedForNet], label);
+    setSelectedForNet(new Set());
+    setNetLabelInput('');
+    setShowNetInput(false);
+  };
+
+  const handleDragEnd = (event: DndDragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIndex = info.codes.findIndex((c) => c.code === active.id);
+    const newIndex = info.codes.findIndex((c) => c.code === over.id);
+    if (oldIndex === -1 || newIndex === -1) return;
+    reorderCodes(varKey, arrayMove(info.codes, oldIndex, newIndex).map((c) => c.code));
+  };
+
+  const canNet = selectedForNet.size >= 2;
 
   return (
     <div className="h-full flex flex-col overflow-auto">
@@ -2315,10 +2702,10 @@ const VariableDetailPage: React.FC = () => {
         >
           ← variables
         </button>
-        <span className="text-xs text-zinc-300 dark:text-zinc-700">/</span>
+        <span className="text-xs text-zinc-300 dark:text-zinc-600">/</span>
         <span className="text-xs text-emerald-700 dark:text-emerald-400 font-medium">{varKey}</span>
         {(hiddenCount > 0 || removedCount > 0) && (
-          <span className="text-xs text-orange-500 ml-1">
+          <span className="text-xs text-orange-500 dark:text-orange-400 ml-1">
             {hiddenCount > 0 && `${hiddenCount} hidden`}
             {hiddenCount > 0 && removedCount > 0 && ', '}
             {removedCount > 0 && `${removedCount} removed`}
@@ -2329,10 +2716,9 @@ const VariableDetailPage: React.FC = () => {
       <div className="flex-1 overflow-hidden flex gap-4 p-4">
         {/* Left: Metadata + Stats */}
         <div className="w-80 shrink-0 overflow-auto space-y-6 pr-2">
-          {/* Name + Definition */}
           <div className="space-y-4">
             <div>
-              <label className="text-xs text-zinc-500 block mb-1">name</label>
+              <label className="text-xs text-zinc-500 dark:text-zinc-400 block mb-1">name</label>
               <input
                 type="text"
                 value={info.name || varKey}
@@ -2341,7 +2727,7 @@ const VariableDetailPage: React.FC = () => {
               />
             </div>
             <div>
-              <label className="text-xs text-zinc-500 block mb-1">definition</label>
+              <label className="text-xs text-zinc-500 dark:text-zinc-400 block mb-1">definition</label>
               <input
                 type="text"
                 value={info.label}
@@ -2353,7 +2739,7 @@ const VariableDetailPage: React.FC = () => {
 
           {/* Stats toggles */}
           <div>
-            <label className="text-xs text-zinc-500 block mb-2">show statistics</label>
+            <label className="text-xs text-zinc-500 dark:text-zinc-400 block mb-2">show statistics</label>
             <div className="flex flex-col gap-2">
               {([
                 ['showMean', 'mean'],
@@ -2377,84 +2763,148 @@ const VariableDetailPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Right: Codes table (scrollable) */}
+        {/* Right: Codes table */}
         <div className="flex-1 overflow-hidden flex flex-col">
-          <label className="text-xs text-zinc-500 block mb-2">codes ({info.codes.length})</label>
+          {/* Toolbar */}
+          <div className="flex flex-col gap-2 mb-2">
+            <div className="flex items-center gap-2">
+              <label className="text-xs text-zinc-500 dark:text-zinc-400">codes ({info.codes.length})</label>
+              <div className="ml-auto flex items-center gap-1">
+                {canNet && !showNetInput && !showAddCode && (
+                  <button
+                    onClick={() => setShowNetInput(true)}
+                    className="text-xs px-2 py-1 bg-purple-500 hover:bg-purple-600 text-white transition-colors"
+                  >
+                    net selected ({selectedForNet.size})
+                  </button>
+                )}
+                {!showAddCode && !showNetInput && (
+                  <button
+                    onClick={() => setShowAddCode(true)}
+                    className="text-xs px-2 py-1 bg-emerald-500 hover:bg-emerald-600 text-white transition-colors"
+                  >
+                    + add code
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {showNetInput && (
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-zinc-400 dark:text-zinc-500">net label:</span>
+                <input
+                  autoFocus
+                  type="text"
+                  placeholder="e.g. T2B"
+                  value={netLabelInput}
+                  onChange={(e) => setNetLabelInput(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleConfirmNet(); if (e.key === 'Escape') { setShowNetInput(false); setNetLabelInput(''); } }}
+                  className="text-xs bg-zinc-50 dark:bg-zinc-800 border border-purple-400 px-2 py-1 text-zinc-700 dark:text-zinc-300 outline-none w-44"
+                />
+                <div className="flex flex-col items-center gap-1">
+                  <button onClick={handleConfirmNet} disabled={!netLabelInput.trim()} className="text-xs px-3 py-1 bg-purple-500 hover:bg-purple-600 disabled:opacity-40 text-white transition-colors">create</button>
+                  <button onClick={() => { setShowNetInput(false); setNetLabelInput(''); }} className="text-xs px-3 py-1 text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-300 transition-colors">cancel</button>
+                </div>
+              </div>
+            )}
+
+            {showAddCode && (
+              <div className="border border-emerald-300 dark:border-emerald-700 p-2 space-y-2 bg-emerald-50 dark:bg-emerald-900/10">
+                <div className="flex items-center gap-2">
+                  <div className="flex flex-col gap-0.5 flex-1">
+                    <span className="text-[10px] text-zinc-400 dark:text-zinc-500">label</span>
+                    <input
+                      autoFocus
+                      type="text"
+                      placeholder="display name"
+                      value={newCodeLabel}
+                      onChange={(e) => setNewCodeLabel(e.target.value)}
+                      className="text-xs bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 px-2 py-1 text-zinc-700 dark:text-zinc-300 outline-none w-full"
+                    />
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="flex flex-col gap-0.5 flex-1">
+                    <span className="text-[10px] text-zinc-400 dark:text-zinc-500">syntax — e.g. <span className="font-mono">ol/8+ol/9</span> or <span className="font-mono">(ses/2+ses/3).age/2</span></span>
+                    <input
+                      type="text"
+                      placeholder="syntax expression"
+                      value={newCodeSyntax}
+                      onChange={(e) => { setNewCodeSyntax(e.target.value); setSyntaxErrors([]); }}
+                      onKeyDown={(e) => { if (e.key === 'Enter') handleConfirmAddCode(); if (e.key === 'Escape') { setShowAddCode(false); setSyntaxErrors([]); } }}
+                      className="text-xs bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 px-2 py-1 text-zinc-700 dark:text-zinc-300 outline-none w-full font-mono"
+                    />
+                  </div>
+                  <div className="flex flex-col items-center gap-1">
+                    <button
+                      onClick={handleConfirmAddCode}
+                      disabled={!newCodeLabel.trim() || !newCodeSyntax.trim()}
+                      className="text-xs px-3 py-1 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-40 text-white transition-colors"
+                    >
+                      add
+                    </button>
+                    <button
+                      onClick={() => { setShowAddCode(false); setSyntaxErrors([]); setNewCodeLabel(''); setNewCodeSyntax(''); }}
+                      className="text-xs px-3 py-1 text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-300 transition-colors"
+                    >
+                      cancel
+                    </button>
+                  </div>
+                </div>
+                {syntaxErrors.length > 0 && (
+                  <div className="space-y-0.5">
+                    {syntaxErrors.map((err, i) => (
+                      <p key={i} className="text-[10px] text-red-500 dark:text-red-400 font-mono">{err}</p>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
           <div className="flex-1 overflow-auto border border-zinc-200 dark:border-zinc-700">
-            <table className="w-full border-collapse text-xs">
-              <thead className="sticky top-0 z-10">
-                <tr className="bg-zinc-50 dark:bg-zinc-800">
-                  <th className="border border-zinc-200 dark:border-zinc-700 px-2 py-1.5 text-left text-zinc-500 w-16">code</th>
-                  <th className="border border-zinc-200 dark:border-zinc-700 px-2 py-1.5 text-left text-zinc-500 flex-1">label</th>
-                  <th className="border border-zinc-200 dark:border-zinc-700 px-2 py-1.5 text-left text-zinc-500 w-36">syntax</th>
-                  <th className="border border-zinc-200 dark:border-zinc-700 px-2 py-1.5 text-left text-zinc-500 w-24">factor</th>
-                  <th className="border border-zinc-200 dark:border-zinc-700 px-2 py-1.5 text-left text-zinc-500 w-28">visibility</th>
-                </tr>
-              </thead>
-              <tbody>
-                {info.codes.map((code) => {
-                  const vis = code.visibility ?? 'visible';
-                  const rowClass = vis === 'removed'
-                    ? 'bg-red-50 dark:bg-red-900/10 opacity-50'
-                    : vis === 'hidden'
-                      ? 'opacity-60'
-                      : '';
-                  return (
-                    <tr key={code.code} className={`${rowClass} hover:bg-zinc-50 dark:hover:bg-zinc-800/30`}>
-                      <td className="border border-zinc-200 dark:border-zinc-700 px-2 py-1 text-zinc-700 dark:text-zinc-300 font-medium">{code.code}</td>
-                      <td className="border border-zinc-200 dark:border-zinc-700 px-2 py-1">
-                        <input
-                          type="text"
-                          value={code.label}
-                          onChange={(e) => updateCodeLabel(varKey, code.code, e.target.value)}
-                          className="w-full text-xs bg-transparent border border-transparent hover:border-zinc-200 dark:hover:border-zinc-700 focus:border-blue-400 dark:focus:border-blue-500 px-1.5 py-0.5 text-zinc-600 dark:text-zinc-400 outline-none"
-                        />
-                      </td>
-                      <td className="border border-zinc-200 dark:border-zinc-700 px-2 py-1 text-zinc-400 dark:text-zinc-500 font-mono text-[10px]">
-                        {info.isCustom && info.code_syntax
-                          ? (
-                            <input
-                              type="text"
-                              value={info.code_syntax[info.codes.findIndex(c => c.code === code.code)] || `${info.name || varKey}/${code.code}`}
-                              onChange={(e) => updateCodeSyntax(varKey, code.code, e.target.value)}
-                              className="w-full text-xs bg-zinc-50 dark:bg-zinc-800 border border-transparent hover:border-zinc-200 dark:hover:border-zinc-700 focus:border-blue-400 dark:focus:border-blue-500 px-1 py-0.5 text-zinc-600 dark:text-zinc-300 outline-none font-mono"
-                            />
-                          )
-                          : `${info.name || varKey}/${code.code}`}
-                      </td>
-                      <td className="border border-zinc-200 dark:border-zinc-700 px-2 py-1">
-                        <input
-                          type="number"
-                          step="any"
-                          value={code.factor ?? ''}
-                          placeholder="—"
-                          onChange={(e) => {
-                            const val = e.target.value === '' ? null : parseFloat(e.target.value);
-                            updateCodeFactor(varKey, code.code, val);
-                          }}
-                          className="w-full text-xs bg-transparent border border-transparent hover:border-zinc-200 dark:hover:border-zinc-700 focus:border-blue-400 dark:focus:border-blue-500 px-1.5 py-0.5 text-zinc-700 dark:text-zinc-300 outline-none"
-                        />
-                      </td>
-                      <td className="border border-zinc-200 dark:border-zinc-700 px-2 py-1">
-                        <select
-                          value={vis}
-                          onChange={(e) => updateCodeVisibility(varKey, code.code, e.target.value as 'visible' | 'hidden' | 'removed')}
-                          className={`w-full text-xs bg-transparent border border-transparent hover:border-zinc-200 dark:hover:border-zinc-700 focus:border-blue-400 dark:focus:border-blue-500 px-1 py-0.5 outline-none cursor-pointer ${
-                            vis === 'removed' ? 'text-red-500 dark:text-red-400' :
-                            vis === 'hidden' ? 'text-zinc-400' :
-                            'text-zinc-600 dark:text-zinc-400'
-                          }`}
-                        >
-                          <option value="visible">visible</option>
-                          <option value="hidden">hide</option>
-                          <option value="removed">remove</option>
-                        </select>
-                      </td>
+            <DndContext
+              sensors={sortSensors}
+              collisionDetection={closestCenter}
+              onDragEnd={handleDragEnd}
+            >
+              <SortableContext items={info.codes.map((c) => c.code)} strategy={verticalListSortingStrategy}>
+                <table className="w-full border-collapse text-xs">
+                  <thead className="sticky top-0 z-10">
+                    <tr className="bg-zinc-50 dark:bg-zinc-800">
+                      <th className="border border-zinc-200 dark:border-zinc-700 px-1 py-1.5 w-6"></th>
+                      <th className="border border-zinc-200 dark:border-zinc-700 px-1 py-1.5 w-6"></th>
+                      <th className="border border-zinc-200 dark:border-zinc-700 px-2 py-1.5 text-left text-zinc-500 dark:text-zinc-400 w-24">code</th>
+                      <th className="border border-zinc-200 dark:border-zinc-700 px-2 py-1.5 text-left text-zinc-500 dark:text-zinc-400 flex-1">label</th>
+                      <th className="border border-zinc-200 dark:border-zinc-700 px-2 py-1.5 text-left text-zinc-500 dark:text-zinc-400 w-40">syntax</th>
+                      <th className="border border-zinc-200 dark:border-zinc-700 px-2 py-1.5 text-left text-zinc-500 dark:text-zinc-400 w-24">factor</th>
+                      <th className="border border-zinc-200 dark:border-zinc-700 px-2 py-1.5 text-left text-zinc-500 dark:text-zinc-400 w-28">visibility</th>
+                      <th className="border border-zinc-200 dark:border-zinc-700 px-1 py-1.5 w-6"></th>
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                  </thead>
+                  <tbody>
+                    {info.codes.map((code, idx) => (
+                      <SortableCodeRow
+                        key={code.code}
+                        code={code}
+                        varKey={varKey}
+                        varName={varName}
+                        isCustom={!!info.isCustom}
+                        code_syntax={info.code_syntax}
+                        codeIndex={idx}
+                        isSelected={selectedForNet.has(code.code)}
+                        onToggleSelect={handleToggleSelect}
+                        onDelete={removeCode}
+                        updateCodeLabel={updateCodeLabel}
+                        updateCodeFactor={updateCodeFactor}
+                        updateCodeVisibility={updateCodeVisibility}
+                        updateCodeSyntax={updateCodeSyntax}
+                      />
+                    ))}
+                  </tbody>
+                </table>
+              </SortableContext>
+            </DndContext>
           </div>
         </div>
       </div>

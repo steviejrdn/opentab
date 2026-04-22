@@ -31,6 +31,9 @@ class CrosstabRequest(BaseModel):
     filter_def: Optional[str] = None
     weight_col: Optional[str] = None
     mean_score_mappings: Optional[list[MeanScoreMapping]] = None
+    name_to_key: Optional[dict[str, str]] = None
+    net_registry: Optional[dict[str, dict]] = None
+    code_registry: Optional[dict[str, dict]] = None
 
 
 class CrosstabResponse(BaseModel):
@@ -74,10 +77,10 @@ def _compute_stats_for_column(df, col_mask, weight_col=None):
     std_error = std_dev / np.sqrt(n) if n > 1 else 0
 
     return {
-        'mean': round(mean_val, 2),
-        'std_error': round(std_error, 2),
-        'std_dev': round(std_dev, 2),
-        'variance': round(variance, 2),
+        'mean': mean_val,
+        'std_error': std_error,
+        'std_dev': std_dev,
+        'variance': variance,
     }
 
 
@@ -119,9 +122,13 @@ async def compute_crosstab(request: CrosstabRequest):
                 code_def = f"{var_part}/{code_clean}"
                 col_defs.append({'name': item.variable, 'label': code_def, 'code_def': code_def})
 
-        crosstab = create_crosstab(df, row_defs, col_defs, request.weight_col, request.filter_def)
+        name_to_key = request.name_to_key or {}
+        net_registry = request.net_registry or {}
+        code_registry = request.code_registry or {}
+
+        crosstab = create_crosstab(df, row_defs, col_defs, request.weight_col, request.filter_def, name_to_key, net_registry, code_registry)
         stats = calculate_frequencies(crosstab)
-        base = calculate_base(df, request.filter_def)
+        base = calculate_base(df, request.filter_def, name_to_key, net_registry, code_registry)
 
         mean_data = None
         std_error_data = None
@@ -136,7 +143,7 @@ async def compute_crosstab(request: CrosstabRequest):
             working_df = df.copy()
             if request.filter_def:
                 from core.code_parser import parse_code_def
-                filter_mask = parse_code_def(request.filter_def, working_df)
+                filter_mask = parse_code_def(request.filter_def, working_df, name_to_key, net_registry, code_registry)
                 working_df = working_df[filter_mask]
 
             working_df['_computed_score'] = None
@@ -154,7 +161,7 @@ async def compute_crosstab(request: CrosstabRequest):
                 col_masks = []
                 for cd in col_defs:
                     from core.code_parser import evaluate_code_def
-                    col_masks.append((cd['label'], evaluate_code_def(cd['code_def'], working_df)))
+                    col_masks.append((cd['label'], evaluate_code_def(cd['code_def'], working_df, name_to_key, net_registry, code_registry)))
 
                 all_mask = pd.Series([True] * len(working_df), index=working_df.index)
 
@@ -176,11 +183,14 @@ async def compute_crosstab(request: CrosstabRequest):
                 std_dev_data['Total'] = total_stats['std_dev']
                 variance_data['Total'] = total_stats['variance']
 
+        def _df_to_float_dict(df):
+            return {r: {c: float(v) for c, v in cols.items()} for r, cols in df.to_dict(orient='index').items()}
+
         return CrosstabResponse(
             counts=stats['counts'].to_dict(orient='index'),
-            row_pct=stats['row_pct'].round(1).to_dict(orient='index'),
-            col_pct=stats['col_pct'].round(1).to_dict(orient='index'),
-            total_pct=stats['total_pct'].round(1).to_dict(orient='index'),
+            row_pct=_df_to_float_dict(stats['row_pct']),
+            col_pct=_df_to_float_dict(stats['col_pct']),
+            total_pct=_df_to_float_dict(stats['total_pct']),
             base=int(base),
             mean=mean_data,
             std_error=std_error_data,
