@@ -42,5 +42,8 @@ dist/
 
 # Project specific
 .claude/
+.opencode/
 *.opentab
 uploads/
+backend/temp/
+*.log

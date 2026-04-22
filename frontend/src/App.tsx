@@ -122,49 +122,150 @@ const ThemeToggle: React.FC = () => {
 };
 
 // ─── Navigation ──────────────────────────────────────────────────────────────
-const Navigation: React.FC<{ onToggleSidebar?: () => void; sidebarVisible?: boolean }> = ({ onToggleSidebar, sidebarVisible }) => {
+const Navigation: React.FC = () => {
   const location = useLocation();
-  const { dataLoaded, variables, tables, displayOptions, activeTableId, fileName, rowCount, importState, setDataLoaded, resetSession } = useStore();
+  const { dataLoaded, variables, tables, folders, displayOptions, activeTableId, fileName, rowCount,
+          importState, setDataLoaded, resetSession, mergeAndSetVariables, setDataInfo } = useStore();
   const openFileRef = useRef<HTMLInputElement>(null);
+  const opentabHandle = useRef<FileSystemFileHandle | null>(null);
+  const [restoreStatus, setRestoreStatus] = useState<{ loading: boolean; message: string } | null>(null);
 
-  const handleSave = () => {
-    const payload = {
-      version: 1,
-      fileName,
-      rowCount,
-      variables,
-      tables,
-      displayOptions,
-      activeTableId,
+  const buildPayload = async () => {
+    const [rawCsv, mergedVars] = await Promise.all([
+      dataApi.getRawCsv(),
+      dataApi.getMergedVariables(),
+    ]);
+    return {
+      version: 2,
+      fileName, rowCount, variables, tables, folders, displayOptions, activeTableId,
+      csvData: rawCsv,
+      mergedVariables: mergedVars,
     };
-    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${fileName?.replace(/\.[^.]+$/, '') || 'session'}.opentab`;
-    a.click();
-    URL.revokeObjectURL(url);
   };
 
-  const handleOpen = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const writeToHandle = async (handle: FileSystemFileHandle, payload: object) => {
+    const writable = await handle.createWritable();
+    await writable.write(JSON.stringify(payload, null, 2));
+    await writable.close();
+  };
+
+  const fsaSupported = typeof window !== 'undefined' && 'showSaveFilePicker' in window;
+
+  const handleSave = async () => {
+    try {
+      const payload = await buildPayload();
+
+      if (fsaSupported) {
+        if (!opentabHandle.current) {
+          // First save — ask user where to save
+          opentabHandle.current = await (window as Window & { showSaveFilePicker: (o: object) => Promise<FileSystemFileHandle> }).showSaveFilePicker({
+            suggestedName: `${fileName?.replace(/\.[^.]+$/, '') || 'session'}.opentab`,
+            types: [{ description: 'opentab session', accept: { 'application/json': ['.opentab'] } }],
+          });
+        }
+        await writeToHandle(opentabHandle.current, payload);
+        setRestoreStatus({ loading: false, message: 'Saved' });
+        setTimeout(() => setRestoreStatus(null), 2000);
+      } else {
+        // Fallback for browsers without File System Access API
+        const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${fileName?.replace(/\.[^.]+$/, '') || 'session'}.opentab`;
+        a.click();
+        URL.revokeObjectURL(url);
+      }
+    } catch (err: unknown) {
+      // User cancelled the picker — not an error
+      if (err instanceof Error && err.name === 'AbortError') return;
+      alert('Save failed — ensure data is loaded.');
+    }
+  };
+
+  const handleSaveAs = async () => {
+    if (!fsaSupported) { handleSave(); return; }
+    try {
+      const payload = await buildPayload();
+      const handle = await (window as Window & { showSaveFilePicker: (o: object) => Promise<FileSystemFileHandle> }).showSaveFilePicker({
+        suggestedName: `${fileName?.replace(/\.[^.]+$/, '') || 'session'}.opentab`,
+        types: [{ description: 'opentab session', accept: { 'application/json': ['.opentab'] } }],
+      });
+      opentabHandle.current = handle;
+      await writeToHandle(handle, payload);
+      setRestoreStatus({ loading: false, message: 'Saved' });
+      setTimeout(() => setRestoreStatus(null), 2000);
+    } catch (err: unknown) {
+      if (err instanceof Error && err.name === 'AbortError') return;
+      alert('Save failed — ensure data is loaded.');
+    }
+  };
+
+  const restoreFromText = async (jsonText: string, fallbackName: string) => {
+    const data = JSON.parse(jsonText);
+    if (!data.variables || !data.tables) throw new Error('Invalid .opentab file');
+
+    if (data.version === 2 && data.csvData) {
+      setRestoreStatus({ loading: true, message: 'Restoring session...' });
+      const uploadResult = await dataApi.uploadText(data.csvData, data.fileName || 'restored.csv');
+      const mergedEntries = Object.entries(data.mergedVariables || {});
+      for (const [name, meta] of mergedEntries) {
+        try { await dataApi.registerMerged(name, meta as object); } catch { /* skip bad entry */ }
+      }
+      const vars = await dataApi.getVariables();
+      importState({
+        variables: data.variables, tables: data.tables,
+        displayOptions: data.displayOptions ?? {}, activeTableId: data.activeTableId ?? null,
+        fileName: data.fileName ?? null, rowCount: data.rowCount ?? 0,
+        folders: data.folders ?? [],
+      });
+      mergeAndSetVariables(vars);
+      setDataInfo(data.fileName || 'restored.csv', uploadResult.row_count);
+      setDataLoaded(true);
+      setRestoreStatus({ loading: false, message: `Restored: ${data.fileName || fallbackName}` });
+      setTimeout(() => setRestoreStatus(null), 3000);
+    } else {
+      importState({
+        variables: data.variables, tables: data.tables,
+        displayOptions: data.displayOptions ?? {}, activeTableId: data.activeTableId ?? null,
+        fileName: data.fileName ?? null, rowCount: data.rowCount ?? 0,
+      });
+      setDataLoaded(false);
+    }
+  };
+
+  const handleOpen = async () => {
+    opentabHandle.current = null;
+    if (fsaSupported) {
+      try {
+        const [handle] = await (window as Window & { showOpenFilePicker: (o: object) => Promise<FileSystemFileHandle[]> }).showOpenFilePicker({
+          types: [{ description: 'opentab session', accept: { 'application/json': ['.opentab'] } }],
+        });
+        opentabHandle.current = handle;
+        const file = await handle.getFile();
+        const text = await file.text();
+        await restoreFromText(text, file.name);
+      } catch (err: unknown) {
+        if (err instanceof Error && err.name === 'AbortError') return;
+        // Fall back to input picker if FSA fails unexpectedly
+        openFileRef.current?.click();
+      }
+    } else {
+      openFileRef.current?.click();
+    }
+  };
+
+  const handleOpenFallback = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = (ev) => {
+    reader.onload = async (ev) => {
       try {
-        const data = JSON.parse(ev.target?.result as string);
-        if (!data.variables || !data.tables) throw new Error('Invalid .opentab file');
-        importState({
-          variables: data.variables,
-          tables: data.tables,
-          displayOptions: data.displayOptions ?? {},
-          activeTableId: data.activeTableId ?? null,
-          fileName: data.fileName ?? null,
-          rowCount: data.rowCount ?? 0,
-        });
-        setDataLoaded(false);
-      } catch {
-        alert('Could not read .opentab file');
+        await restoreFromText(ev.target?.result as string, file.name);
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : 'unknown error';
+        setRestoreStatus({ loading: false, message: 'Restore failed: ' + msg });
+        setTimeout(() => setRestoreStatus(null), 5000);
       }
     };
     reader.readAsText(file);
@@ -172,11 +273,12 @@ const Navigation: React.FC<{ onToggleSidebar?: () => void; sidebarVisible?: bool
   };
 
   return (
+    <>
     <nav className="bg-zinc-50 dark:bg-zinc-950 border-b border-zinc-200 dark:border-zinc-800 px-4 py-3 flex justify-between items-center">
       <div className="flex items-center gap-3">
         {/* Logo — click to reset session */}
         <button
-          onClick={() => { if (window.confirm('Start a new session? All tables and data will be cleared.')) resetSession(); }}
+          onClick={() => { if (window.confirm('Start a new session? All tables and data will be cleared.')) { resetSession(); opentabHandle.current = null; } }}
           className="flex items-center focus:outline-none"
           title="New session"
         >
@@ -214,35 +316,46 @@ const Navigation: React.FC<{ onToggleSidebar?: () => void; sidebarVisible?: bool
         </div>
         <div className="flex items-center gap-1 border-l border-zinc-200 dark:border-zinc-800 pl-3">
           {dataLoaded && (
-            <button
-              onClick={handleSave}
-              title="Save session"
-              className="px-2.5 py-1 text-xs text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
-            >
-              save
-            </button>
+            <>
+              <button
+                onClick={handleSave}
+                title={fsaSupported ? (opentabHandle.current ? 'Save (overwrite)' : 'Save') : 'Save (download)'}
+                className="px-2.5 py-1 text-xs text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+              >
+                save
+              </button>
+              {fsaSupported && opentabHandle.current && (
+                <button
+                  onClick={handleSaveAs}
+                  title="Save as new file"
+                  className="px-2.5 py-1 text-xs text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+                >
+                  save as
+                </button>
+              )}
+            </>
           )}
           <button
-            onClick={() => openFileRef.current?.click()}
+            onClick={handleOpen}
             title="Open .opentab session"
             className="px-2.5 py-1 text-xs text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
           >
             open
           </button>
-          <input ref={openFileRef} type="file" accept=".opentab" className="hidden" onChange={handleOpen} />
+          <input ref={openFileRef} type="file" accept=".opentab" className="hidden" onChange={handleOpenFallback} />
         </div>
-        {onToggleSidebar && (
-          <button
-            onClick={onToggleSidebar}
-            title={sidebarVisible ? 'Hide sidebar' : 'Show sidebar'}
-            className="px-2.5 py-1 text-xs text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
-          >
-            {sidebarVisible ? '◀ sidebar' : '▶ sidebar'}
-          </button>
-        )}
         <ThemeToggle />
       </div>
     </nav>
+    {restoreStatus && (
+      <div className={`fixed bottom-4 right-4 z-50 px-4 py-3 text-xs border shadow-lg max-w-xs
+        ${restoreStatus.loading
+          ? 'bg-zinc-100 dark:bg-zinc-800 border-zinc-300 dark:border-zinc-600 text-zinc-600 dark:text-zinc-400 animate-pulse'
+          : 'bg-zinc-50 dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300'}`}>
+        {restoreStatus.message}
+      </div>
+    )}
+    </>
   );
 };
 
@@ -664,7 +777,7 @@ const RootDropZone: React.FC<{
 
 // ─── Build Page Layout with Resizable Sidebar ─────────────────────────────────
 const BuildPageLayout: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ onLoadSample, loading }) => {
-  const { sidebarWidth, sidebarVisible, setSidebarWidth } = useStore();
+  const { sidebarWidth, sidebarVisible, setSidebarWidth, toggleSidebar } = useStore();
   const [isResizing, setIsResizing] = useState(false);
 
   useEffect(() => {
@@ -687,24 +800,37 @@ const BuildPageLayout: React.FC<{ onLoadSample: () => void; loading: boolean }> 
   }, [isResizing, setSidebarWidth]);
 
   return (
-    <div className="flex-1 overflow-hidden flex">
-      {sidebarVisible && (
-        <>
-          <div
-            style={{ width: `${sidebarWidth}px` }}
-            className="bg-zinc-50 dark:bg-zinc-900 border-r border-zinc-200 dark:border-zinc-800 flex flex-col flex-shrink-0 relative"
-          >
-            <div className="h-1/2 flex flex-col border-b border-zinc-200 dark:border-zinc-800"><TableList /></div>
-            <div className="h-1/2 flex flex-col"><VariableList /></div>
-
-            {/* Resize handle */}
-            <div
-              onMouseDown={() => setIsResizing(true)}
-              className="absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-blue-400 dark:hover:bg-blue-500 hover:shadow-lg transition-colors"
-            />
-          </div>
-        </>
+    <div className="flex-1 overflow-hidden flex relative">
+      {/* Full-screen overlay during resize — prevents text selection and cursor flicker */}
+      {isResizing && (
+        <div className="fixed inset-0 z-50 cursor-col-resize select-none" />
       )}
+      {/* Sidebar — always in DOM, width animates for drawer effect */}
+      <div
+        style={{ width: sidebarVisible ? `${sidebarWidth}px` : '0px' }}
+        className={`bg-zinc-50 dark:bg-zinc-900 flex-shrink-0 relative overflow-hidden ${isResizing ? '' : 'transition-[width] duration-200 ease-in-out'}`}
+      >
+        {/* Inner wrapper keeps content at full width while outer clips */}
+        <div className="absolute inset-0 flex flex-col" style={{ width: `${sidebarWidth}px` }}>
+          <div className="h-1/2 flex flex-col border-b border-zinc-200 dark:border-zinc-800"><TableList /></div>
+          <div className="h-1/2 flex flex-col"><VariableList /></div>
+        </div>
+      </div>
+
+      {/* Drawer tab + resize handle — always at the seam */}
+      <div className="flex-shrink-0 flex self-stretch border-x border-zinc-200 dark:border-zinc-700">
+        <button
+          onClick={toggleSidebar}
+          title={sidebarVisible ? 'Hide sidebar' : 'Show sidebar'}
+          className="w-3 flex items-center justify-center bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors text-[10px] cursor-pointer"
+        >
+          {sidebarVisible ? '‹' : '›'}
+        </button>
+        <div
+          onMouseDown={() => setIsResizing(true)}
+          className="w-1 cursor-col-resize hover:bg-blue-400 dark:hover:bg-blue-500 transition-colors"
+        />
+      </div>
 
       <div className="flex-1 overflow-hidden bg-white dark:bg-zinc-950">
         <BuildPage onLoadSample={onLoadSample} loading={loading} />
@@ -803,20 +929,60 @@ const TableList: React.FC = () => {
   );
 };
 
-// ─── Draggable Zone Item ──────────────────────────────────────────────────────
-const DraggableZoneItem: React.FC<{
-  zoneType: 'row' | 'col';
+// ─── Nesting Builder Modal ─────────────────────────────────────────────────────
+interface NestingBuilderModalProps {
   item: DropItem;
+  zoneType: 'row' | 'col';
+  onClose: () => void;
+}
+
+const NestingBuilderItem: React.FC<{
+  item: DropItem;
+  zoneType: 'row' | 'col';
   onRemove: (id: string) => void;
+  onAddChild: (parentId: string) => void;
   depth?: number;
-}> = ({ zoneType, item, onRemove, depth = 0 }) => {
+}> = ({ item, zoneType, onRemove, onAddChild, depth = 0 }) => {
+  const { variables } = useStore();
+  const displayName = variables[item.variable]?.name || item.variable;
+  const hasChildren = (item.children?.length || 0) > 0;
+
+  return (
+    <div className="flex flex-col">
+      <div className={`flex items-center gap-2 px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 ${depth === 0 ? 'rounded-t-lg' : 'border-t-0'} ${hasChildren ? 'rounded-b-lg' : 'rounded-lg'}`}>
+        <div className="flex-1 min-w-0">
+          <div className={`text-xs font-medium truncate ${depth === 0 ? 'text-emerald-700 dark:text-emerald-400' : 'text-blue-600 dark:text-blue-400'}`}>{displayName}</div>
+          {depth === 0 && <div className="text-[10px] text-zinc-400 mt-0.5">{item.variable}</div>}
+        </div>
+        {depth < 3 && !hasChildren && (
+          <button
+            onClick={() => onAddChild(item.id)}
+            className="w-6 h-6 flex items-center justify-center text-zinc-400 dark:text-zinc-500 hover:text-blue-500 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded transition-colors text-sm"
+            title="Add nested variable"
+          >+</button>
+        )}
+        <button
+          onClick={() => onRemove(item.id)}
+          className="w-6 h-6 flex items-center justify-center text-zinc-400 dark:text-zinc-600 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded transition-colors text-sm"
+        >×</button>
+      </div>
+      {hasChildren && (
+        <div className={`ml-4 pl-3 border-l-2 border-blue-200 dark:border-blue-800 mt-0.5 space-y-0.5`}>
+          {item.children!.map((child) => (
+            <NestingBuilderItem key={child.id} item={child} zoneType={zoneType} onRemove={onRemove} onAddChild={onAddChild} depth={depth + 1} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+const NestingBuilderModal: React.FC<NestingBuilderModalProps> = ({ item, zoneType, onClose }) => {
   const { variables, activeTableId, nestItem } = useStore();
-  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
-    id: `zone-item:${zoneType}:${item.id}`,
-    disabled: depth > 0,
-  });
+  const displayName = variables[item.variable]?.name || item.variable;
   const [showPicker, setShowPicker] = useState(false);
   const [nestSearch, setNestSearch] = useState('');
+  const [selectedParent, setSelectedParent] = useState<string | null>(null);
   const pickerRef = useRef<HTMLDivElement>(null);
   const nestSearchRef = useRef<HTMLInputElement>(null);
 
@@ -829,83 +995,152 @@ const DraggableZoneItem: React.FC<{
     return () => document.removeEventListener('mousedown', handler);
   }, [showPicker]);
 
-  const handleNestVariable = (varName: string) => {
-    if (!activeTableId) return;
+  const handleAddChild = (parentId: string) => {
+    setSelectedParent(parentId);
+    setShowPicker(true);
+    setNestSearch('');
+    setTimeout(() => nestSearchRef.current?.focus(), 50);
+  };
+
+  const handleConfirmAdd = (varName: string) => {
+    if (!activeTableId || !selectedParent) return;
     const varInfo = variables[varName];
     if (!varInfo?.codes?.length) return;
     const allCodes = varInfo.codes.map((c: any) => c.code).join(',');
-    nestItem(activeTableId, zoneType, item.id, { id: uuidv4(), variable: varName, codeDef: allCodes });
+    nestItem(activeTableId, zoneType, selectedParent, { id: uuidv4(), variable: varName, codeDef: allCodes });
     setShowPicker(false);
+    setSelectedParent(null);
+    setNestSearch('');
   };
+
+  const handleRemove = (id: string) => {
+    if (!activeTableId) return;
+    if (zoneType === 'row') {
+      useStore.getState().removeRowItem(activeTableId, id);
+    } else {
+      useStore.getState().removeColItem(activeTableId, id);
+    }
+  };
+
+  const q = nestSearch.toLowerCase();
+  const matches = Object.entries(variables).filter(([name, info]) =>
+    name.toLowerCase().includes(q) || ((info as any).name || '').toLowerCase().includes(q)
+  );
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+      <div className="bg-white dark:bg-zinc-900 rounded-lg shadow-xl w-[480px] max-h-[75vh] flex flex-col">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-200 dark:border-zinc-700">
+          <div>
+            <h3 className="text-sm font-medium text-zinc-700 dark:text-zinc-200">Build Nesting</h3>
+            <p className="text-xs text-zinc-400 mt-0.5">{displayName}</p>
+          </div>
+          <button onClick={onClose} className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 text-lg leading-none">×</button>
+        </div>
+
+        <div className="flex-1 overflow-auto p-4">
+          <NestingBuilderItem item={item} zoneType={zoneType} onRemove={handleRemove} onAddChild={handleAddChild} />
+        </div>
+
+        {showPicker && selectedParent && (
+          <div className="border-t border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800">
+            <div className="p-2 border-b border-zinc-100 dark:border-zinc-800">
+              <input
+                ref={nestSearchRef}
+                type="text"
+                value={nestSearch}
+                onChange={(e) => setNestSearch(e.target.value)}
+                placeholder="search variable..."
+                className="w-full px-2 py-1.5 text-xs bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 placeholder-zinc-400 outline-none focus:border-blue-400"
+              />
+            </div>
+            <div className="max-h-48 overflow-y-auto py-1">
+              {matches.length === 0 ? (
+                <div className="px-3 py-2 text-xs text-zinc-400 italic">no match</div>
+              ) : (
+                matches.map(([name, info]) => (
+                  <button
+                    key={name}
+                    onClick={() => handleConfirmAdd(name)}
+                    className="w-full text-left px-3 py-1.5 text-xs hover:bg-blue-50 dark:hover:bg-blue-900/30 text-zinc-700 dark:text-zinc-300"
+                  >
+                    <span className="font-medium text-emerald-700 dark:text-emerald-400">{(info as any).name || name}</span>
+                    <span className="text-zinc-400 ml-1">({name})</span>
+                  </button>
+                ))
+              )}
+            </div>
+            <div className="p-2 border-t border-zinc-100 dark:border-zinc-800">
+              <button
+                onClick={() => { setShowPicker(false); setSelectedParent(null); }}
+                className="w-full text-xs text-center text-zinc-400 hover:text-zinc-600 py-1"
+              >Cancel</button>
+            </div>
+          </div>
+        )}
+
+        <div className="flex justify-end px-4 py-3 border-t border-zinc-200 dark:border-zinc-700">
+          <button onClick={onClose} className="px-3 py-1.5 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors">Done</button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ─── Draggable Zone Item ──────────────────────────────────────────────────────
+const DraggableZoneItem: React.FC<{
+  zoneType: 'row' | 'col';
+  item: DropItem;
+  onRemove: (id: string) => void;
+  depth?: number;
+}> = ({ zoneType, item, onRemove, depth = 0 }) => {
+  const { variables } = useStore();
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: `zone-item:${zoneType}:${item.id}`,
+    disabled: depth > 0,
+  });
+  const [showNestingBuilder, setShowNestingBuilder] = useState(false);
 
   const displayName = variables[item.variable]?.name || item.variable;
   const hasChildren = (item.children?.length || 0) > 0;
+  const maxDepth = (it: DropItem, d: number = 0): number => {
+    if (!it.children?.length) return d;
+    return Math.max(...it.children.map(c => maxDepth(c, d + 1)));
+  };
+  const deepestLevel = hasChildren ? maxDepth(item) : 0;
+
   return (
-    <div className={depth > 0 ? 'ml-3 pl-2 mt-1 border-l border-zinc-300 dark:border-zinc-700' : ''}>
+    <div>
       <div
         ref={setNodeRef}
         {...(depth === 0 ? listeners : {})}
         {...(depth === 0 ? attributes : {})}
         className={`group flex items-center gap-1.5 px-2 py-1.5 border select-none transition-colors
-          ${depth === 0 ? 'cursor-grab bg-zinc-100 dark:bg-zinc-800' : 'cursor-default bg-zinc-50 dark:bg-zinc-900'}
+          ${depth === 0 ? 'cursor-grab bg-zinc-100 dark:bg-zinc-800 rounded' : 'cursor-default bg-zinc-50 dark:bg-zinc-900 rounded-none rounded-t'}
           ${isDragging ? 'opacity-40' : ''}
           border-zinc-200 dark:border-zinc-700 hover:border-zinc-300 dark:hover:border-zinc-600`}
       >
         <span className={`text-xs font-medium truncate flex-1 ${depth === 0 ? 'text-emerald-700 dark:text-emerald-400' : 'text-blue-600 dark:text-blue-400'}`}>
           {depth > 0 && '↳ '}{displayName}
         </span>
-        {hasChildren && <span className="text-xs text-zinc-400 shrink-0">({item.children!.length})</span>}
-        {depth < 3 && (
+        {hasChildren && (
+          <button
+            onClick={(e) => { e.stopPropagation(); setShowNestingBuilder(true); }}
+            className="text-xs text-zinc-400 shrink-0 hover:text-blue-500 dark:hover:text-blue-400"
+            title="Edit nesting"
+          >({deepestLevel}lvl)</button>
+        )}
+        {depth < 3 && !hasChildren && (
           <div className="relative">
             <button
               onPointerDown={(e) => e.stopPropagation()}
               onClick={(e) => {
                 e.stopPropagation();
-                setShowPicker((v) => !v);
-                setNestSearch('');
-                setTimeout(() => nestSearchRef.current?.focus(), 50);
+                setShowNestingBuilder(true);
               }}
-              title="Nest a variable under this one"
+              title="Build nesting structure"
               className="text-zinc-400 dark:text-zinc-500 hover:text-blue-500 dark:hover:text-blue-400 text-sm leading-none px-0.5 transition-colors"
             >+</button>
-            {showPicker && (
-              <div
-                ref={pickerRef}
-                className="absolute z-50 left-0 top-5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 shadow-lg text-xs"
-                style={{ width: '180px' }}
-              >
-                <div className="p-2 border-b border-zinc-100 dark:border-zinc-800">
-                  <input
-                    ref={nestSearchRef}
-                    type="text"
-                    value={nestSearch}
-                    onChange={(e) => setNestSearch(e.target.value)}
-                    onPointerDown={(e) => e.stopPropagation()}
-                    placeholder="search variable..."
-                    className="w-full px-2 py-1 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 placeholder-zinc-400 dark:placeholder-zinc-600 outline-none focus:border-zinc-400 dark:focus:border-zinc-500"
-                  />
-                </div>
-                <div className="max-h-48 overflow-y-auto py-1">
-                  {(() => {
-                    const q = nestSearch.toLowerCase();
-                    const matches = Object.entries(variables).filter(([name, info]) =>
-                      name.toLowerCase().includes(q) || ((info as any).name || '').toLowerCase().includes(q)
-                    );
-                    if (matches.length === 0) return <div className="px-3 py-2 text-zinc-400 dark:text-zinc-600 italic">no match</div>;
-                    return matches.map(([name, info]) => (
-                      <button
-                        key={name}
-                        className="w-full text-left px-3 py-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
-                        onPointerDown={(e) => e.stopPropagation()}
-                        onClick={() => { handleNestVariable(name); setNestSearch(''); }}
-                      >
-                        <span className="text-emerald-700 dark:text-emerald-400 font-medium">{(info as any).name || name}</span>
-                      </button>
-                    ));
-                  })()}
-                </div>
-              </div>
-            )}
           </div>
         )}
         <button
@@ -914,9 +1149,13 @@ const DraggableZoneItem: React.FC<{
           className="text-zinc-400 dark:text-zinc-600 hover:text-red-500 dark:hover:text-red-400 text-sm leading-none"
         >×</button>
       </div>
-      {item.children?.map((child) => (
-        <DraggableZoneItem key={child.id} zoneType={zoneType} item={child} onRemove={onRemove} depth={depth + 1} />
-      ))}
+      {showNestingBuilder && (
+        <NestingBuilderModal
+          item={item}
+          zoneType={zoneType}
+          onClose={() => setShowNestingBuilder(false)}
+        />
+      )}
     </div>
   );
 };
@@ -934,7 +1173,7 @@ const DropZone: React.FC<{
   return (
     <div
       ref={setNodeRef}
-      className={`border border-dashed p-3 transition-all ${
+      className={`border border-dashed p-3 transition-all overflow-hidden ${
         isOver
           ? 'border-blue-500 bg-blue-500/5'
           : 'border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900'
@@ -1054,7 +1293,7 @@ const App: React.FC = () => {
     <Router>
       <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd} onDragCancel={handleDragCancel}>
         <div className="h-screen flex flex-col bg-white dark:bg-zinc-950 font-mono">
-          <Navigation onToggleSidebar={toggleSidebar} sidebarVisible={sidebarVisible} />
+          <Navigation />
           <Routes>
             <Route path="/build" element={
               <BuildPageLayout onLoadSample={handleLoadSample} loading={loading} />
@@ -1397,15 +1636,149 @@ const ResultTab: React.FC = () => {
     return statData?.[col] ?? '—';
   };
 
-  const handleCopy = () => {
-    const lines: string[] = [];
-    lines.push(['', 'Total', ...colPaths.map((c) => getCompoundLabel(c))].join('\t'));
-    lines.push(['Base', String(result.base), ...colPaths.map((c) => String(result.counts['Total']?.[c] ?? 0))].join('\t'));
-    rowNames.forEach((row) => {
-      lines.push([getCompoundLabel(row), String(result.counts[row]?.['Total'] ?? 0), ...colPaths.map((c) => String(result.counts[row]?.[c] ?? 0))].join('\t'));
+  const buildTableHtml = (): string => {
+    const th = (label: string, colspan: number, rowspan: number, bg: string, bold: boolean, align: string = 'center') =>
+      `<th${colspan > 1 ? ` colspan="${colspan}"` : ''}${rowspan > 1 ? ` rowspan="${rowspan}"` : ''} style="background:${bg};color:${bold ? '#333' : '#666'};font-weight:${bold ? 'bold' : 'normal'};text-align:${align};border:1px solid #ccc;padding:4px 8px;">${label}</th>`;
+    const td = (value: string, bg: string, bold: boolean, align: string = 'center', color: string = '#666') =>
+      `<td style="background:${bg};color:${color};font-weight:${bold ? 'bold' : 'normal'};text-align:${align};border:1px solid #ddd;padding:3px 8px;">${value}</td>`;
+
+    let html = `<table style="border-collapse:collapse;font-size:12px;font-family:Arial,sans-serif;">`;
+
+    if (numHeaderRows > 0) {
+      html += '<thead>';
+      for (let h = 0; h < numHeaderRows; h++) {
+        html += '<tr>';
+        if (h === 0) {
+          html += th('', 1, numHeaderRows, '#F5F5F5', false);
+          html += th('Total', 1, numHeaderRows, '#E8E8E8', true);
+        }
+        const levelCols = colHeaderRows[h] || [];
+        const totalDataCols = colPaths.length;
+        let colOffset = 0;
+        for (const cell of levelCols) {
+          const remaining = totalDataCols - colOffset;
+          const effectiveSpan = Math.min(cell.colSpan, Math.max(remaining, 1));
+          html += th(cell.label, effectiveSpan, cell.rowSpan, h === 0 ? '#E8E8E8' : '#F5F5F5', h === 0);
+          colOffset += effectiveSpan;
+        }
+        html += '</tr>';
+      }
+      html += '</thead>';
+    } else {
+      html += '<thead><tr>';
+      html += th('', 1, 1, '#F5F5F5', false);
+      html += th('Total', 1, 1, '#E8E8E8', true);
+      for (let ci = 0; ci < colPaths.length; ci++) {
+        html += th(colPaths[ci], 1, 1, '#F5F5F5', false);
+      }
+      html += '</tr></thead>';
+    }
+
+    html += '<tbody>';
+    html += `<tr>${td('Base', '#F5F5F5', true, 'left', '#333')}${td(String(result.base), '#F3F4F6', false, 'center', '#333')}${colPaths.map(c => td(String(result.counts['Total']?.[c] ?? 0), '#F3F4F6', false)).join('')}</tr>`;
+
+    rowNames.forEach((rname) => {
+      const rowLabel = getCompoundLabel(rname);
+      const rowTotal = result.counts[rname]?.['Total'] ?? 0;
+      if (displayOptions.counts && displayOptions.colPct) {
+        html += `<tr>${td(rowLabel, '#F5F5F5', true, 'left', '#333')}${td(String(rowTotal), '#F3F4F6', false)}${colPaths.map(c => td(String(result.counts[rname]?.[c] ?? 0), '#FFF', false)).join('')}</tr>`;
+        html += `<tr>${td('', '#F5F5F5', false)}${td(formatPct(result.col_pct[rname]?.['Total'] ?? 0), '#EFF6FF', false, 'center', '#2563EB')}${colPaths.map(c => td(formatPct(result.col_pct[rname]?.[c] ?? 0), '#EFF6FF', false, 'center', '#2563EB')).join('')}</tr>`;
+      } else if (displayOptions.counts) {
+        html += `<tr>${td(rowLabel, '#F5F5F5', true, 'left', '#333')}${td(String(rowTotal), '#F3F4F6', false)}${colPaths.map(c => td(String(result.counts[rname]?.[c] ?? 0), '#FFF', false)).join('')}</tr>`;
+      } else if (displayOptions.colPct) {
+        html += `<tr>${td(rowLabel, '#F5F5F5', true, 'left', '#333')}${td(formatPct(result.col_pct[rname]?.['Total'] ?? 0), '#EFF6FF', false, 'center', '#2563EB')}${colPaths.map(c => td(formatPct(result.col_pct[rname]?.[c] ?? 0), '#EFF6FF', false, 'center', '#2563EB')).join('')}</tr>`;
+      }
     });
-    navigator.clipboard.writeText(lines.join('\n'));
-    alert('copied!');
+
+    if (statRows.length > 0) {
+      statRows.forEach(sr => {
+        html += `<tr>${td(sr.label, '#FFFBEB', true, 'left', '#666')}${td(String(statValue(sr.key, 'Total')), '#FFFBEB', false, 'center', '#92400E')}${colPaths.map(c => td(String(statValue(sr.key, c)), '#FFFBEB', false, 'center', '#92400E')).join('')}</tr>`;
+      });
+    }
+    html += '</tbody></table>';
+    return html;
+  };
+
+  const handleCopy = () => {
+    const html = buildTableHtml();
+
+    const text = (() => {
+      const lines: string[] = [];
+      const colHeaderLine: string[] = [''];
+      if (numHeaderRows === 0) {
+        colHeaderLine.push('Total');
+        colPaths.forEach(c => colHeaderLine.push(getCompoundLabel(c)));
+      } else {
+        colHeaderLine.push('Total');
+        (colHeaderRows[0] || []).forEach(cell => colHeaderLine.push(cell.label));
+      }
+      lines.push(colHeaderLine.join('\t'));
+      lines.push(['Base', String(result.base), ...colPaths.map(c => String(result.counts['Total']?.[c] ?? 0))].join('\t'));
+      rowNames.forEach((row) => {
+        const rowLabel = getCompoundLabel(row);
+        const parts: string[] = [rowLabel];
+        if (displayOptions.counts && displayOptions.colPct) {
+          parts.push(String(result.counts[row]?.['Total'] ?? 0));
+          colPaths.forEach(c => parts.push(String(result.counts[row]?.[c] ?? 0)));
+          lines.push(parts.join('\t'));
+          lines.push(['', ...colPaths.map(c => formatPct(result.col_pct[row]?.[c] ?? 0))].join('\t'));
+        } else if (displayOptions.counts) {
+          parts.push(String(result.counts[row]?.['Total'] ?? 0));
+          colPaths.forEach(c => parts.push(String(result.counts[row]?.[c] ?? 0)));
+          lines.push(parts.join('\t'));
+        } else if (displayOptions.colPct) {
+          parts.push(formatPct(result.col_pct[row]?.['Total'] ?? 0));
+          colPaths.forEach(c => parts.push(formatPct(result.col_pct[row]?.[c] ?? 0)));
+          lines.push(parts.join('\t'));
+        }
+      });
+      return lines.join('\n');
+    })();
+
+    const blob = new Blob([text], { type: 'text/plain' });
+    const htmlBlob = new Blob([html], { type: 'text/html' });
+
+    if (navigator.clipboard && window.ClipboardItem) {
+      const item = new window.ClipboardItem({
+        'text/plain': blob,
+        'text/html': htmlBlob
+      });
+      navigator.clipboard.write([item]).then(() => {
+        alert('copied!');
+      }).catch(() => {
+        navigator.clipboard.writeText(text);
+        alert('copied!');
+      });
+    } else {
+      navigator.clipboard.writeText(text);
+      alert('copied!');
+    }
+  };
+
+  const handleExport = () => {
+    const tableHtml = buildTableHtml();
+    const fullHtml = [
+      '<html xmlns:o="urn:schemas-microsoft-com:office:office"',
+      ' xmlns:x="urn:schemas-microsoft-com:office:excel"',
+      ' xmlns="http://www.w3.org/TR/REC-html40">',
+      '<head><meta charset="UTF-8">',
+      '<!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets>',
+      '<x:ExcelWorksheet><x:Name>Crosstab</x:Name>',
+      '<x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions>',
+      '</x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]-->',
+      '</head><body>',
+      tableHtml,
+      '</body></html>',
+    ].join('');
+    const blob = new Blob([fullHtml], { type: 'application/vnd.ms-excel;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `crosstab_${Date.now()}.xls`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   };
 
   return (
@@ -1446,6 +1819,12 @@ const ResultTab: React.FC = () => {
           className="ml-auto px-3 py-1 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 text-xs hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
         >
           copy
+        </button>
+        <button
+          onClick={handleExport}
+          className="px-3 py-1 bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-400 text-xs hover:bg-emerald-100 dark:hover:bg-emerald-900/50 transition-colors"
+        >
+          export xlsx
         </button>
       </div>
 
@@ -1583,24 +1962,271 @@ const ResultTab: React.FC = () => {
   );
 };
 
+// ─── Merge Variables Modal ────────────────────────────────────────────────────
+interface MergeVariablesModalProps {
+  onClose: () => void;
+}
+
+const MergeVariablesModal: React.FC<MergeVariablesModalProps> = ({ onClose }) => {
+  const { variables, setVariables } = useStore();
+  const [mergeMode, setMergeMode] = useState<'ma' | 'code'>('ma');
+  const [selectedColumns, setSelectedColumns] = useState<string[]>([]);
+  const [newVarName, setNewVarName] = useState('');
+  const [mergeType, setMergeType] = useState<'binary' | 'spread'>('binary');
+  const [codePrefix, setCodePrefix] = useState('');
+  const [mergeOperator, setMergeOperator] = useState<'OR' | 'AND'>('OR');
+  const [description, setDescription] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const variableList = Object.keys(variables);
+
+  const toggleColumn = (key: string) => {
+    setSelectedColumns(prev =>
+      prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]
+    );
+  };
+
+  const handleMerge = async () => {
+    if (!newVarName.trim()) {
+      setError('Variable name required');
+      return;
+    }
+    if (selectedColumns.length < 2) {
+      setError('Select at least 2 variables');
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+
+    try {
+      if (mergeMode === 'ma') {
+        const result = await dataApi.mergeVariables({
+          columns: selectedColumns,
+          new_variable_name: newVarName.trim(),
+          merge_type: mergeType,
+          code_prefix: codePrefix || undefined,
+        });
+        const newVarInfo: VariableInfo = {
+          name: result.name,
+          label: result.label,
+          type: result.type,
+          codes: result.codes.map((c: any) => ({
+            code: c.code,
+            label: c.label,
+            factor: null,
+            visibility: 'visible' as const,
+          })),
+          syntax: result.syntax,
+          code_syntax: result.code_syntax,
+          isCustom: true,
+          showMean: false,
+          showStdError: false,
+          showStdDev: false,
+          showVariance: false,
+        };
+        setVariables({ ...variables, [newVarName.trim()]: newVarInfo });
+      } else {
+        const result = await dataApi.mergeCodes({
+          variables: selectedColumns,
+          new_variable_name: newVarName.trim(),
+          merge_operator: mergeOperator,
+          description: description || undefined,
+        });
+        const newVarInfo: VariableInfo = {
+          name: result.name,
+          label: result.label,
+          type: result.type,
+          codes: result.codes.map((c: any) => ({
+            code: c.code,
+            label: c.label,
+            factor: null,
+            visibility: 'visible' as const,
+          })),
+          syntax: result.syntax,
+          code_syntax: result.code_syntax,
+          isCustom: true,
+          showMean: false,
+          showStdError: false,
+          showStdDev: false,
+          showVariance: false,
+        };
+        setVariables({ ...variables, [newVarName.trim()]: newVarInfo });
+      }
+      onClose();
+    } catch (err: any) {
+      setError(err?.response?.data?.detail || 'Merge failed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+      <div className="bg-white dark:bg-zinc-900 rounded-lg shadow-xl w-[600px] max-h-[80vh] flex flex-col">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-200 dark:border-zinc-700">
+          <h3 className="text-sm font-medium text-zinc-700 dark:text-zinc-200">Merge Variables</h3>
+          <button onClick={onClose} className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 text-lg leading-none">×</button>
+        </div>
+
+        <div className="flex-1 overflow-auto p-4 space-y-4">
+          {error && <div className="text-xs text-red-500 bg-red-50 dark:bg-red-900/20 px-3 py-2 rounded">{error}</div>}
+
+          <div>
+            <label className="text-xs text-zinc-500 block mb-1">Select Variables (2+ required)</label>
+            <div className="border border-zinc-200 dark:border-zinc-700 rounded max-h-40 overflow-auto">
+              {variableList.map(key => (
+                <label key={key} className="flex items-center gap-2 px-2 py-1.5 hover:bg-zinc-50 dark:hover:bg-zinc-800 cursor-pointer text-xs">
+                  <input
+                    type="checkbox"
+                    checked={selectedColumns.includes(key)}
+                    onChange={() => toggleColumn(key)}
+                    className="accent-blue-500"
+                  />
+                  <span className="font-mono text-emerald-700 dark:text-emerald-400">{key}</span>
+                  <span className="text-zinc-400 truncate">{variables[key]?.label}</span>
+                  <span className="ml-auto text-zinc-400">{variables[key]?.type}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className="text-xs text-zinc-500 block mb-1">New Variable Name</label>
+            <input
+              type="text"
+              value={newVarName}
+              onChange={e => setNewVarName(e.target.value)}
+              placeholder="e.g. A1_merged"
+              className="w-full text-xs bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 px-2 py-1.5 text-zinc-700 dark:text-zinc-200 outline-none focus:border-blue-400"
+            />
+          </div>
+
+          <div>
+            <label className="text-xs text-zinc-500 block mb-2">Merge Mode</label>
+            <div className="flex gap-4">
+              <label className="flex items-center gap-1.5 text-xs cursor-pointer text-zinc-700 dark:text-zinc-200">
+                <input type="radio" name="mergeMode" checked={mergeMode === 'ma'} onChange={() => setMergeMode('ma')} className="accent-blue-500" />
+                MA Merge (binary / spread)
+              </label>
+              <label className="flex items-center gap-1.5 text-xs cursor-pointer text-zinc-700 dark:text-zinc-200">
+                <input type="radio" name="mergeMode" checked={mergeMode === 'code'} onChange={() => setMergeMode('code')} className="accent-blue-500" />
+                Code Merge (OR / AND)
+              </label>
+            </div>
+          </div>
+
+          {mergeMode === 'ma' && (
+            <>
+              <div>
+                <label className="text-xs text-zinc-500 block mb-1">Type</label>
+                <div className="flex gap-4">
+                  <label className="flex items-center gap-1.5 text-xs cursor-pointer text-zinc-700 dark:text-zinc-200">
+                    <input type="radio" name="mergeType" checked={mergeType === 'binary'} onChange={() => setMergeType('binary')} className="accent-blue-500" />
+                    Binary (0/1)
+                  </label>
+                  <label className="flex items-center gap-1.5 text-xs cursor-pointer text-zinc-700 dark:text-zinc-200">
+                    <input type="radio" name="mergeType" checked={mergeType === 'spread'} onChange={() => setMergeType('spread')} className="accent-blue-500" />
+                    Spread (delimited)
+                  </label>
+                </div>
+              </div>
+              <div>
+                <label className="text-xs text-zinc-500 block mb-1">Code Prefix (optional)</label>
+                <input
+                  type="text"
+                  value={codePrefix}
+                  onChange={e => setCodePrefix(e.target.value)}
+                  placeholder="e.g. p (codes become p1, p2, p3...)"
+                  className="w-full text-xs bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 px-2 py-1.5 text-zinc-700 dark:text-zinc-200 outline-none focus:border-blue-400"
+                />
+              </div>
+            </>
+          )}
+
+          {mergeMode === 'code' && (
+            <>
+              <div>
+                <label className="text-xs text-zinc-500 block mb-1">Operator</label>
+                <div className="flex gap-4">
+                  <label className="flex items-center gap-1.5 text-xs cursor-pointer text-zinc-700 dark:text-zinc-200">
+                    <input type="radio" name="operator" checked={mergeOperator === 'OR'} onChange={() => setMergeOperator('OR')} className="accent-blue-500" />
+                    OR (union)
+                  </label>
+                  <label className="flex items-center gap-1.5 text-xs cursor-pointer text-zinc-700 dark:text-zinc-200">
+                    <input type="radio" name="operator" checked={mergeOperator === 'AND'} onChange={() => setMergeOperator('AND')} className="accent-blue-500" />
+                    AND (intersection)
+                  </label>
+                </div>
+              </div>
+              <div>
+                <label className="text-xs text-zinc-500 block mb-1">Description (optional)</label>
+                <input
+                  type="text"
+                  value={description}
+                  onChange={e => setDescription(e.target.value)}
+                  placeholder="e.g. Total brand awareness"
+                  className="w-full text-xs bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 px-2 py-1.5 text-zinc-700 dark:text-zinc-200 outline-none focus:border-blue-400"
+                />
+              </div>
+            </>
+          )}
+        </div>
+
+        <div className="flex justify-end gap-2 px-4 py-3 border-t border-zinc-200 dark:border-zinc-700">
+          <button onClick={onClose} className="px-3 py-1.5 text-xs text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors">Cancel</button>
+          <button
+            onClick={handleMerge}
+            disabled={loading || selectedColumns.length < 2 || !newVarName.trim()}
+            className="px-3 py-1.5 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 disabled:bg-zinc-300 disabled:cursor-not-allowed transition-colors"
+          >
+            {loading ? 'Merging...' : 'Merge'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // ─── Edit Variables Page ──────────────────────────────────────────────────────
 const EditVariablesPage: React.FC = () => {
   const { variables } = useStore();
   const navigate = useNavigate();
+  const [showMergeModal, setShowMergeModal] = useState(false);
 
   const variableEntries = Object.entries(variables);
 
   return (
     <div className="h-full flex flex-col p-4 overflow-auto">
       <div className="flex justify-between items-center mb-4">
-        <h2 className="text-xs font-medium text-zinc-500 uppercase tracking-wider">variables</h2>
-        <span className="text-xs text-zinc-400 dark:text-zinc-600">{variableEntries.length}</span>
+        <div className="flex items-center gap-4">
+          <h2 className="text-xs font-medium text-zinc-500 uppercase tracking-wider">variables</h2>
+          <div className="flex items-center gap-3 text-xs text-zinc-400">
+            <span className="flex items-center gap-1">
+              <span className="inline-block w-2 h-2 rounded-full bg-zinc-300 dark:bg-zinc-600" /> original
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="inline-block w-2 h-2 rounded-full bg-amber-400" /> custom
+            </span>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowMergeModal(true)}
+            className="px-3 py-1.5 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
+          >
+            Merge
+          </button>
+          <span className="text-xs text-zinc-400 dark:text-zinc-600">{variableEntries.length}</span>
+        </div>
       </div>
 
       <div className="flex-1 overflow-auto border border-zinc-200 dark:border-zinc-800">
         <table className="w-full border-collapse text-xs">
           <thead className="sticky top-0">
             <tr className="bg-zinc-50 dark:bg-zinc-900">
+              <th className="border-b border-zinc-200 dark:border-zinc-800 px-2 py-2 text-left text-zinc-500 font-medium w-6" />
               <th className="border-b border-zinc-200 dark:border-zinc-800 px-3 py-2 text-left text-zinc-500 font-medium w-28">key</th>
               <th className="border-b border-zinc-200 dark:border-zinc-800 px-3 py-2 text-left text-zinc-500 font-medium w-32">name</th>
               <th className="border-b border-zinc-200 dark:border-zinc-800 px-3 py-2 text-left text-zinc-500 font-medium">definition</th>
@@ -1612,12 +2238,19 @@ const EditVariablesPage: React.FC = () => {
             {variableEntries.map(([key, info]) => {
               const hiddenCount = info.codes.filter((c: any) => c.visibility === 'hidden').length;
               const removedCount = info.codes.filter((c: any) => c.visibility === 'removed').length;
+              const isCustom = info.isCustom;
               return (
                 <tr
                   key={key}
                   className="hover:bg-zinc-50 dark:hover:bg-zinc-800/40 cursor-pointer"
                   onClick={() => navigate(`/edit-variables/${encodeURIComponent(key)}`)}
                 >
+                  <td className="border-b border-zinc-100 dark:border-zinc-800/60 px-2 py-2 text-center">
+                    {isCustom
+                      ? <span className="inline-block w-2 h-2 rounded-full bg-amber-400" title="Custom variable" />
+                      : <span className="inline-block w-2 h-2 rounded-full bg-zinc-300 dark:bg-zinc-600" title="Original variable" />
+                    }
+                  </td>
                   <td className="border-b border-zinc-100 dark:border-zinc-800/60 px-3 py-2 text-emerald-700 dark:text-emerald-400 font-medium truncate max-w-[7rem]">{key}</td>
                   <td className="border-b border-zinc-100 dark:border-zinc-800/60 px-3 py-2 text-zinc-700 dark:text-zinc-300 truncate max-w-[8rem]">{info.name || key}</td>
                   <td className="border-b border-zinc-100 dark:border-zinc-800/60 px-3 py-2 text-zinc-500 truncate">{info.label}</td>
@@ -1636,6 +2269,8 @@ const EditVariablesPage: React.FC = () => {
           </tbody>
         </table>
       </div>
+
+      {showMergeModal && <MergeVariablesModal onClose={() => setShowMergeModal(false)} />}
     </div>
   );
 };
@@ -1651,9 +2286,10 @@ const VariableDetailPage: React.FC = () => {
     updateVariableDisplayName,
     updateCodeLabel,
     updateCodeFactor,
-    updateCodeVisibility,
-    toggleVariableStat,
-  } = useStore();
+  updateCodeVisibility,
+  updateCodeSyntax,
+  toggleVariableStat,
+} = useStore();
 
   const info: VariableInfo | undefined = variables[varKey];
 
@@ -1750,6 +2386,7 @@ const VariableDetailPage: React.FC = () => {
                 <tr className="bg-zinc-50 dark:bg-zinc-800">
                   <th className="border border-zinc-200 dark:border-zinc-700 px-2 py-1.5 text-left text-zinc-500 w-16">code</th>
                   <th className="border border-zinc-200 dark:border-zinc-700 px-2 py-1.5 text-left text-zinc-500 flex-1">label</th>
+                  <th className="border border-zinc-200 dark:border-zinc-700 px-2 py-1.5 text-left text-zinc-500 w-36">syntax</th>
                   <th className="border border-zinc-200 dark:border-zinc-700 px-2 py-1.5 text-left text-zinc-500 w-24">factor</th>
                   <th className="border border-zinc-200 dark:border-zinc-700 px-2 py-1.5 text-left text-zinc-500 w-28">visibility</th>
                 </tr>
@@ -1772,6 +2409,18 @@ const VariableDetailPage: React.FC = () => {
                           onChange={(e) => updateCodeLabel(varKey, code.code, e.target.value)}
                           className="w-full text-xs bg-transparent border border-transparent hover:border-zinc-200 dark:hover:border-zinc-700 focus:border-blue-400 dark:focus:border-blue-500 px-1.5 py-0.5 text-zinc-600 dark:text-zinc-400 outline-none"
                         />
+                      </td>
+                      <td className="border border-zinc-200 dark:border-zinc-700 px-2 py-1 text-zinc-400 dark:text-zinc-500 font-mono text-[10px]">
+                        {info.isCustom && info.code_syntax
+                          ? (
+                            <input
+                              type="text"
+                              value={info.code_syntax[info.codes.findIndex(c => c.code === code.code)] || `${info.name || varKey}/${code.code}`}
+                              onChange={(e) => updateCodeSyntax(varKey, code.code, e.target.value)}
+                              className="w-full text-xs bg-zinc-50 dark:bg-zinc-800 border border-transparent hover:border-zinc-200 dark:hover:border-zinc-700 focus:border-blue-400 dark:focus:border-blue-500 px-1 py-0.5 text-zinc-600 dark:text-zinc-300 outline-none font-mono"
+                            />
+                          )
+                          : `${info.name || varKey}/${code.code}`}
                       </td>
                       <td className="border border-zinc-200 dark:border-zinc-700 px-2 py-1">
                         <input

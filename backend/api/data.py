@@ -1,4 +1,4 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi import APIRouter, UploadFile, File, HTTPException, Response
 from pydantic import BaseModel
 from typing import Optional
 import os
@@ -8,7 +8,7 @@ import io
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from core.data_loader import load_csv, merge_multiple_response
+from core.data_loader import load_csv, merge_multiple_response, merge_spread_columns, detect_column_types
 from core.mdd_parser import parse_mdd
 
 router = APIRouter()
@@ -42,6 +42,9 @@ class VariableInfo(BaseModel):
     label: str
     type: str
     codes: list[dict]
+    syntax: Optional[str] = None
+    code_syntax: Optional[list[str]] = None
+    is_custom: Optional[bool] = False
 
 
 class VariablesResponse(BaseModel):
@@ -281,6 +284,179 @@ async def delete_merged_variable(name: str):
     del data_store['merged_variables'][name]
     return {"status": "ok"}
 
+
+# ─── Merge Variables (MA Binary / Spread) ────────────────────────────────────
+class MergeVariablesRequest(BaseModel):
+    columns: list[str]
+    new_variable_name: str
+    merge_type: str  # "binary" or "spread"
+    code_prefix: Optional[str] = None
+
+
+class MergeVariablesResponse(BaseModel):
+    name: str
+    label: str
+    type: str
+    codes: list[dict]
+    syntax: str
+    code_syntax: list[str]
+    is_custom: bool = True
+
+
+@router.post("/merge_variables", response_model=MergeVariablesResponse)
+async def merge_variables(request: MergeVariablesRequest):
+    if data_store['df'] is None:
+        raise HTTPException(status_code=400, detail="No data loaded.")
+
+    df = data_store['df']
+    for col in request.columns:
+        if col not in df.columns:
+            raise HTTPException(status_code=400, detail=f"Column '{col}' not found in data.")
+
+    if request.new_variable_name in df.columns:
+        raise HTTPException(status_code=400, detail=f"Variable '{request.new_variable_name}' already exists.")
+
+    if request.merge_type not in ('binary', 'spread'):
+        raise HTTPException(status_code=400, detail="merge_type must be 'binary' or 'spread'.")
+
+    if request.merge_type == 'binary':
+        merged_series = merge_multiple_response(df, request.columns, request.new_variable_name)
+    else:
+        merged_series = merge_spread_columns(df, request.columns, request.new_variable_name)
+
+    data_store['df'][request.new_variable_name] = merged_series
+
+    prefix = request.code_prefix or ""
+    codes = []
+    for i, col in enumerate(request.columns):
+        code_val = f"{prefix}{i+1}" if prefix else str(i + 1)
+        codes.append({'code': code_val, 'label': col})
+
+    label = request.new_variable_name
+    code_syntax = [f"{col}/1" for col in request.columns]
+
+    data_store['merged_variables'][request.new_variable_name] = {
+        'label': label,
+        'type': request.merge_type,
+        'codes': codes,
+        'syntax': ",".join(code_syntax),
+        'code_syntax': code_syntax,
+        'source_columns': request.columns,
+    }
+
+    return MergeVariablesResponse(name=request.new_variable_name, label=label, type='multiple_response', codes=codes, syntax=",".join(code_syntax), code_syntax=code_syntax, is_custom=True)
+
+
+# ─── Merge Codes (OR / AND) ──────────────────────────────────────────────────
+class MergeCodesRequest(BaseModel):
+    variables: list[str]
+    new_variable_name: str
+    merge_operator: str  # "OR" or "AND"
+    description: Optional[str] = None
+
+
+class MergeCodesResponse(BaseModel):
+    name: str
+    label: str
+    type: str
+    codes: list[dict]
+    syntax: str
+    code_syntax: list[str]
+    merge_operator: str
+    is_custom: bool = True
+
+
+@router.post("/merge_codes", response_model=MergeCodesResponse)
+async def merge_codes(request: MergeCodesRequest):
+    if data_store['df'] is None:
+        raise HTTPException(status_code=400, detail="No data loaded.")
+
+    if len(request.variables) < 2:
+        raise HTTPException(status_code=400, detail="At least 2 variables required.")
+
+    if request.merge_operator not in ('OR', 'AND'):
+        raise HTTPException(status_code=400, detail="merge_operator must be 'OR' or 'AND'.")
+
+    df = data_store['df']
+    for var in request.variables:
+        if var not in df.columns:
+            raise HTTPException(status_code=400, detail=f"Variable '{var}' not found in data.")
+
+    first_var = request.variables[0]
+    first_cols = [c for c in df.columns if c.startswith(first_var + "_")]
+    n_codes = len(first_cols)
+
+    if n_codes == 0:
+        raise HTTPException(status_code=400, detail=f"Variable '{first_var}' does not appear to be an MA variable (no _code columns found).")
+
+    for var in request.variables[1:]:
+        var_cols = [c for c in df.columns if c.startswith(var + "_")]
+        if len(var_cols) != n_codes:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Variable '{var}' has {len(var_cols)} codes but '{first_var}' has {n_codes}. "
+                       "All variables must have the same number of codes."
+            )
+
+    if request.new_variable_name in df.columns:
+        raise HTTPException(status_code=400, detail=f"Variable '{request.new_variable_name}' already exists.")
+
+    result = pd.Series(index=df.index, dtype=object)
+    sep = "+" if request.merge_operator == "OR" else "."
+
+    for idx in df.index:
+        selected = []
+        for code_pos in range(1, n_codes + 1):
+            code_str = str(code_pos)
+            vals = []
+            for var in request.variables:
+                col_name = f"{var}_{code_pos}"
+                val = "0"
+                if col_name in df.columns:
+                    val = str(df.at[idx, col_name]).strip()
+                vals.append(val)
+
+            if request.merge_operator == "OR":
+                if any(v == "1" for v in vals):
+                    selected.append(code_str)
+            else:
+                if all(v == "1" for v in vals):
+                    selected.append(code_str)
+
+        result.iloc[idx] = ";".join(selected) if selected else ""
+
+    data_store['df'][request.new_variable_name] = result
+
+    codes = [{'code': str(i + 1), 'label': f"Code {i + 1}"} for i in range(n_codes)]
+    label = request.description or request.new_variable_name
+    sep = "+" if request.merge_operator == "OR" else "."
+    code_syntax = [
+        sep.join(f"{var}/{code_pos}" for var in request.variables)
+        for code_pos in range(1, n_codes + 1)
+    ]
+    syntax = ",".join(code_syntax)
+
+    data_store['merged_variables'][request.new_variable_name] = {
+        'label': label,
+        'type': 'code_merge',
+        'codes': codes,
+        'syntax': syntax,
+        'code_syntax': code_syntax,
+        'merge_operator': request.merge_operator,
+        'source_variables': request.variables,
+    }
+
+    return MergeCodesResponse(
+        name=request.new_variable_name,
+        label=label,
+        type='code_merge',
+        codes=codes,
+        syntax=syntax,
+        code_syntax=code_syntax,
+        merge_operator=request.merge_operator,
+        is_custom=True
+    )
+
 # ─── Sample data ──────────────────────────────────────────────────────────────
 @router.post("/load-sample")
 async def load_sample():
@@ -367,3 +543,47 @@ async def get_data_info():
         column_count=len(df.columns),
         columns=list(df.columns)
     )
+
+
+# ─── Raw CSV export ───────────────────────────────────────────────────────────
+@router.get("/raw")
+async def get_raw_csv():
+    if data_store['df'] is None:
+        raise HTTPException(status_code=400, detail="No data loaded.")
+    csv_text = data_store['df'].to_csv(index=False)
+    return Response(content=csv_text, media_type="text/csv")
+
+
+# ─── Upload from text (session restore) ──────────────────────────────────────
+class UploadTextRequest(BaseModel):
+    csv_text: str
+    file_name: Optional[str] = "restored.csv"
+
+@router.post("/upload-text", response_model=UploadResponse)
+async def upload_text(request: UploadTextRequest):
+    try:
+        import pandas as pd
+        df = pd.read_csv(io.StringIO(request.csv_text), dtype=str)
+        metadata = detect_column_types(df)
+        data_store['df'] = df
+        data_store['metadata'] = metadata
+        data_store['file_name'] = request.file_name
+        data_store['merged_variables'] = {}
+        return UploadResponse(columns=list(df.columns), row_count=len(df), metadata=metadata, format='csv')
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ─── Register merged variable metadata (column already exists in df) ─────────
+class RegisterMergedRequest(BaseModel):
+    name: str
+    metadata: dict
+
+@router.post("/register-merged")
+async def register_merged(request: RegisterMergedRequest):
+    if data_store['df'] is None:
+        raise HTTPException(status_code=400, detail="No data loaded.")
+    if request.name not in data_store['df'].columns:
+        raise HTTPException(status_code=400, detail=f"Column '{request.name}' not found in data.")
+    data_store['merged_variables'][request.name] = request.metadata
+    return {"status": "ok", "name": request.name}

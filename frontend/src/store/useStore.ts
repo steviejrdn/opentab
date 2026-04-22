@@ -63,8 +63,10 @@ interface AppState {
   updateCodeLabel: (varName: string, code: string, label: string) => void;
   updateCodeVisibility: (varName: string, code: string, visibility: 'visible' | 'hidden' | 'removed') => void;
   updateCodeFactor: (varName: string, code: string, factor: number | null) => void;
+  updateCodeSyntax: (varName: string, code: string, syntax: string) => void;
   removeCode: (varName: string, code: string) => void;
   toggleVariableStat: (varName: string, stat: 'showMean' | 'showStdError' | 'showStdDev' | 'showVariance') => void;
+  deleteVariable: (varName: string) => void;
   importState: (state: Partial<Pick<AppState, 'variables' | 'tables' | 'displayOptions' | 'activeTableId' | 'fileName' | 'rowCount' | 'folders'>>) => void;
   mergeAndSetVariables: (incoming: Record<string, VariableInfo>) => void;
   resetSession: () => void;
@@ -272,6 +274,22 @@ export const useStore = create<AppState>()((set, get) => ({
       };
     }),
 
+  updateCodeSyntax: (varName, code, syntax) =>
+    set((state) => {
+      const v = state.variables[varName];
+      if (!v || !v.code_syntax) return state;
+      const codeIdx = v.codes.findIndex((c) => c.code === code);
+      if (codeIdx === -1) return state;
+      const newCodeSyntax = [...v.code_syntax];
+      newCodeSyntax[codeIdx] = syntax;
+      return {
+        variables: {
+          ...state.variables,
+          [varName]: { ...v, code_syntax: newCodeSyntax },
+        },
+      };
+    }),
+
   removeCode: (varName, code) =>
     set((state) => {
       const v = state.variables[varName];
@@ -313,6 +331,7 @@ export const useStore = create<AppState>()((set, get) => ({
         ...newInfo,
         name: existing.name !== key ? existing.name : newInfo.name,
         label: existing.label || newInfo.label,
+        syntax: newInfo.syntax || existing.syntax,
         showMean: existing.showMean,
         showStdError: existing.showStdError,
         showStdDev: existing.showStdDev,
@@ -325,6 +344,12 @@ export const useStore = create<AppState>()((set, get) => ({
     }
     return { variables: merged };
   }),
+
+  deleteVariable: (varName) =>
+    set((state) => {
+      const entries = Object.entries(state.variables).filter(([k]) => k !== varName);
+      return { variables: Object.fromEntries(entries) };
+    }),
 
   resetSession: () => set({
     dataLoaded: false,

@@ -21,6 +21,9 @@ export interface VariableInfo {
   label: string;
   type: string;
   codes: VariableCode[];
+  syntax?: string;
+  code_syntax?: string[];
+  isCustom?: boolean;
   showMean: boolean;
   showStdError: boolean;
   showStdDev: boolean;
@@ -141,6 +144,41 @@ export const dataApi = {
 
   deleteMergedVariable: async (name: string) => {
     const response = await api.delete(`/api/data/merge-mr/${name}`);
+    return response.data;
+  },
+
+  mergeVariables: async (request: {
+    columns: string[];
+    new_variable_name: string;
+    merge_type: 'binary' | 'spread';
+    code_prefix?: string;
+  }) => {
+    const response = await api.post('/api/data/merge_variables', request);
+    return response.data;
+  },
+
+  mergeCodes: async (request: {
+    variables: string[];
+    new_variable_name: string;
+    merge_operator: 'OR' | 'AND';
+    description?: string;
+  }) => {
+    const response = await api.post('/api/data/merge_codes', request);
+    return response.data;
+  },
+
+  getRawCsv: async (): Promise<string> => {
+    const response = await api.get('/api/data/raw', { responseType: 'text' });
+    return response.data as string;
+  },
+
+  uploadText: async (csvText: string, fileName: string) => {
+    const response = await api.post('/api/data/upload-text', { csv_text: csvText, file_name: fileName });
+    return response.data;
+  },
+
+  registerMerged: async (name: string, metadata: object) => {
+    const response = await api.post('/api/data/register-merged', { name, metadata });
     return response.data;
   },
 };

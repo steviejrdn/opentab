@@ -6,8 +6,7 @@ opentab_ is a survey data cross-tabulation tool with React frontend and FastAPI 
 ## Architecture
 - **Frontend**: React 19 + TypeScript + Vite + Zustand (state) + dnd-kit (drag-drop) + Tailwind CSS 4 + react-router-dom
 - **Backend**: FastAPI with `allow_origins=["*"]`, three routers: `/api/data`, `/api/tables`, `/api/compute`
-- **Core Logic**: `backend/core/` is active. `core/` and `ui/` at repo root are legacy Streamlit-era copies — do not modify.
-- **Legacy**: `app.py` is Streamlit-based, deprecated.
+- **Core Logic**: `backend/core/` contains all active Python modules (tabulator, code_parser, statistics, mdd_parser, data_loader).
 
 ## Development Commands
 
@@ -17,7 +16,7 @@ docker-compose up    # Backend :8001, Frontend :5173
 ```
 
 ### Both Services (local — Windows)
-- `start.sh` starts backend on **port 8000** (background) + frontend — but frontend expects **8001**. Use manual commands below instead.
+- `start.sh` starts backend on **port 8000** but frontend expects **8001**. Use manual commands below instead.
 
 ### Frontend (port 5173)
 ```bash
@@ -28,7 +27,7 @@ npm run build        # tsc -b && vite build
 npm run lint         # ESLint
 ```
 
-### Backend (port 8001 — match frontend default)
+### Backend (port 8001)
 ```bash
 cd backend
 pip install -r requirements.txt
@@ -39,15 +38,11 @@ uvicorn main:app --reload --port 8001
 - `VITE_API_URL` — backend URL for frontend (default: `http://localhost:8001`). See `.env.example`.
 - Docker Compose sets `VITE_API_URL=http://backend:8001` internally.
 
-### Testing
-```bash
-python test_phase1.py    # Core module tests (run from repo root, imports from `core/`)
-```
-
 ## Key Patterns
 
 ### Frontend Structure
-- **All pages are inlined in `App.tsx`** (~1600 lines) — there is no `pages/` directory. BuildPage, WelcomeScreen, ResultTab, EditVariablesPage are local components.
+- **Main component**: `frontend/src/App.tsx` (~900 lines) contains the inline `BuildPage`, `BuildPageLayout`, `WelcomeScreen`, `EditVariablesPage`, `ResultTab`, `TableList`, `VariableList` as local components.
+- **Components directory** (`frontend/src/components/`): Only `FilterTab` is imported from a separate file. Everything else is inline in App.tsx.
 - Zustand store (`frontend/src/store/useStore.ts`) is single source of truth. Never mutate state directly.
 - Key slices: `variables`, `tables` (each with `row_items`, `col_items`, `filter_items`, `filter_def`, `result`), `activeTableId`, `displayOptions` (`counts`, `colPct`, `showPctSign`, `decimalPlaces`).
 - Session save/load exports `.opentab` files.
@@ -85,7 +80,6 @@ python test_phase1.py    # Core module tests (run from repo root, imports from `
 ## Important Notes
 - **Port mismatch**: `start.sh` launches uvicorn on 8000, but `api.ts` defaults to 8001. Always use `--port 8001` manually.
 - Code definitions must maintain backward compatibility.
-- Drag-drop logic lives entirely in `App.tsx`.
 - Sample data in `sample_data/` directory.
 - Log files: `backend.log`, `frontend.log`.
 - See `CLAUDE.md` for more detailed architecture guide.
