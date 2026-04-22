@@ -162,4 +162,4 @@ MIT License — see LICENSE file
 
 ---
 
-**Made with ❤️ for survey researchers and data analysts**
+**Made with ❤️ from market researcher to another**
