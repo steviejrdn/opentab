@@ -12,11 +12,18 @@ A modern, interactive survey data cross-tabulation tool. Upload CSV data, define
 - 📦 **Resizable Sidebar** — Customize your workspace
 - 💾 **Session Save/Load** — Export/import `.opentab` files
 
-## Quick Start (Docker)
+## End User Install
+
+```bash
+pip install git+https://github.com/steviejrdn/opentab.git
+opentab
+```
+
+Browser opens automatically at http://localhost:8001.
+
+## Developer Quick Start (Docker)
 
 **Prerequisites:** [Docker](https://www.docker.com/products/docker-desktop) and Docker Compose
-
-### Run with Docker Compose
 
 ```bash
 git clone https://github.com/steviejrdn/opentab.git
@@ -24,13 +31,10 @@ cd opentab
 docker-compose up
 ```
 
-Then open http://localhost:5173 in your browser.
+- Backend (FastAPI + hot reload): http://localhost:8001
+- Frontend (Vite + React + hot reload): http://localhost:5173
 
-**What it does:**
-- `backend` service runs on `http://localhost:8001` (FastAPI)
-- `frontend` service runs on `http://localhost:5173` (Vite + React)
-
-Stop with `Ctrl+C` (or `docker-compose down` to remove containers).
+Stop with `Ctrl+C`.
 
 ## Local Development (without Docker)
 
@@ -42,12 +46,11 @@ Stop with `Ctrl+C` (or `docker-compose down` to remove containers).
 ### Setup Backend
 
 ```bash
-cd backend
-pip install -r requirements.txt
-uvicorn main:app --reload --port 8001
+pip install -e .
+uvicorn opentab.main:app --reload --port 8001
 ```
 
-Backend runs on http://localhost:8001/api/docs (Swagger UI)
+Backend API docs: http://localhost:8001/api/docs
 
 ### Setup Frontend
 
@@ -62,8 +65,8 @@ Frontend runs on http://localhost:5173
 ## Architecture
 
 ### Backend (FastAPI)
-- **Entry**: `backend/main.py`
-- **Core modules**: `backend/core/` — cross-tabulation, statistics, data parsing
+- **Entry**: `opentab/main.py`
+- **Core modules**: `opentab/core/` — cross-tabulation, statistics, data parsing
 - **API routes**: `/api/data`, `/api/tables`, `/api/compute`
 
 ### Frontend (React + TypeScript + Vite)
@@ -84,8 +87,9 @@ Frontend runs on http://localhost:5173
 
 ```
 opentab/
-├── backend/
+├── opentab/
 │   ├── main.py              # FastAPI entry
+│   ├── cli.py               # `opentab` CLI entry point
 │   ├── requirements.txt
 │   ├── Dockerfile
 │   ├── api/                 # Route handlers
@@ -104,6 +108,7 @@ opentab/
 │   ├── package.json
 │   ├── vite.config.ts
 │   └── Dockerfile
+├── pyproject.toml           # Package config (pip install)
 ├── docker-compose.yml       # Docker Compose config
 └── README.md                # This file
 ```
@@ -128,22 +133,13 @@ opentab/
 
 ## Building for Production
 
-### Backend
-```bash
-cd backend
-pip install -r requirements.txt
-uvicorn main:app --host 0.0.0.0 --port 8001
-```
+Build the frontend into the package static dir, then serve everything from one process:
 
-### Frontend
 ```bash
-cd frontend
-npm install
-npm run build  # Creates dist/ folder
-npm run preview  # Test production build
+cd frontend && npm install && npm run build && cd ..
+pip install -e .
+opentab
 ```
-
-Serve frontend with any static host (Nginx, Vercel, etc.).
 
 ## Contributing
 
