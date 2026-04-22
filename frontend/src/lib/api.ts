@@ -61,6 +61,7 @@ export interface FilterItem {
   variable: string;
   condition: FilterCondition;
   selectedCodes: string[];
+  operatorToNext?: 'AND' | 'OR';
 }
 
 export interface CrosstabRequest {

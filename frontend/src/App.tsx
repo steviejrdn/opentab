@@ -1210,16 +1210,36 @@ const DropZone: React.FC<{
 
 // ─── Filter def builder ───────────────────────────────────────────────────────
 function buildFilterDef(filterItems: FilterItem[]): string | undefined {
-  const parts: string[] = [];
-  for (const item of filterItems) {
-    if (item.condition === 'has_value') parts.push(`${item.variable}/*`);
-    else if (item.condition === 'has_no_value') parts.push(`!${item.variable}/*`);
-    else if (item.condition === 'includes_any' && item.selectedCodes.length > 0)
-      parts.push(`${item.variable}/${item.selectedCodes.join(',')}`);
-    else if (item.condition === 'includes_none' && item.selectedCodes.length > 0)
-      parts.push(`!${item.variable}/${item.selectedCodes.join(',')}`);
+  if (filterItems.length < 1) return undefined;
+  if (filterItems.length === 1) {
+    const item = filterItems[0];
+    if (item.condition === 'has_value') return `${item.variable}/*`;
+    if (item.condition === 'has_no_value') return `!${item.variable}/*`;
+    if (item.condition === 'includes_any' && item.selectedCodes.length > 0)
+      return `${item.variable}/${item.selectedCodes.join(',')}`;
+    if (item.condition === 'includes_none' && item.selectedCodes.length > 0)
+      return `!${item.variable}/${item.selectedCodes.join(',')}`;
+    return undefined;
   }
-  return parts.length > 0 ? parts.join('.') : undefined;
+  const parts: string[] = [];
+  for (let i = 0; i < filterItems.length; i++) {
+    const item = filterItems[i];
+    let part = '';
+    if (item.condition === 'has_value') part = `${item.variable}/*`;
+    else if (item.condition === 'has_no_value') part = `!${item.variable}/*`;
+    else if (item.condition === 'includes_any' && item.selectedCodes.length > 0)
+      part = `${item.variable}/${item.selectedCodes.join(',')}`;
+    else if (item.condition === 'includes_none' && item.selectedCodes.length > 0)
+      part = `!${item.variable}/${item.selectedCodes.join(',')}`;
+    if (part) {
+      if (parts.length > 0) {
+        if (!item.operatorToNext) return undefined;
+        parts.push(item.operatorToNext === 'OR' ? '+' : '.');
+      }
+      parts.push(part);
+    }
+  }
+  return parts.length > 0 ? parts.join('') : undefined;
 }
 
 // ─── Main App ─────────────────────────────────────────────────────────────────
@@ -1440,6 +1460,10 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
 
   const handleGenerate = async () => {
     if (!activeTable?.row_items.length) { alert('Add items to Sidebreak first'); return; }
+    if (activeTable.filter_items.length > 1) {
+      const hasUnsetOperator = activeTable.filter_items.slice(1).some(item => !item.operatorToNext);
+      if (hasUnsetOperator) { alert('Set the operator between filter variables before running'); return; }
+    }
     setIsComputing(true);
     try {
       const allVarNames = [...new Set([

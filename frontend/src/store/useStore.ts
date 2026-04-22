@@ -52,6 +52,7 @@ interface AppState {
   addFilterItem: (tableId: string, item: FilterItem) => void;
   updateFilterItem: (tableId: string, itemId: string, updates: Partial<FilterItem>) => void;
   removeFilterItem: (tableId: string, itemId: string) => void;
+  setFilterOperator: (tableId: string, itemId: string, operator: 'AND' | 'OR') => void;
   setTableResult: (tableId: string, result: CrosstabResult) => void;
   nestItem: (tableId: string, zone: 'row' | 'col', parentId: string, newItem: DropItem) => void;
 
@@ -191,6 +192,15 @@ export const useStore = create<AppState>()((set, get) => ({
     if (table) {
       get().updateTable(tableId, {
         filter_items: table.filter_items.filter((i) => i.id !== itemId),
+      });
+    }
+  },
+
+  setFilterOperator: (tableId, itemId, operator) => {
+    const table = get().tables.find((t) => t.id === tableId);
+    if (table) {
+      get().updateTable(tableId, {
+        filter_items: table.filter_items.map((i) => i.id === itemId ? { ...i, operatorToNext: operator } : i),
       });
     }
   },
