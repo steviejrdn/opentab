@@ -67,6 +67,7 @@ interface AppState {
   updateCodeVisibility: (varName: string, code: string, visibility: 'visible' | 'hidden' | 'removed') => void;
   updateCodeFactor: (varName: string, code: string, factor: number | null) => void;
   updateCodeSyntax: (varName: string, code: string, syntax: string) => void;
+  updateNetCode: (varName: string, code: string, syntax: string) => void;
   removeCode: (varName: string, code: string) => void;
   addNetCode: (varName: string, netOf: string[], label: string) => void;
   addCode: (varName: string, label: string, syntax: string, factor?: number | null) => void;
@@ -306,7 +307,32 @@ export const useStore = create<AppState>()((set, get) => ({
         },
       };
     }),
-
+  updateNetCode: (varName, code, syntax) =>
+    set((state) => {
+      const v = state.variables[varName];
+      if (!v) return state;
+      const codeIdx = v.codes.findIndex((c) => c.code === code);
+      if (codeIdx === -1) return state;
+      const targetCode = v.codes[codeIdx];
+      if (!targetCode.isNet) return state;
+      const atomRe = /([A-Za-z_][A-Za-z0-9_]*)\/([^+]+)/g;
+      const codes: string[] = [];
+      let match;
+      while ((match = atomRe.exec(syntax)) !== null) {
+        codes.push(match[2]);
+      }
+      const newCodes = v.codes.map((c, i) =>
+        i === codeIdx ? { ...c, netOf: codes, syntax } : c
+      );
+      const newCodeSyntax = [...(v.code_syntax || Array(v.codes.length).fill(''))];
+      newCodeSyntax[codeIdx] = syntax;
+      return {
+        variables: {
+          ...state.variables,
+          [varName]: { ...v, codes: newCodes, code_syntax: newCodeSyntax },
+        },
+      };
+    }),
   removeCode: (varName, code) =>
     set((state) => {
       const v = state.variables[varName];
@@ -349,7 +375,6 @@ export const useStore = create<AppState>()((set, get) => ({
     set((state) => {
       const v = state.variables[varName];
       if (!v) return state;
-      // Auto-generate next numeric code
       const numericCodes = v.codes
         .map((c) => parseInt(c.code, 10))
         .filter((n) => !isNaN(n) && n > 0);
@@ -357,7 +382,7 @@ export const useStore = create<AppState>()((set, get) => ({
       const code = String(nextCode);
       const newCode = { code, label, syntax, factor, isNew: true, visibility: 'visible' as const };
       const newCodeSyntax = [...(v.code_syntax || []), syntax];
-      return { variables: { ...state.variables, [varName]: { ...v, codes: [...v.codes, newCode], code_syntax: newCodeSyntax } } };
+      return { variables: { ...state.variables, [varName]: { ...v, isCustom: true, codes: [...v.codes, newCode], code_syntax: newCodeSyntax } } };
     }),
 
   reorderCodes: (varName, orderedCodes) =>

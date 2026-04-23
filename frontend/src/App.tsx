@@ -2760,7 +2760,6 @@ interface SortableCodeRowProps {
   code: NonNullable<VariableInfo['codes']>[number];
   varKey: string;
   varName: string;
-  isCustom: boolean;
   code_syntax?: string[];
   codeIndex: number;
   isSelected: boolean;
@@ -2774,7 +2773,7 @@ interface SortableCodeRowProps {
 }
 
 const SortableCodeRow: React.FC<SortableCodeRowProps> = ({
-  code, varKey, varName, isCustom, code_syntax, codeIndex,
+  code, varKey, varName, code_syntax, codeIndex,
   isSelected, onToggleSelect, onDelete,
   updateCodeLabel, updateCodeFactor, updateCodeVisibility, updateCodeSyntax,
   onEditSyntax,
@@ -2836,26 +2835,39 @@ const SortableCodeRow: React.FC<SortableCodeRowProps> = ({
       {/* Syntax */}
       <td className="border border-zinc-200 dark:border-zinc-700 px-2 py-1 text-zinc-400 dark:text-zinc-500 font-mono text-[10px]">
         {netSyntax ? (
-          <span className="text-purple-500 dark:text-purple-400">{netSyntax}</span>
-        ) : isCustom && code_syntax ? (
+          <div className="flex items-center gap-1">
+            <span className="text-purple-500 dark:text-purple-400">{netSyntax}</span>
+            {onEditSyntax && (
+              <button
+                onClick={() => onEditSyntax(code.code, netSyntax)}
+                className="text-[10px] px-1 py-0.5 bg-blue-100 dark:bg-blue-900/30 hover:bg-blue-200 dark:hover:bg-blue-800 text-blue-600 dark:text-blue-400 rounded transition-colors shrink-0"
+                title="edit net syntax"
+              >
+                edit
+              </button>
+            )}
+          </div>
+        ) : (code.isNew && !netSyntax) ? (
           <div className="flex items-center gap-1">
             <input
               type="text"
-              value={code_syntax[codeIndex] || `${varName}/${code.code}`}
+              value={code.syntax || code_syntax?.[codeIndex] || `${varName}/${code.code}`}
               onChange={(e) => updateCodeSyntax(varKey, code.code, e.target.value)}
               className="flex-1 w-full text-xs bg-zinc-50 dark:bg-zinc-800 border border-transparent hover:border-zinc-200 dark:hover:border-zinc-700 focus:border-blue-400 dark:focus:border-blue-500 px-1 py-0.5 text-zinc-600 dark:text-zinc-300 outline-none font-mono"
             />
             {onEditSyntax && (
               <button
-                onClick={() => onEditSyntax(code.code, code_syntax[codeIndex] || `${varName}/${code.code}`)}
-                className="text-[10px] px-1 py-0.5 bg-blue-100 dark:bg-blue-900/30 hover:bg-blue-200 dark:hover:bg-blue-800 text-blue-600 dark:text-blue-400 rounded transition-colors"
+                onClick={() => onEditSyntax(code.code, code.syntax || code_syntax?.[codeIndex] || `${varName}/${code.code}`)}
+                className="text-[10px] px-1 py-0.5 bg-blue-100 dark:bg-blue-900/30 hover:bg-blue-200 dark:hover:bg-blue-800 text-blue-600 dark:text-blue-400 rounded transition-colors shrink-0"
                 title="edit syntax"
               >
                 edit
               </button>
             )}
           </div>
-        ) : `${varName}/${code.code}`}
+        ) : (
+          <span>{varName}/{code.code}</span>
+        )}
       </td>
       {/* Factor */}
       <td className="border border-zinc-200 dark:border-zinc-700 px-2 py-1">
@@ -2914,6 +2926,7 @@ const VariableDetailPage: React.FC = () => {
     updateCodeFactor,
     updateCodeVisibility,
     updateCodeSyntax,
+    updateNetCode,
     toggleVariableStat,
     addNetCode,
     addCode,
@@ -2942,7 +2955,12 @@ const VariableDetailPage: React.FC = () => {
 
   const handleSaveSyntax = (syntax: string) => {
     if (editingCodeKey) {
-      updateCodeSyntax(varKey, editingCodeKey, syntax);
+      const codeInfo = info?.codes.find((c) => c.code === editingCodeKey);
+      if (codeInfo?.isNet) {
+        updateNetCode(varKey, editingCodeKey, syntax);
+      } else {
+        updateCodeSyntax(varKey, editingCodeKey, syntax);
+      }
     } else {
       setNewCodeSyntax(syntax);
     }
@@ -3245,7 +3263,6 @@ const VariableDetailPage: React.FC = () => {
                         code={code}
                         varKey={varKey}
                         varName={varName}
-                        isCustom={!!info.isCustom}
                         code_syntax={info.code_syntax}
                         codeIndex={idx}
                         isSelected={selectedForNet.has(code.code)}
