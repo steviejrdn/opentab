@@ -98,9 +98,9 @@ export const useStore = create<AppState>()((set, get) => ({
     statDecimalPlaces: 2,
   },
   sidebarWidth: 256,
-  sidebarVisible: true,
+  sidebarVisible: false,
 
-  setDataLoaded: (loaded) => set({ dataLoaded: loaded }),
+  setDataLoaded: (loaded) => set({ dataLoaded: loaded, sidebarVisible: loaded }),
   setVariables: (variables) => set({ variables }),
   setDataInfo: (fileName, rowCount) => set({ fileName, rowCount }),
 
@@ -443,6 +443,7 @@ export const useStore = create<AppState>()((set, get) => ({
     activeTableId: null,
     folders: [],
     activeTab: 'build',
+    sidebarVisible: false,
     displayOptions: { counts: true, colPct: false, showPctSign: true, decimalPlaces: 1, statDecimalPlaces: 2 },
   }),
 

@@ -23,6 +23,49 @@ function buildNameToKeyMap(vars: Record<string, VariableInfo>): Record<string, s
   return map;
 }
 
+function parseSimpleSyntax(text: string): { label?: string; stats?: string[]; codes?: { code: string; label?: string; factor?: number | null; visibility?: string; syntax?: string }[] } {
+  const result: { label?: string; stats?: string[]; codes?: { code: string; label?: string; factor?: number | null; visibility?: string; syntax?: string }[] } = {};
+  text = text.trim();
+  const labelMatch = text.match(/label:\s*([^;|]+)/i);
+  if (labelMatch) result.label = labelMatch[1].trim();
+  const statsMatch = text.match(/stats:\s*([^;|]+)/i);
+  if (statsMatch) result.stats = statsMatch[1].split(',').map((s) => s.trim());
+  const codesMatch = text.match(/codes:\s*(.+)/i);
+  if (codesMatch) {
+    result.codes = [];
+    const codePairs = codesMatch[1].split(/[,;](?=\d+:)/);
+    for (const pair of codePairs) {
+      const colonIdx = pair.indexOf(':');
+      if (colonIdx > 0) {
+        const code = pair.slice(0, colonIdx).trim();
+        const rest = pair.slice(colonIdx + 1).trim();
+        const parts = rest.split(/\s+/);
+        const codeEntry: { code: string; label?: string; factor?: number | null; visibility?: string; syntax?: string } = { code };
+        let i = 0;
+        while (i < parts.length) {
+          const p = parts[i];
+          if (p === 'label' && i + 1 < parts.length) {
+            codeEntry.label = parts[i + 1];
+            i += 2;
+          } else if (p === 'factor' && i + 1 < parts.length) {
+            codeEntry.factor = parts[i + 1] === 'null' ? null : parseFloat(parts[i + 1]);
+            i += 2;
+          } else if (p === 'vis' && i + 1 < parts.length) {
+            codeEntry.visibility = parts[i + 1];
+            i += 2;
+          } else {
+            codeEntry.syntax = rest;
+            break;
+          }
+        }
+        if (!codeEntry.syntax) codeEntry.syntax = rest;
+        result.codes.push(codeEntry);
+      }
+    }
+  }
+  return result;
+}
+
 // ─── Nesting Helpers ──────────────────────────────────────────────────────────
 function getTreeMaxDepth(item: DropItem): number {
   if (!item.children?.length) return 0;
@@ -506,6 +549,245 @@ const WelcomeScreen: React.FC<{ onLoadSample: () => void; loading: boolean }> = 
         </button>
       </p>
 
+    </div>
+  );
+};
+
+// ─── Syntax Builder Modal ─────────────────────────────────────────────────────
+interface SyntaxBuilderModalProps {
+  initialSyntax?: string;
+  onSave: (syntax: string) => void;
+  onClose: () => void;
+}
+
+const SyntaxBuilderModal: React.FC<SyntaxBuilderModalProps> = ({ initialSyntax = '', onSave, onClose }) => {
+  const { variables } = useStore();
+  const [rawSyntax, setRawSyntax] = useState(initialSyntax);
+  const [searchVar, setSearchVar] = useState('');
+  const [expandedVars, setExpandedVars] = useState<Set<string>>(new Set());
+  const [notMode, setNotMode] = useState(false);
+
+  const nameToKeyMap = buildNameToKeyMap(variables);
+
+  const parseSyntaxAtoms = (syntax: string) => {
+    const atomRe = /([A-Za-z_][A-Za-z0-9_]*)\/([^+()\s!.]+)/g;
+    const atoms: { varName: string; codePart: string; full: string; start: number; end: number; isNot: boolean }[] = [];
+    let match;
+    while ((match = atomRe.exec(syntax)) !== null) {
+      const codePart = match[2];
+      const isNot = codePart.startsWith('n');
+      atoms.push({ varName: match[1], codePart, full: match[0], start: match.index, end: match.index + match[0].length, isNot });
+    }
+    return atoms;
+  };
+
+  const atoms = parseSyntaxAtoms(rawSyntax);
+
+  const getLabelForAtom = (varName: string, codePart: string, isNot: boolean) => {
+    const resolvedKey = nameToKeyMap[varName] || varName;
+    const vInfo = variables[resolvedKey];
+    const cleanCodePart = isNot ? codePart.slice(1) : codePart;
+    if (!vInfo) return { varLabel: varName, codeLabel: `?${cleanCodePart}?` };
+    const varLabel = vInfo.label || varName;
+    let codeLabel = `?${cleanCodePart}?`;
+    if (cleanCodePart === '*') codeLabel = '* (any)';
+    else if (cleanCodePart.includes('..')) {
+      const [from, to] = cleanCodePart.split('..');
+      const fromCode = vInfo.codes?.find((c: any) => c.code === from);
+      const toCode = vInfo.codes?.find((c: any) => c.code === to);
+      codeLabel = `${fromCode?.label || from} .. ${toCode?.label || to}`;
+    } else {
+      const code = vInfo.codes?.find((c: any) => c.code === cleanCodePart);
+      codeLabel = code?.label || cleanCodePart;
+    }
+    return { varLabel, codeLabel };
+  };
+
+  const insertAtCursor = (insert: string) => {
+    const textarea = document.getElementById('syntax-input') as HTMLTextAreaElement;
+    const pos = textarea?.selectionStart ?? rawSyntax.length;
+    const before = rawSyntax.slice(0, pos);
+    const after = rawSyntax.slice(pos);
+    setRawSyntax(before + insert + after);
+    setTimeout(() => { textarea?.focus(); textarea?.setSelectionRange(pos + insert.length, pos + insert.length); }, 0);
+  };
+
+  const insertCode = (_varKey: string, varName: string, code: string) => {
+    const prefix = notMode ? 'n' : '';
+    insertAtCursor(`${varName}/${prefix}${code}`);
+  };
+
+  const toggleVar = (key: string) => {
+    setExpandedVars((prev) => { const next = new Set(prev); if (next.has(key)) next.delete(key); else next.add(key); return next; });
+  };
+
+  const filteredVars = Object.entries(variables).filter(([key, vInfo]) => {
+    if (!searchVar) return true;
+    const search = searchVar.toLowerCase();
+    return (vInfo.name || key).toLowerCase().includes(search) || (vInfo.label || '').toLowerCase().includes(search);
+  });
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+      <div className="bg-white dark:bg-zinc-900 rounded-lg shadow-xl w-[820px] max-h-[85vh] flex flex-col">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-200 dark:border-zinc-700">
+          <h3 className="text-sm font-medium text-zinc-700 dark:text-zinc-200">Build Syntax</h3>
+          <button onClick={onClose} className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 text-lg leading-none">×</button>
+        </div>
+        <div className="flex-1 overflow-hidden flex">
+          <div className="w-80 border-r border-zinc-200 dark:border-zinc-700 flex flex-col">
+            <div className="p-2 border-b border-zinc-200 dark:border-zinc-700">
+              <input type="text" value={searchVar} onChange={(e) => setSearchVar(e.target.value)} placeholder="search variables..." className="w-full text-xs px-2 py-1.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 outline-none focus:border-blue-400" />
+            </div>
+            <div className="flex-1 overflow-auto">
+              {filteredVars.map(([key, vInfo]) => {
+                const isExpanded = expandedVars.has(key);
+                return (
+                  <div key={key} className="border-b border-zinc-100 dark:border-zinc-800">
+                    <button onClick={() => toggleVar(key)} className="w-full px-3 py-2 flex items-center justify-between hover:bg-zinc-50 dark:hover:bg-zinc-800/50 text-left">
+                      <div className="min-w-0">
+                        <div className="text-xs font-medium text-zinc-700 dark:text-zinc-200 truncate">{vInfo.name || key}</div>
+                        <div className="text-[10px] text-zinc-400 dark:text-zinc-500 truncate">{vInfo.label || ''}</div>
+                      </div>
+                      <span className={`text-zinc-400 dark:text-zinc-600 text-xs ml-2 shrink-0 transition-transform ${isExpanded ? 'rotate-90' : ''}`}>▶</span>
+                    </button>
+                    {isExpanded && (
+                      <div className="px-3 pb-2 flex flex-wrap gap-1">
+                        {vInfo.codes?.map((c: any) => (
+                          <button key={c.code} onClick={() => insertCode(key, vInfo.name || key, c.code)} className={`text-[10px] px-2 py-1 border rounded transition-colors ${notMode ? 'bg-red-50 dark:bg-red-900/30 border-red-200 dark:border-red-800 text-red-600 dark:text-red-400' : 'bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-800 text-blue-600 dark:text-blue-400'}`} title={`${c.code} — ${c.label}`}>
+                            {notMode ? <span className="flex items-center gap-1"><span>{c.label}</span><span className="text-[8px] font-bold">NOT</span></span> : c.label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+              {filteredVars.length === 0 && <div className="p-4 text-xs text-zinc-400 dark:text-zinc-500 text-center">no variables found</div>}
+            </div>
+          </div>
+          <div className="flex-1 flex flex-col overflow-hidden">
+            <div className="p-4 border-b border-zinc-200 dark:border-zinc-700 min-h-[120px] max-h-[180px] overflow-auto">
+              <div className="text-xs font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wide mb-2">preview</div>
+              {atoms.length === 0 ? (
+                <div className="text-xs text-zinc-400 dark:text-zinc-500 italic">click codes to add them here</div>
+              ) : (
+                <div className="text-xs space-y-2">
+                  {(() => {
+                    const rows: React.ReactNode[][] = []; let currentRow: React.ReactNode[] = []; let lastEnd = 0;
+                    atoms.forEach((atom, idx) => {
+                      const before = rawSyntax.slice(lastEnd, atom.start);
+                      if (before) { const tokens = before.match(/[+.]|\(|\)/g) || []; tokens.forEach((tok, ti) => { if (tok === '+') currentRow.push(<span key={`op-${idx}-${ti}`} className="mx-1 text-emerald-600 dark:text-emerald-400 font-medium">OR</span>); else if (tok === '.') currentRow.push(<span key={`op-${idx}-${ti}`} className="mx-1 text-blue-500 font-medium">AND</span>); else if (tok === '(') currentRow.push(<span key={`op-${idx}-${ti}`} className="text-zinc-400">(</span>); else if (tok === ')') currentRow.push(<span key={`op-${idx}-${ti}`} className="text-zinc-400">)</span>); }); }
+                      const cleanCode = atom.isNot ? atom.codePart.slice(1) : atom.codePart;
+                      const { varLabel, codeLabel } = getLabelForAtom(atom.varName, atom.codePart, atom.isNot);
+                      const displayCode = atom.isNot ? `n${cleanCode}` : cleanCode;
+                      currentRow.push(<span key={`atom-${idx}`} className="inline-flex items-center gap-1 bg-zinc-50 dark:bg-zinc-800 px-2 py-1 rounded">{atom.isNot && <span className="text-[9px] font-bold text-red-500 dark:text-red-400">NOT</span>}<span className="font-mono text-purple-600 dark:text-purple-400">{atom.varName}/{displayCode}</span><span className="text-zinc-300 dark:text-zinc-600">=</span><span className="text-zinc-600 dark:text-zinc-300">{varLabel}/{codeLabel}</span></span>);
+                      lastEnd = atom.end;
+                    });
+                    const after = rawSyntax.slice(lastEnd);
+                    if (after) { const tokens = after.match(/[+.]|\(|\)/g) || []; tokens.forEach((tok, ti) => { if (tok === '+') currentRow.push(<span key={`op-after-${ti}`} className="mx-1 text-emerald-600 dark:text-emerald-400 font-medium">OR</span>); else if (tok === '.') currentRow.push(<span key={`op-after-${ti}`} className="mx-1 text-blue-500 font-medium">AND</span>); else if (tok === '(') currentRow.push(<span key={`op-after-${ti}`} className="text-zinc-400">(</span>); else if (tok === ')') currentRow.push(<span key={`op-after-${ti}`} className="text-zinc-400">)</span>); }); }
+                    if (currentRow.length > 0) rows.push(currentRow);
+                    return rows.map((row, ri) => <div key={`row-${ri}`} className="flex items-center gap-1 flex-wrap">{row}</div>);
+                  })()}
+                </div>
+              )}
+            </div>
+            <div className="px-4 py-2 border-b border-zinc-200 dark:border-zinc-700">
+              <div className="flex items-center gap-1 flex-wrap">
+                <button onClick={() => insertAtCursor('+')} className="text-xs px-3 py-1.5 bg-zinc-100 dark:bg-zinc-700 hover:bg-zinc-200 dark:hover:bg-zinc-600 text-zinc-600 dark:text-zinc-300 rounded font-medium">OR</button>
+                <button onClick={() => insertAtCursor('.')} className="text-xs px-3 py-1.5 bg-zinc-100 dark:bg-zinc-700 hover:bg-zinc-200 dark:hover:bg-zinc-600 text-zinc-600 dark:text-zinc-300 rounded font-medium">AND</button>
+                <button onClick={() => insertAtCursor('(')} className="text-xs px-3 py-1.5 bg-zinc-100 dark:bg-zinc-700 hover:bg-zinc-200 dark:hover:bg-zinc-600 text-zinc-600 dark:text-zinc-300 rounded font-medium">(</button>
+                <button onClick={() => insertAtCursor(')')} className="text-xs px-3 py-1.5 bg-zinc-100 dark:bg-zinc-700 hover:bg-zinc-200 dark:hover:bg-zinc-600 text-zinc-600 dark:text-zinc-300 rounded font-medium">)</button>
+                <button onClick={() => setNotMode((prev) => !prev)} className={`text-xs px-3 py-1.5 rounded font-medium transition-colors ${notMode ? 'bg-red-500 text-white hover:bg-red-600' : 'bg-zinc-100 dark:bg-zinc-700 hover:bg-zinc-200 dark:hover:bg-zinc-600 text-zinc-600 dark:text-zinc-300'}`}>NOT</button>
+              </div>
+              {notMode && <div className="text-[10px] text-red-500 dark:text-red-400 mt-1">NOT mode: next code will be negated (e.g. ol/n8)</div>}
+            </div>
+            <div className="flex-1 p-4">
+              <div className="text-xs font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wide mb-2">syntax</div>
+              <textarea id="syntax-input" value={rawSyntax} onChange={(e) => setRawSyntax(e.target.value)} className="w-full h-full min-h-[80px] text-sm font-mono bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 px-3 py-2 text-zinc-700 dark:text-zinc-300 outline-none focus:border-blue-400 dark:focus:border-blue-500 resize-none" placeholder="e.g. ol/8+ol/9 or (ses/2+ses/3).age/2" autoFocus />
+            </div>
+          </div>
+        </div>
+        <div className="flex justify-end gap-2 px-4 py-3 border-t border-zinc-200 dark:border-zinc-700">
+          <button onClick={onClose} className="text-xs px-4 py-1.5 text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-300 transition-colors">cancel</button>
+          <button onClick={() => { onSave(rawSyntax); onClose(); }} disabled={!rawSyntax.trim()} className="text-xs px-4 py-1.5 bg-blue-500 hover:bg-blue-600 disabled:opacity-40 text-white transition-colors">save</button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ─── Variable Syntax Modal ───────────────────────────────────────────────────
+interface VariableSyntaxModalProps {
+  varKey: string;
+  varName: string;
+  info: VariableInfo;
+  onClose: () => void;
+  updateVariableLabel: (varKey: string, label: string) => void;
+  toggleVariableStat: (varKey: string, stat: 'showMean' | 'showStdError' | 'showStdDev' | 'showVariance') => void;
+  updateCodeLabel: (varKey: string, code: string, label: string) => void;
+  updateCodeFactor: (varKey: string, code: string, factor: number | null) => void;
+  updateCodeVisibility: (varKey: string, code: string, visibility: 'visible' | 'hidden' | 'removed') => void;
+  updateCodeSyntax: (varKey: string, code: string, syntax: string) => void;
+}
+
+const VariableSyntaxModal: React.FC<VariableSyntaxModalProps> = ({ varKey, varName, info, onClose, updateVariableLabel, toggleVariableStat, updateCodeLabel, updateCodeFactor, updateCodeVisibility, updateCodeSyntax }) => {
+  const getVariableSyntax = (v: VariableInfo) => {
+    const stats: string[] = [];
+    if (v.showMean) stats.push('mean');
+    if (v.showStdError) stats.push('std_error');
+    if (v.showStdDev) stats.push('std_dev');
+    if (v.showVariance) stats.push('variance');
+    const varName = v.name || varKey;
+    const codesParts = v.codes.map((c: any, i: number) => {
+      const syntax = v.code_syntax?.[i] || '';
+      let parts: string[] = [];
+      if (syntax && syntax !== `${varName}/${c.code}`) parts.push(syntax);
+      if (c.label && c.label !== c.code) parts.push(`label ${c.label}`);
+      if (c.factor !== undefined && c.factor !== null) parts.push(`factor ${c.factor}`);
+      if (c.visibility && c.visibility !== 'visible') parts.push(`vis ${c.visibility}`);
+      return parts.length > 0 ? `${c.code}:${parts.join(' ')}` : null;
+    }).filter(Boolean);
+    let result = `label:${v.label || ''}`;
+    if (stats.length > 0) result += `; stats:${stats.join(',')}`;
+    if (codesParts.length > 0) result += `; codes:${codesParts.join(',')}`;
+    return result;
+  };
+
+  const [syntax, setSyntax] = useState(() => getVariableSyntax(info));
+  const [error, setError] = useState<string | null>(null);
+
+  const handleApply = () => {
+    try {
+      let parsed: any;
+      if (syntax.trim().startsWith('{')) parsed = JSON.parse(syntax);
+      else parsed = parseSimpleSyntax(syntax);
+      if (parsed.label !== undefined) updateVariableLabel(varKey, parsed.label);
+      if (parsed.stats) ['showMean', 'showStdError', 'showStdDev', 'showVariance'].forEach((s) => { const statKey = s as 'showMean' | 'showStdError' | 'showStdDev' | 'showVariance'; if (parsed.stats.includes(s.replace('show', '').toLowerCase()) !== info[statKey]) toggleVariableStat(varKey, statKey); });
+      if (parsed.codes && Array.isArray(parsed.codes)) parsed.codes.forEach((cd: any) => { const codeInfo = info.codes.find((c: any) => c.code === cd.code); if (codeInfo) { if (cd.label !== undefined) updateCodeLabel(varKey, cd.code, cd.label); if (cd.factor !== undefined) updateCodeFactor(varKey, cd.code, cd.factor); if (cd.visibility) updateCodeVisibility(varKey, cd.code, cd.visibility); if (cd.syntax) updateCodeSyntax(varKey, cd.code, cd.syntax); } });
+      setError(null); onClose();
+    } catch (e: any) { setError(e.message || 'Invalid syntax'); }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+      <div className="bg-white dark:bg-zinc-900 rounded-lg shadow-xl w-[700px] max-h-[80vh] flex flex-col">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-200 dark:border-zinc-700">
+          <h3 className="text-sm font-medium text-zinc-700 dark:text-zinc-200">Variable Syntax: {varName}</h3>
+          <button onClick={onClose} className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 text-lg leading-none">×</button>
+        </div>
+        <div className="flex-1 overflow-auto p-4">
+          <div className="space-y-3">
+            <div className="text-xs text-zinc-500 dark:text-zinc-400">Format: <span className="font-mono">label:X; stats:a,b; codes:1:syntax,2:syntax</span></div>
+            <textarea value={syntax} onChange={(e) => { setSyntax(e.target.value); setError(null); }} className="w-full h-48 text-xs font-mono bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 px-3 py-2 text-zinc-700 dark:text-zinc-300 outline-none focus:border-blue-400 dark:focus:border-blue-500 resize-none" placeholder="label:Name; stats:mean,std; codes:1:syntax label X factor 1 vis visible" />
+            {error && <div className="text-xs text-red-500">{error}</div>}
+          </div>
+        </div>
+        <div className="flex justify-end gap-2 px-4 py-3 border-t border-zinc-200 dark:border-zinc-700">
+          <button onClick={onClose} className="text-xs px-4 py-1.5 text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-300 transition-colors">cancel</button>
+          <button onClick={handleApply} className="text-xs px-4 py-1.5 bg-blue-500 hover:bg-blue-600 text-white rounded transition-colors">apply</button>
+        </div>
+      </div>
     </div>
   );
 };
@@ -2488,12 +2770,14 @@ interface SortableCodeRowProps {
   updateCodeFactor: (varName: string, code: string, factor: number | null) => void;
   updateCodeVisibility: (varName: string, code: string, visibility: 'visible' | 'hidden' | 'removed') => void;
   updateCodeSyntax: (varName: string, code: string, syntax: string) => void;
+  onEditSyntax?: (code: string, currentSyntax: string) => void;
 }
 
 const SortableCodeRow: React.FC<SortableCodeRowProps> = ({
   code, varKey, varName, isCustom, code_syntax, codeIndex,
   isSelected, onToggleSelect, onDelete,
   updateCodeLabel, updateCodeFactor, updateCodeVisibility, updateCodeSyntax,
+  onEditSyntax,
 }) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: code.code });
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 };
@@ -2554,12 +2838,23 @@ const SortableCodeRow: React.FC<SortableCodeRowProps> = ({
         {netSyntax ? (
           <span className="text-purple-500 dark:text-purple-400">{netSyntax}</span>
         ) : isCustom && code_syntax ? (
-          <input
-            type="text"
-            value={code_syntax[codeIndex] || `${varName}/${code.code}`}
-            onChange={(e) => updateCodeSyntax(varKey, code.code, e.target.value)}
-            className="w-full text-xs bg-zinc-50 dark:bg-zinc-800 border border-transparent hover:border-zinc-200 dark:hover:border-zinc-700 focus:border-blue-400 dark:focus:border-blue-500 px-1 py-0.5 text-zinc-600 dark:text-zinc-300 outline-none font-mono"
-          />
+          <div className="flex items-center gap-1">
+            <input
+              type="text"
+              value={code_syntax[codeIndex] || `${varName}/${code.code}`}
+              onChange={(e) => updateCodeSyntax(varKey, code.code, e.target.value)}
+              className="flex-1 w-full text-xs bg-zinc-50 dark:bg-zinc-800 border border-transparent hover:border-zinc-200 dark:hover:border-zinc-700 focus:border-blue-400 dark:focus:border-blue-500 px-1 py-0.5 text-zinc-600 dark:text-zinc-300 outline-none font-mono"
+            />
+            {onEditSyntax && (
+              <button
+                onClick={() => onEditSyntax(code.code, code_syntax[codeIndex] || `${varName}/${code.code}`)}
+                className="text-[10px] px-1 py-0.5 bg-blue-100 dark:bg-blue-900/30 hover:bg-blue-200 dark:hover:bg-blue-800 text-blue-600 dark:text-blue-400 rounded transition-colors"
+                title="edit syntax"
+              >
+                edit
+              </button>
+            )}
+          </div>
         ) : `${varName}/${code.code}`}
       </td>
       {/* Factor */}
@@ -2633,7 +2928,27 @@ const VariableDetailPage: React.FC = () => {
   const [newCodeLabel, setNewCodeLabel] = useState('');
   const [newCodeSyntax, setNewCodeSyntax] = useState('');
   const [syntaxErrors, setSyntaxErrors] = useState<string[]>([]);
+  const [showSyntaxBuilder, setShowSyntaxBuilder] = useState(false);
+  const [showVarSyntaxModal, setShowVarSyntaxModal] = useState(false);
+  const [editingCodeKey, setEditingCodeKey] = useState<string | null>(null);
+  const [editingCodeSyntax, setEditingCodeSyntax] = useState<string>('');
   const sortSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+
+  const handleEditSyntax = (code: string, currentSyntax: string) => {
+    setEditingCodeKey(code);
+    setEditingCodeSyntax(currentSyntax);
+    setShowSyntaxBuilder(true);
+  };
+
+  const handleSaveSyntax = (syntax: string) => {
+    if (editingCodeKey) {
+      updateCodeSyntax(varKey, editingCodeKey, syntax);
+    } else {
+      setNewCodeSyntax(syntax);
+    }
+    setShowSyntaxBuilder(false);
+    setEditingCodeKey(null);
+  };
 
   const info: VariableInfo | undefined = variables[varKey];
 
@@ -2794,6 +3109,14 @@ const VariableDetailPage: React.FC = () => {
             <div className="flex items-center gap-2">
               <label className="text-xs text-zinc-500 dark:text-zinc-400">codes ({info.codes.length})</label>
               <div className="ml-auto flex items-center gap-1">
+                {!showAddCode && !showNetInput && (
+                  <button
+                    onClick={() => setShowVarSyntaxModal(true)}
+                    className="text-xs px-2 py-1 bg-zinc-100 dark:bg-zinc-700 hover:bg-zinc-200 dark:hover:bg-zinc-600 text-zinc-600 dark:text-zinc-300 transition-colors"
+                  >
+                    var syntax
+                  </button>
+                )}
                 {canNet && !showNetInput && !showAddCode && (
                   <button
                     onClick={() => setShowNetInput(true)}
@@ -2850,14 +3173,23 @@ const VariableDetailPage: React.FC = () => {
                 <div className="flex items-center gap-2">
                   <div className="flex flex-col gap-0.5 flex-1">
                     <span className="text-[10px] text-zinc-400 dark:text-zinc-500">syntax — e.g. <span className="font-mono">ol/8+ol/9</span> or <span className="font-mono">(ses/2+ses/3).age/2</span></span>
-                    <input
-                      type="text"
-                      placeholder="syntax expression"
-                      value={newCodeSyntax}
-                      onChange={(e) => { setNewCodeSyntax(e.target.value); setSyntaxErrors([]); }}
-                      onKeyDown={(e) => { if (e.key === 'Enter') handleConfirmAddCode(); if (e.key === 'Escape') { setShowAddCode(false); setSyntaxErrors([]); } }}
-                      className="text-xs bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 px-2 py-1 text-zinc-700 dark:text-zinc-300 outline-none w-full font-mono"
-                    />
+                    <div className="flex items-center gap-1">
+                      <input
+                        type="text"
+                        placeholder="syntax expression"
+                        value={newCodeSyntax}
+                        onChange={(e) => { setNewCodeSyntax(e.target.value); setSyntaxErrors([]); }}
+                        onKeyDown={(e) => { if (e.key === 'Enter') handleConfirmAddCode(); if (e.key === 'Escape') { setShowAddCode(false); setSyntaxErrors([]); } }}
+                        className="flex-1 text-xs bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 px-2 py-1 text-zinc-700 dark:text-zinc-300 outline-none w-full font-mono"
+                      />
+                      <button
+                        onClick={() => { setShowSyntaxBuilder(true); }}
+                        className="text-xs px-2 py-1 bg-blue-500 hover:bg-blue-600 text-white transition-colors shrink-0"
+                        title="select response"
+                      >
+                        select
+                      </button>
+                    </div>
                   </div>
                   <div className="flex flex-col items-center gap-1">
                     <button
@@ -2923,6 +3255,7 @@ const VariableDetailPage: React.FC = () => {
                         updateCodeFactor={updateCodeFactor}
                         updateCodeVisibility={updateCodeVisibility}
                         updateCodeSyntax={updateCodeSyntax}
+                        onEditSyntax={handleEditSyntax}
                       />
                     ))}
                   </tbody>
@@ -2931,6 +3264,27 @@ const VariableDetailPage: React.FC = () => {
             </DndContext>
           </div>
         </div>
+        {showSyntaxBuilder && (
+          <SyntaxBuilderModal
+            initialSyntax={editingCodeKey ? editingCodeSyntax : newCodeSyntax}
+            onSave={handleSaveSyntax}
+            onClose={() => { setShowSyntaxBuilder(false); setEditingCodeKey(null); }}
+          />
+        )}
+        {showVarSyntaxModal && (
+          <VariableSyntaxModal
+            varKey={varKey}
+            varName={varName}
+            info={info}
+            onClose={() => setShowVarSyntaxModal(false)}
+            updateVariableLabel={updateVariableLabel}
+            toggleVariableStat={toggleVariableStat}
+            updateCodeLabel={updateCodeLabel}
+            updateCodeFactor={updateCodeFactor}
+            updateCodeVisibility={updateCodeVisibility}
+            updateCodeSyntax={updateCodeSyntax}
+          />
+        )}
       </div>
     </div>
   );

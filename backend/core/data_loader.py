@@ -24,26 +24,44 @@ def detect_column_types(df):
         if len(non_null) == 0:
             metadata[col] = {'type': 'unknown', 'codes': []}
             continue
-        try:
-            numeric_vals = pd.to_numeric(non_null, errors='coerce')
-            if numeric_vals.isna().sum() == 0:
-                metadata[col] = {
-                    'type': 'numeric',
-                    'codes': sorted(numeric_vals.unique().tolist())
-                }
-            else:
-                unique_vals = non_null.unique().tolist()
-                metadata[col] = {
-                    'type': 'categorical',
-                    'codes': [{'code': v, 'label': str(v)} for v in unique_vals]
-                }
-        except Exception:
-            unique_vals = non_null.unique().tolist()
-            metadata[col] = {
-                'type': 'categorical',
-                'codes': [{'code': v, 'label': str(v)} for v in unique_vals]
-            }
+
+        col_type = _infer_column_type(non_null)
+        unique_vals = non_null.unique().tolist()
+
+        if col_type == 'boolean':
+            codes = [{'code': '1', 'label': 'Yes'}, {'code': '0', 'label': 'No'}]
+        elif col_type == 'numeric':
+            try:
+                codes = sorted(pd.to_numeric(unique_vals, errors='coerce').dropna().tolist())
+            except Exception:
+                codes = [{'code': str(v), 'label': str(v)} for v in unique_vals]
+        else:
+            codes = [{'code': str(v), 'label': str(v)} for v in unique_vals]
+
+        metadata[col] = {'type': col_type, 'codes': codes}
     return metadata
+
+
+def _infer_column_type(non_null):
+    sample = non_null.head(100).tolist()
+    n = len(sample)
+
+    if n == 0:
+        return 'categorical'
+
+    bool_patterns = {'true', 'false', 'yes', 'no', '1', '0', 'y', 'n'}
+    bool_count = sum(1 for v in sample if str(v).lower().strip() in bool_patterns)
+    if bool_count >= n * 0.9:
+        return 'boolean'
+
+    try:
+        numeric_vals = pd.to_numeric(non_null, errors='coerce')
+        if numeric_vals.notna().all():
+            return 'numeric'
+    except (ValueError, TypeError, OverflowError):
+        pass
+
+    return 'categorical'
 
 
 def load_mdd(path):
