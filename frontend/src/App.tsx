@@ -731,7 +731,7 @@ interface VariableSyntaxModalProps {
   updateCodeSyntax: (varKey: string, code: string, syntax: string) => void;
 }
 
-const VariableSyntaxModal: React.FC<VariableSyntaxModalProps> = ({ varKey, varName, info, onClose, updateVariableLabel, toggleVariableStat, updateCodeLabel, updateCodeFactor, updateCodeVisibility, updateCodeSyntax }) => {
+  const VariableSyntaxModal: React.FC<VariableSyntaxModalProps> = ({ varKey, varName, info, onClose, updateVariableLabel, toggleVariableStat, updateCodeLabel, updateCodeFactor, updateCodeVisibility, updateCodeSyntax }) => {
   const getVariableSyntax = (v: VariableInfo) => {
     const stats: string[] = [];
     if (v.showMean) stats.push('mean');
@@ -755,6 +755,7 @@ const VariableSyntaxModal: React.FC<VariableSyntaxModalProps> = ({ varKey, varNa
   };
 
   const [syntax, setSyntax] = useState(() => getVariableSyntax(info));
+  const originalStats = useState(() => parseSimpleSyntax(getVariableSyntax(info)).stats || [])[0];
   const [error, setError] = useState<string | null>(null);
 
   const handleApply = () => {
@@ -763,7 +764,14 @@ const VariableSyntaxModal: React.FC<VariableSyntaxModalProps> = ({ varKey, varNa
       if (syntax.trim().startsWith('{')) parsed = JSON.parse(syntax);
       else parsed = parseSimpleSyntax(syntax);
       if (parsed.label !== undefined) updateVariableLabel(varKey, parsed.label);
-      if (parsed.stats) ['showMean', 'showStdError', 'showStdDev', 'showVariance'].forEach((s) => { const statKey = s as 'showMean' | 'showStdError' | 'showStdDev' | 'showVariance'; if (parsed.stats.includes(s.replace('show', '').toLowerCase()) !== info[statKey]) toggleVariableStat(varKey, statKey); });
+      const newStats = parsed.stats || [];
+      ['showMean', 'showStdError', 'showStdDev', 'showVariance'].forEach((s) => {
+        const statKey = s as 'showMean' | 'showStdError' | 'showStdDev' | 'showVariance';
+        const statName = s.replace('show', '').toLowerCase();
+        const wasEnabled = originalStats.includes(statName);
+        const isEnabled = newStats.includes(statName);
+        if (wasEnabled !== isEnabled) toggleVariableStat(varKey, statKey);
+      });
       if (parsed.codes && Array.isArray(parsed.codes)) parsed.codes.forEach((cd: any) => { const codeInfo = info.codes.find((c: any) => c.code === cd.code); if (codeInfo) { if (cd.label !== undefined) updateCodeLabel(varKey, cd.code, cd.label); if (cd.factor !== undefined) updateCodeFactor(varKey, cd.code, cd.factor); if (cd.visibility) updateCodeVisibility(varKey, cd.code, cd.visibility); if (cd.syntax) updateCodeSyntax(varKey, cd.code, cd.syntax); } });
       setError(null); onClose();
     } catch (e: any) { setError(e.message || 'Invalid syntax'); }
@@ -2954,6 +2962,8 @@ const VariableDetailPage: React.FC = () => {
   };
 
   const handleSaveSyntax = (syntax: string) => {
+    const errs = validateSyntax(syntax);
+    if (errs.length > 0) { setSyntaxErrors(errs); return; }
     if (editingCodeKey) {
       const codeInfo = info?.codes.find((c) => c.code === editingCodeKey);
       if (codeInfo?.isNet) {
@@ -2961,11 +2971,12 @@ const VariableDetailPage: React.FC = () => {
       } else {
         updateCodeSyntax(varKey, editingCodeKey, syntax);
       }
+      setShowSyntaxBuilder(false);
+      setEditingCodeKey(null);
     } else {
       setNewCodeSyntax(syntax);
+      setShowSyntaxBuilder(false);
     }
-    setShowSyntaxBuilder(false);
-    setEditingCodeKey(null);
   };
 
   const info: VariableInfo | undefined = variables[varKey];
@@ -3015,6 +3026,13 @@ const VariableDetailPage: React.FC = () => {
     if (!label || !syntax) return;
     const errs = validateSyntax(syntax);
     if (errs.length > 0) { setSyntaxErrors(errs); return; }
+    const existingSyntaxes = (info.codes || [])
+      .filter((c: any) => c.isNew && c.syntax)
+      .map((c: any) => c.syntax);
+    if (existingSyntaxes.includes(syntax)) {
+      setSyntaxErrors([`Syntax "${syntax}" already exists in this variable`]);
+      return;
+    }
     addCode(varKey, label, syntax);
     setNewCodeLabel(''); setNewCodeSyntax('');
     setSyntaxErrors([]);
@@ -3201,7 +3219,7 @@ const VariableDetailPage: React.FC = () => {
                         className="flex-1 text-xs bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 px-2 py-1 text-zinc-700 dark:text-zinc-300 outline-none w-full font-mono"
                       />
                       <button
-                        onClick={() => { setShowSyntaxBuilder(true); }}
+                        onClick={() => { setSyntaxErrors([]); setShowSyntaxBuilder(true); }}
                         className="text-xs px-2 py-1 bg-blue-500 hover:bg-blue-600 text-white transition-colors shrink-0"
                         title="select response"
                       >
