@@ -23,50 +23,6 @@ function buildNameToKeyMap(vars: Record<string, VariableInfo>): Record<string, s
   return map;
 }
 
-function parseSimpleSyntax(text: string): { label?: string; stats?: string[]; codes?: { code: string; label?: string; factor?: number | null; visibility?: string; syntax?: string }[] } {
-  const result: { label?: string; stats?: string[]; codes?: { code: string; label?: string; factor?: number | null; visibility?: string; syntax?: string }[] } = {};
-  text = text.trim();
-  const labelMatch = text.match(/label:\s*([^;|]+)/i);
-  if (labelMatch) result.label = labelMatch[1].trim();
-  const statsMatch = text.match(/stats:\s*([^;|]+)/i);
-  if (statsMatch) result.stats = statsMatch[1].split(',').map((s) => s.trim());
-  const codesMatch = text.match(/codes:\s*(.+)/i);
-  if (codesMatch) {
-    result.codes = [];
-    const codePairs = codesMatch[1].split(/[,;](?=\d+:)/);
-    for (const pair of codePairs) {
-      const colonIdx = pair.indexOf(':');
-      if (colonIdx > 0) {
-        const code = pair.slice(0, colonIdx).trim();
-        const rest = pair.slice(colonIdx + 1).trim();
-        const parts = rest.split(/\s+/);
-        const codeEntry: { code: string; label?: string; factor?: number | null; visibility?: string; syntax?: string } = { code };
-        let i = 0;
-        while (i < parts.length) {
-          const p = parts[i];
-          if (p === 'label' && i + 1 < parts.length) {
-            codeEntry.label = parts[i + 1];
-            i += 2;
-          } else if (p === 'factor' && i + 1 < parts.length) {
-            codeEntry.factor = parts[i + 1] === 'null' ? null : parseFloat(parts[i + 1]);
-            i += 2;
-          } else if (p === 'vis' && i + 1 < parts.length) {
-            codeEntry.visibility = parts[i + 1];
-            i += 2;
-          } else {
-            codeEntry.syntax = rest;
-            break;
-          }
-        }
-        if (!codeEntry.syntax) codeEntry.syntax = rest;
-        result.codes.push(codeEntry);
-      }
-    }
-  }
-  return result;
-}
-
-// ─── Nesting Helpers ──────────────────────────────────────────────────────────
 function getTreeMaxDepth(item: DropItem): number {
   if (!item.children?.length) return 0;
   return 1 + Math.max(...item.children.map(getTreeMaxDepth));
@@ -148,7 +104,7 @@ function getAllNestedVars(items: DropItem[]): string[] {
 
 // ─── Theme Toggle ────────────────────────────────────────────────────────────
 const ThemeToggle: React.FC = () => {
-  const [isDark, setIsDark] = useState(() => localStorage.getItem('opentab-theme') !== 'light');
+  const [isDark, setIsDark] = useState(() => localStorage.getItem('opentab-theme') === 'dark');
 
   const toggle = () => {
     const next = !isDark;
@@ -419,28 +375,87 @@ const Navigation: React.FC = () => {
 
 // ─── Welcome Screen ───────────────────────────────────────────────────────────
 const WelcomeScreen: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ onLoadSample, loading }) => {
-  const { setDataLoaded, mergeAndSetVariables, setDataInfo, fileName } = useStore();
+  const { setDataLoaded, mergeAndSetVariables, setDataInfo } = useStore();
   const [isDragOver, setIsDragOver] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [status, setStatus] = useState<{ type: 'error' | 'info'; message: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const processFiles = async (files: File[]) => {
-    const csvFiles = files.filter(f => /\.(csv|txt)$/i.test(f.name));
+  const sillyTexts = [
+    'Twerking...', 'Papapooting...', 'Stomachacheing...', 'Yodeling...', 'Discoing...',
+    'Moonwalking...', 'Macarena-ing...', 'Roboting...', 'Chickening...', 'Banana-ing...',
+    'Hip-hopping...', 'Bellyflopping...', 'Splatting...', 'Bumblebee-ing...', 'Snail-racing...',
+  ];
+  const [sillyText, setSillyText] = useState('');
 
-    if (csvFiles.length === 0) {
-      setStatus({ type: 'error', message: 'Unsupported file format. Drop a .csv or .txt file.' });
+  useEffect(() => {
+    if (!uploading) { setSillyText(''); return; }
+    let i = 0;
+    const interval = setInterval(() => { setSillyText(sillyTexts[i % sillyTexts.length]); i++; }, 400);
+    return () => clearInterval(interval);
+  }, [uploading]);
+
+  const processFiles = async (files: File[]) => {
+    const validFiles = files.filter(f => /\.(csv|opentab)$/i.test(f.name));
+
+    if (validFiles.length === 0) {
+      setStatus({ type: 'error', message: 'Unsupported file format. Drop a .csv or .opentab file.' });
       return;
     }
 
     setUploading(true);
+    setSillyText(sillyTexts[0]);
     setStatus(null);
 
+    const file = validFiles[0];
+    const isOpentab = file.name.toLowerCase().endsWith('.opentab');
+
+    if (isOpentab) {
+      const reader = new FileReader();
+      reader.onload = async (ev) => {
+        try {
+          const text = ev.target?.result as string;
+          const data = JSON.parse(text);
+          if (!data.variables || !data.tables) throw new Error('Invalid .opentab file');
+          if (data.version === 2 && data.csvData) {
+            const uploadResult = await dataApi.uploadText(data.csvData, data.fileName || 'restored.csv');
+            const mergedEntries = Object.entries(data.mergedVariables || {});
+            for (const [name, meta] of mergedEntries) {
+              try { await dataApi.registerMerged(name, meta as object); } catch { /* skip bad entry */ }
+            }
+            const { importState } = useStore.getState();
+            importState({
+              variables: data.variables, tables: data.tables,
+              displayOptions: data.displayOptions ?? {}, activeTableId: data.activeTableId ?? null,
+              fileName: data.fileName ?? null, rowCount: uploadResult.row_count,
+              folders: data.folders ?? [],
+            });
+            setDataLoaded(true);
+          } else {
+            const { importState } = useStore.getState();
+            importState({
+              variables: data.variables, tables: data.tables,
+              displayOptions: data.displayOptions ?? {}, activeTableId: data.activeTableId ?? null,
+              fileName: data.fileName ?? null, rowCount: data.rowCount ?? 0,
+            });
+            setDataLoaded(false);
+          }
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : 'unknown error';
+          setStatus({ type: 'error', message: 'Failed to load: ' + msg });
+        } finally {
+          setUploading(false);
+        }
+      };
+      reader.readAsText(file);
+      return;
+    }
+
     try {
-      const result = await dataApi.uploadFile(csvFiles[0]);
+      const result = await dataApi.uploadFile(file);
       const vars = await dataApi.getVariables();
       mergeAndSetVariables(vars);
-      setDataInfo(csvFiles[0].name, result.row_count);
+      setDataInfo(file.name, result.row_count);
       setDataLoaded(true);
     } catch (e: any) {
       const detail = e.response?.data?.detail || e.message || 'Upload failed.';
@@ -473,61 +488,58 @@ const WelcomeScreen: React.FC<{ onLoadSample: () => void; loading: boolean }> = 
   };
 
   return (
-    <div className="h-full flex flex-col items-center justify-center gap-8 p-8">
-      {/* Heading */}
-      <div className="text-center space-y-1">
-        <h2 className="text-base font-medium text-zinc-900 dark:text-zinc-100 tracking-wide">
-          welcome to opentab_
-        </h2>
-        <p className="text-xs text-zinc-400 dark:text-zinc-600">
-          {fileName ? <>load <span className="text-zinc-600 dark:text-zinc-400 font-medium">'{fileName}'</span> to start</> : 'load a dataset to get started'}
-        </p>
+    <div className="h-full flex items-center justify-center p-8">
+      {/* Left column */}
+      <div className="w-72 mr-16">
+        <p className="text-3xl font-medium text-zinc-900 dark:text-zinc-100 mb-2">welcome to</p>
+        <img src="/blacknomargin.svg" alt="opentab" className="h-10 block dark:hidden" />
+        <img src="/whitenomargin.svg" alt="opentab" className="h-10 hidden dark:block" />
       </div>
 
-      {/* Drop Zone */}
+      {/* Right: Drop Zone */}
       <div
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
         onClick={() => !uploading && fileInputRef.current?.click()}
-        className={`w-full max-w-sm border-2 border-dashed transition-all p-12 text-center ${
+        className={`w-96 h-72 border-2 border-dashed rounded-lg transition-all flex flex-col items-center justify-center gap-4 ${
           uploading
             ? 'border-zinc-300 dark:border-zinc-700 cursor-wait'
             : isDragOver
             ? 'border-blue-500 bg-blue-500/5 cursor-copy'
-            : 'border-zinc-300 dark:border-zinc-700 cursor-pointer hover:border-zinc-400 dark:hover:border-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-900/50'
+            : 'border-zinc-300 dark:border-zinc-700 cursor-pointer hover:border-zinc-400 dark:hover:border-zinc-500'
         }`}
       >
         <input
           ref={fileInputRef}
           type="file"
           className="hidden"
-          accept=".csv,.txt"
+          accept=".csv,.opentab"
           onChange={handleFileInput}
         />
         {uploading ? (
-          <p className="text-xs text-zinc-500 animate-pulse">uploading...</p>
+          <p className="text-sm text-zinc-500 animate-pulse">{sillyText || 'uploading...'}</p>
         ) : isDragOver ? (
-          <p className="text-xs text-blue-500">drop to load</p>
+          <p className="text-sm text-blue-500 font-medium">drop to load</p>
         ) : (
-          <div className="space-y-3">
-            <p className="text-xs text-zinc-500 dark:text-zinc-400">
-              drag &amp; drop files here
-            </p>
-            <p className="text-xs text-zinc-300 dark:text-zinc-700 tracking-widest">
-              .csv · .txt
-            </p>
-            <p className="text-xs text-zinc-300 dark:text-zinc-700">
-              or click to browse
-            </p>
-          </div>
+          <p className="text-sm text-zinc-400 dark:text-zinc-500">drop .csv or .opentab here</p>
         )}
+        <p className="text-xs text-zinc-400 dark:text-zinc-600">
+          or{' '}
+          <button
+            onClick={onLoadSample}
+            disabled={loading || uploading}
+            className="text-blue-600 dark:text-blue-400 underline underline-offset-2 hover:text-blue-700 dark:hover:text-blue-300 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {loading ? 'loading...' : 'load sample data'}
+          </button>
+        </p>
       </div>
 
       {/* Status message */}
       {status && (
         <div
-          className={`text-xs px-3 py-2 border w-full max-w-sm ${
+          className={`absolute bottom-8 left-1/2 -translate-x-1/2 text-xs px-3 py-2 border ${
             status.type === 'error'
               ? 'text-red-600 dark:text-red-400 border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/30'
               : 'text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-900 bg-blue-50 dark:bg-blue-950/30'
@@ -536,19 +548,6 @@ const WelcomeScreen: React.FC<{ onLoadSample: () => void; loading: boolean }> = 
           {status.message}
         </div>
       )}
-
-      {/* Sample data link */}
-      <p className="text-xs text-zinc-400 dark:text-zinc-600">
-        or{' '}
-        <button
-          onClick={onLoadSample}
-          disabled={loading || uploading}
-          className="text-blue-600 dark:text-blue-400 underline underline-offset-2 hover:text-blue-700 dark:hover:text-blue-300 disabled:opacity-40 disabled:cursor-not-allowed"
-        >
-          {loading ? 'loading...' : 'load sample data'}
-        </button>
-      </p>
-
     </div>
   );
 };
@@ -711,89 +710,6 @@ const SyntaxBuilderModal: React.FC<SyntaxBuilderModalProps> = ({ initialSyntax =
         <div className="flex justify-end gap-2 px-4 py-3 border-t border-zinc-200 dark:border-zinc-700">
           <button onClick={onClose} className="text-xs px-4 py-1.5 text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-300 transition-colors">cancel</button>
           <button onClick={() => { onSave(rawSyntax); onClose(); }} disabled={!rawSyntax.trim()} className="text-xs px-4 py-1.5 bg-blue-500 hover:bg-blue-600 disabled:opacity-40 text-white transition-colors">save</button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// ─── Variable Syntax Modal ───────────────────────────────────────────────────
-interface VariableSyntaxModalProps {
-  varKey: string;
-  varName: string;
-  info: VariableInfo;
-  onClose: () => void;
-  updateVariableLabel: (varKey: string, label: string) => void;
-  toggleVariableStat: (varKey: string, stat: 'showMean' | 'showStdError' | 'showStdDev' | 'showVariance') => void;
-  updateCodeLabel: (varKey: string, code: string, label: string) => void;
-  updateCodeFactor: (varKey: string, code: string, factor: number | null) => void;
-  updateCodeVisibility: (varKey: string, code: string, visibility: 'visible' | 'hidden' | 'removed') => void;
-  updateCodeSyntax: (varKey: string, code: string, syntax: string) => void;
-}
-
-  const VariableSyntaxModal: React.FC<VariableSyntaxModalProps> = ({ varKey, varName, info, onClose, updateVariableLabel, toggleVariableStat, updateCodeLabel, updateCodeFactor, updateCodeVisibility, updateCodeSyntax }) => {
-  const getVariableSyntax = (v: VariableInfo) => {
-    const stats: string[] = [];
-    if (v.showMean) stats.push('mean');
-    if (v.showStdError) stats.push('std_error');
-    if (v.showStdDev) stats.push('std_dev');
-    if (v.showVariance) stats.push('variance');
-    const varName = v.name || varKey;
-    const codesParts = v.codes.map((c: any, i: number) => {
-      const syntax = v.code_syntax?.[i] || '';
-      let parts: string[] = [];
-      if (syntax && syntax !== `${varName}/${c.code}`) parts.push(syntax);
-      if (c.label && c.label !== c.code) parts.push(`label ${c.label}`);
-      if (c.factor !== undefined && c.factor !== null) parts.push(`factor ${c.factor}`);
-      if (c.visibility && c.visibility !== 'visible') parts.push(`vis ${c.visibility}`);
-      return parts.length > 0 ? `${c.code}:${parts.join(' ')}` : null;
-    }).filter(Boolean);
-    let result = `label:${v.label || ''}`;
-    if (stats.length > 0) result += `; stats:${stats.join(',')}`;
-    if (codesParts.length > 0) result += `; codes:${codesParts.join(',')}`;
-    return result;
-  };
-
-  const [syntax, setSyntax] = useState(() => getVariableSyntax(info));
-  const originalStats = useState(() => parseSimpleSyntax(getVariableSyntax(info)).stats || [])[0];
-  const [error, setError] = useState<string | null>(null);
-
-  const handleApply = () => {
-    try {
-      let parsed: any;
-      if (syntax.trim().startsWith('{')) parsed = JSON.parse(syntax);
-      else parsed = parseSimpleSyntax(syntax);
-      if (parsed.label !== undefined) updateVariableLabel(varKey, parsed.label);
-      const newStats = parsed.stats || [];
-      ['showMean', 'showStdError', 'showStdDev', 'showVariance'].forEach((s) => {
-        const statKey = s as 'showMean' | 'showStdError' | 'showStdDev' | 'showVariance';
-        const statName = s.replace('show', '').toLowerCase();
-        const wasEnabled = originalStats.includes(statName);
-        const isEnabled = newStats.includes(statName);
-        if (wasEnabled !== isEnabled) toggleVariableStat(varKey, statKey);
-      });
-      if (parsed.codes && Array.isArray(parsed.codes)) parsed.codes.forEach((cd: any) => { const codeInfo = info.codes.find((c: any) => c.code === cd.code); if (codeInfo) { if (cd.label !== undefined) updateCodeLabel(varKey, cd.code, cd.label); if (cd.factor !== undefined) updateCodeFactor(varKey, cd.code, cd.factor); if (cd.visibility) updateCodeVisibility(varKey, cd.code, cd.visibility); if (cd.syntax) updateCodeSyntax(varKey, cd.code, cd.syntax); } });
-      setError(null); onClose();
-    } catch (e: any) { setError(e.message || 'Invalid syntax'); }
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="bg-white dark:bg-zinc-900 rounded-lg shadow-xl w-[700px] max-h-[80vh] flex flex-col">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-200 dark:border-zinc-700">
-          <h3 className="text-sm font-medium text-zinc-700 dark:text-zinc-200">Variable Syntax: {varName}</h3>
-          <button onClick={onClose} className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 text-lg leading-none">×</button>
-        </div>
-        <div className="flex-1 overflow-auto p-4">
-          <div className="space-y-3">
-            <div className="text-xs text-zinc-500 dark:text-zinc-400">Format: <span className="font-mono">label:X; stats:a,b; codes:1:syntax,2:syntax</span></div>
-            <textarea value={syntax} onChange={(e) => { setSyntax(e.target.value); setError(null); }} className="w-full h-48 text-xs font-mono bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 px-3 py-2 text-zinc-700 dark:text-zinc-300 outline-none focus:border-blue-400 dark:focus:border-blue-500 resize-none" placeholder="label:Name; stats:mean,std; codes:1:syntax label X factor 1 vis visible" />
-            {error && <div className="text-xs text-red-500">{error}</div>}
-          </div>
-        </div>
-        <div className="flex justify-end gap-2 px-4 py-3 border-t border-zinc-200 dark:border-zinc-700">
-          <button onClick={onClose} className="text-xs px-4 py-1.5 text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-300 transition-colors">cancel</button>
-          <button onClick={handleApply} className="text-xs px-4 py-1.5 bg-blue-500 hover:bg-blue-600 text-white rounded transition-colors">apply</button>
         </div>
       </div>
     </div>
@@ -1697,6 +1613,9 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
       const m = (vInfo.codes as any[]).find((c) => c.syntax && c.syntax === key);
       if (m) return m.label;
     }
+    if (key.includes('.')) {
+      return key.split('.').map((part) => getCodeLabel(part)).join(' › ');
+    }
     const parts = key.split('/');
     if (parts.length !== 2) return key;
     const [varName, code] = parts;
@@ -1872,9 +1791,6 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
                         );
                       }
 
-                      const getCompoundLabel = (key: string) =>
-                        key.split('.').map((part) => getCodeLabel(part)).join(' › ');
-
                       return (
                         <table className="w-full border-collapse text-xs">
                           <thead className="sticky top-0">
@@ -1915,7 +1831,7 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
                             </tr>
                             {previewRowPaths.map((row) => (
                               <tr key={row} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/40">
-                                <td className="border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-zinc-600 dark:text-zinc-400">{getCompoundLabel(row)}</td>
+                                <td className="border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-zinc-600 dark:text-zinc-400">{getCodeLabel(row)}</td>
                                 <td className="border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-center text-zinc-300 dark:text-zinc-700 bg-zinc-50 dark:bg-zinc-800/30">—</td>
                                 {previewColPaths.map((col) => (
                                   <td key={`${row}-${col}`} className="border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-center text-zinc-300 dark:text-zinc-700">—</td>
@@ -1971,6 +1887,9 @@ const ResultTab: React.FC = () => {
       const m = (vInfo.codes as any[]).find((c) => c.syntax && c.syntax === key);
       if (m) return m.label;
     }
+    if (key.includes('.')) {
+      return key.split('.').map((part) => getCodeLabel(part)).join(' › ');
+    }
     const parts = key.split('/');
     if (parts.length !== 2) return key;
     const [varName, code] = parts;
@@ -1979,9 +1898,6 @@ const ResultTab: React.FC = () => {
     const codeObj = variable.codes.find((c: any) => c.code === code);
     return codeObj?.label || code;
   };
-
-  const getCompoundLabel = (key: string): string =>
-    key.split('.').map((part) => getCodeLabel(part)).join(' › ');
 
   const getVisibleCodesList = (variable: string): string[] => {
     const v = variables[variable];
@@ -2065,7 +1981,7 @@ const ResultTab: React.FC = () => {
     html += `<tr>${td('Base', '#F5F5F5', true, 'left', '#333')}${td(String(result.base), '#F3F4F6', false, 'center', '#333')}${colPaths.map(c => td(String(result.counts['Total']?.[c] ?? 0), '#F3F4F6', false)).join('')}</tr>`;
 
     rowNames.forEach((rname) => {
-      const rowLabel = getCompoundLabel(rname);
+      const rowLabel = getCodeLabel(rname);
       const rowTotal = result.counts[rname]?.['Total'] ?? 0;
       if (displayOptions.counts && displayOptions.colPct) {
         html += `<tr>${td(rowLabel, '#F5F5F5', true, 'left', '#333')}${td(String(rowTotal), '#F3F4F6', false)}${colPaths.map(c => td(String(result.counts[rname]?.[c] ?? 0), '#FFF', false)).join('')}</tr>`;
@@ -2094,7 +2010,7 @@ const ResultTab: React.FC = () => {
       const colHeaderLine: string[] = [''];
       if (numHeaderRows === 0) {
         colHeaderLine.push('Total');
-        colPaths.forEach(c => colHeaderLine.push(getCompoundLabel(c)));
+        colPaths.forEach(c => colHeaderLine.push(getCodeLabel(c)));
       } else {
         colHeaderLine.push('Total');
         (colHeaderRows[0] || []).forEach(cell => colHeaderLine.push(cell.label));
@@ -2102,7 +2018,7 @@ const ResultTab: React.FC = () => {
       lines.push(colHeaderLine.join('\t'));
       lines.push(['Base', String(result.base), ...colPaths.map(c => String(result.counts['Total']?.[c] ?? 0))].join('\t'));
       rowNames.forEach((row) => {
-        const rowLabel = getCompoundLabel(row);
+        const rowLabel = getCodeLabel(row);
         const parts: string[] = [rowLabel];
         if (displayOptions.counts && displayOptions.colPct) {
           parts.push(String(result.counts[row]?.['Total'] ?? 0));
@@ -2296,7 +2212,7 @@ const ResultTab: React.FC = () => {
               ))}
             </tr>
             {rowNames.map((row) => {
-              const rowLabel = getCompoundLabel(row);
+              const rowLabel = getCodeLabel(row);
               const rowTotal = result.counts[row]?.['Total'] ?? 0;
 
               if (displayOptions.counts && displayOptions.colPct) {
@@ -2696,7 +2612,7 @@ const EditVariablesPage: React.FC = () => {
                   className="text-xs bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 px-2 py-1 text-zinc-700 dark:text-zinc-300 outline-none"
                 >
                   <option value="categorical">categorical</option>
-                  <option value="multiple_response">multiple_response</option>
+                  <option value="boolean">boolean</option>
                   <option value="numeric">numeric</option>
                 </select>
               </div>
@@ -2950,7 +2866,6 @@ const VariableDetailPage: React.FC = () => {
   const [newCodeSyntax, setNewCodeSyntax] = useState('');
   const [syntaxErrors, setSyntaxErrors] = useState<string[]>([]);
   const [showSyntaxBuilder, setShowSyntaxBuilder] = useState(false);
-  const [showVarSyntaxModal, setShowVarSyntaxModal] = useState(false);
   const [editingCodeKey, setEditingCodeKey] = useState<string | null>(null);
   const [editingCodeSyntax, setEditingCodeSyntax] = useState<string>('');
   const sortSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
@@ -2994,30 +2909,8 @@ const VariableDetailPage: React.FC = () => {
   const removedCount = info.codes.filter((c: any) => c.visibility === 'removed').length;
   const varName = info.name || varKey;
 
-  const validateSyntax = (syntax: string): string[] => {
-    const errors: string[] = [];
-    const atomRe = /([A-Za-z_][A-Za-z0-9_]*)\/([^+()\s!]+)/g;
-    const nameToKey = buildNameToKeyMap(variables);
-    let match;
-    while ((match = atomRe.exec(syntax)) !== null) {
-      const [, vName, codePart] = match;
-      // Resolve display name to column key
-      const resolvedKey = nameToKey[vName] || vName;
-      const vInfo = variables[resolvedKey];
-      if (!vInfo) { errors.push(`variable '${vName}' not found`); continue; }
-      if (codePart === '*') continue;
-      if (codePart.includes('..')) {
-        const [from, to] = codePart.split('..');
-        for (const c of [from, to]) {
-          if (!vInfo.codes.find((vc: any) => vc.code === c)) errors.push(`code '${c}' not found in '${vName}'`);
-        }
-      } else {
-        for (const c of codePart.split(',')) {
-          if (!vInfo.codes.find((vc: any) => vc.code === c.trim())) errors.push(`code '${c.trim()}' not found in '${vName}'`);
-        }
-      }
-    }
-    return errors;
+  const validateSyntax = (_syntax: string): string[] => {
+    return [];
   };
 
   const handleConfirmAddCode = () => {
@@ -3145,14 +3038,6 @@ const VariableDetailPage: React.FC = () => {
             <div className="flex items-center gap-2">
               <label className="text-xs text-zinc-500 dark:text-zinc-400">codes ({info.codes.length})</label>
               <div className="ml-auto flex items-center gap-1">
-                {!showAddCode && !showNetInput && (
-                  <button
-                    onClick={() => setShowVarSyntaxModal(true)}
-                    className="text-xs px-2 py-1 bg-zinc-100 dark:bg-zinc-700 hover:bg-zinc-200 dark:hover:bg-zinc-600 text-zinc-600 dark:text-zinc-300 transition-colors"
-                  >
-                    var syntax
-                  </button>
-                )}
                 {canNet && !showNetInput && !showAddCode && (
                   <button
                     onClick={() => setShowNetInput(true)}
@@ -3304,20 +3189,6 @@ const VariableDetailPage: React.FC = () => {
             initialSyntax={editingCodeKey ? editingCodeSyntax : newCodeSyntax}
             onSave={handleSaveSyntax}
             onClose={() => { setShowSyntaxBuilder(false); setEditingCodeKey(null); }}
-          />
-        )}
-        {showVarSyntaxModal && (
-          <VariableSyntaxModal
-            varKey={varKey}
-            varName={varName}
-            info={info}
-            onClose={() => setShowVarSyntaxModal(false)}
-            updateVariableLabel={updateVariableLabel}
-            toggleVariableStat={toggleVariableStat}
-            updateCodeLabel={updateCodeLabel}
-            updateCodeFactor={updateCodeFactor}
-            updateCodeVisibility={updateCodeVisibility}
-            updateCodeSyntax={updateCodeSyntax}
           />
         )}
       </div>
