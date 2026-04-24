@@ -97,34 +97,6 @@ export const dataApi = {
     return response.data;
   },
 
-  uploadMdd: async (file: File) => {
-    const formData = new FormData();
-    formData.append('file', file);
-    const response = await api.post('/api/data/upload-mdd', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    });
-    return response.data;
-  },
-
-  uploadPair: async (csvFile: File, mddFile: File) => {
-    const formData = new FormData();
-    formData.append('csv_file', csvFile);
-    formData.append('mdd_file', mddFile);
-    const response = await api.post('/api/data/upload-pair', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    });
-    return response.data;
-  },
-
-  uploadZip: async (file: File) => {
-    const formData = new FormData();
-    formData.append('file', file);
-    const response = await api.post('/api/data/upload-zip', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    });
-    return response.data;
-  },
-
   loadSample: async () => {
     const response = await api.post('/api/data/load-sample');
     return response.data;

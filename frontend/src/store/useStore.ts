@@ -73,6 +73,7 @@ interface AppState {
   addCode: (varName: string, label: string, syntax: string, factor?: number | null) => void;
   reorderCodes: (varName: string, orderedCodes: string[]) => void;
   addVariable: (key: string, name: string, label: string, type: string) => void;
+  duplicateVariable: (sourceKey: string, targetKey: string) => void;
   toggleVariableStat: (varName: string, stat: 'showMean' | 'showStdError' | 'showStdDev' | 'showVariance') => void;
   deleteVariable: (varName: string) => void;
   importState: (state: Partial<Pick<AppState, 'variables' | 'tables' | 'displayOptions' | 'activeTableId' | 'fileName' | 'rowCount' | 'folders'>>) => void;
@@ -102,7 +103,28 @@ export const useStore = create<AppState>()((set, get) => ({
   sidebarVisible: false,
 
   setDataLoaded: (loaded) => set({ dataLoaded: loaded, sidebarVisible: loaded }),
-  setVariables: (variables) => set({ variables }),
+  setVariables: (variables) => {
+    // Sort codes for each variable
+    const sortedVars: Record<string, VariableInfo> = {};
+    for (const [key, info] of Object.entries(variables)) {
+      sortedVars[key] = {
+        ...info,
+        codes: [...info.codes].sort((a, b) => {
+          const aCode = String(a.code);
+          const bCode = String(b.code);
+          const aNum = parseInt(aCode, 10);
+          const bNum = parseInt(bCode, 10);
+          const aIsNum = !isNaN(aNum) && String(aNum) === aCode;
+          const bIsNum = !isNaN(bNum) && String(bNum) === bCode;
+          if (aIsNum && bIsNum) return aNum - bNum;
+          if (aIsNum && !bIsNum) return -1;
+          if (!aIsNum && bIsNum) return 1;
+          return aCode.localeCompare(bCode);
+        }),
+      };
+    }
+    set({ variables: sortedVars });
+  },
   setDataInfo: (fileName, rowCount) => set({ fileName, rowCount }),
 
   setTables: (tables) => set({ tables }),
@@ -407,6 +429,23 @@ export const useStore = create<AppState>()((set, get) => ({
       };
     }),
 
+  duplicateVariable: (sourceKey: string, targetKey: string) =>
+    set((state) => {
+      const sourceVar = state.variables[sourceKey];
+      if (!sourceVar || state.variables[targetKey]) return state;
+      return {
+        variables: {
+          ...state.variables,
+          [targetKey]: {
+            ...sourceVar,
+            name: `${sourceVar.name || sourceKey} (copy)`,
+            codes: sourceVar.codes.map((c) => ({ ...c })),
+            isCustom: true,
+          },
+        },
+      };
+    }),
+
   toggleVariableStat: (varName, stat) =>
     set((state) => {
       const v = state.variables[varName];
@@ -431,8 +470,23 @@ export const useStore = create<AppState>()((set, get) => ({
     const merged: Record<string, VariableInfo> = {};
     for (const [key, newInfo] of Object.entries(incoming)) {
       const existing = state.variables[key];
+      // Sort codes by numeric value if possible, otherwise alphabetical
+      const sortCodes = (codes: any[]) => {
+        return [...codes].sort((a, b) => {
+          const aCode = String(a.code);
+          const bCode = String(b.code);
+          const aNum = parseInt(aCode, 10);
+          const bNum = parseInt(bCode, 10);
+          const aIsNum = !isNaN(aNum) && String(aNum) === aCode;
+          const bIsNum = !isNaN(bNum) && String(bNum) === bCode;
+          if (aIsNum && bIsNum) return aNum - bNum;
+          if (aIsNum && !bIsNum) return -1;
+          if (!aIsNum && bIsNum) return 1;
+          return aCode.localeCompare(bCode);
+        });
+      };
       if (!existing) {
-        merged[key] = newInfo;
+        merged[key] = { ...newInfo, codes: sortCodes(newInfo.codes) };
         continue;
       }
       merged[key] = {
@@ -444,10 +498,10 @@ export const useStore = create<AppState>()((set, get) => ({
         showStdError: existing.showStdError,
         showStdDev: existing.showStdDev,
         showVariance: existing.showVariance,
-        codes: newInfo.codes.map((c) => {
+        codes: sortCodes(newInfo.codes.map((c) => {
           const ec = existing.codes.find((x) => x.code === c.code);
           return ec ? { ...c, label: ec.label || c.label, factor: ec.factor, visibility: ec.visibility } : c;
-        }),
+        })),
       };
     }
     return { variables: merged };

@@ -32,23 +32,18 @@ def detect_column_types(df):
                     'codes': sorted(numeric_vals.unique().tolist())
                 }
             else:
-                unique_vals = non_null.unique().tolist()
+                unique_vals = sorted(non_null.unique().tolist(), key=lambda x: (int(x) if str(x).isdigit() else float('inf'), str(x)))
                 metadata[col] = {
                     'type': 'categorical',
                     'codes': [{'code': v, 'label': str(v)} for v in unique_vals]
                 }
         except Exception:
-            unique_vals = non_null.unique().tolist()
+            unique_vals = sorted(non_null.unique().tolist(), key=lambda x: (int(x) if str(x).isdigit() else float('inf'), str(x)))
             metadata[col] = {
                 'type': 'categorical',
                 'codes': [{'code': v, 'label': str(v)} for v in unique_vals]
             }
     return metadata
-
-
-def load_mdd(path):
-    from core.mdd_parser import parse_mdd
-    return parse_mdd(path)
 
 
 def merge_multiple_response(df, source_columns, name):

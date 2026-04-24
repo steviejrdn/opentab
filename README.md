@@ -97,8 +97,7 @@ opentab/
 │       ├── tabulator.py     # Crosstab builder
 │       ├── code_parser.py   # Code expression parser
 │       ├── statistics.py    # Frequency/stats calc
-│       ├── mdd_parser.py    # IBM Dimensions metadata
-│       └── data_loader.py   # CSV/MDD loader
+│       └── data_loader.py   # CSV loader
 ├── frontend/
 │   ├── src/
 │   │   ├── App.tsx          # Main component

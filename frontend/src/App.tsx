@@ -373,6 +373,80 @@ const Navigation: React.FC = () => {
   );
 };
 
+// ─── Donate Widget Component ──────────────────────────────────────────────────
+const DonateWidget: React.FC = () => {
+  const [isOpen, setIsOpen] = useState(false);
+  const widgetRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (widgetRef.current && !widgetRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+
+    if (isOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isOpen]);
+
+  return (
+    <div ref={widgetRef} className="fixed bottom-4 right-4 z-50">
+      {/* Dropdown Menu */}
+      {isOpen && (
+        <div className="absolute bottom-full right-0 mb-2 bg-white dark:bg-zinc-800 rounded-lg shadow-lg border border-zinc-200 dark:border-zinc-700 overflow-hidden min-w-[150px]">
+          <a
+            href="https://ko-fi.com/K3K71YDOVQ"
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={() => setIsOpen(false)}
+            className="flex items-center gap-2 px-4 py-3 text-sm text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors"
+          >
+            <span className="w-5 h-5 rounded-full flex items-center justify-center text-white text-xs font-bold" style={{ backgroundColor: '#f5aa27' }}>K</span>
+            Ko-fi
+          </a>
+          <a
+            href="https://saweria.co/steviejrdn"
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={() => setIsOpen(false)}
+            className="flex items-center gap-2 px-4 py-3 text-sm text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors border-t border-zinc-100 dark:border-zinc-700"
+          >
+            <span className="w-5 h-5 rounded-full flex items-center justify-center bg-green-500 text-white text-xs font-bold">S</span>
+            Saweria
+          </a>
+        </div>
+      )}
+
+      {/* Main Button */}
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="flex items-center gap-2 px-4 py-2 rounded-lg text-white text-sm font-medium hover:opacity-90 transition-opacity shadow-lg"
+        style={{ backgroundColor: '#f5aa27' }}
+      >
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" fill="white"/>
+        </svg>
+        Support
+        <svg 
+          width="12" 
+          height="12" 
+          viewBox="0 0 24 24" 
+          fill="none" 
+          xmlns="http://www.w3.org/2000/svg"
+          className={`transition-transform ${isOpen ? 'rotate-180' : ''}`}
+        >
+          <path d="M7 10l5 5 5-5" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
+      </button>
+    </div>
+  );
+};
+
 // ─── Welcome Screen ───────────────────────────────────────────────────────────
 const WelcomeScreen: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ onLoadSample, loading }) => {
   const { setDataLoaded, mergeAndSetVariables, setDataInfo } = useStore();
@@ -381,17 +455,14 @@ const WelcomeScreen: React.FC<{ onLoadSample: () => void; loading: boolean }> = 
   const [status, setStatus] = useState<{ type: 'error' | 'info'; message: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const sillyTexts = [
-    'Twerking...', 'Papapooting...', 'Stomachacheing...', 'Yodeling...', 'Discoing...',
-    'Moonwalking...', 'Macarena-ing...', 'Roboting...', 'Chickening...', 'Banana-ing...',
-    'Hip-hopping...', 'Bellyflopping...', 'Splatting...', 'Bumblebee-ing...', 'Snail-racing...',
-  ];
-  const [sillyText, setSillyText] = useState('');
+  const [loadingText, setLoadingText] = useState('Twerking...');
 
   useEffect(() => {
-    if (!uploading) { setSillyText(''); return; }
-    let i = 0;
-    const interval = setInterval(() => { setSillyText(sillyTexts[i % sillyTexts.length]); i++; }, 400);
+    if (!uploading) { setLoadingText('Twerking...'); return; }
+    // Keep it simple with just twerking
+    const interval = setInterval(() => {
+      setLoadingText(prev => prev === 'Twerking...' ? 'Twerking..' : 'Twerking...');
+    }, 500);
     return () => clearInterval(interval);
   }, [uploading]);
 
@@ -404,7 +475,7 @@ const WelcomeScreen: React.FC<{ onLoadSample: () => void; loading: boolean }> = 
     }
 
     setUploading(true);
-    setSillyText(sillyTexts[0]);
+    setLoadingText('Twerking...');
     setStatus(null);
 
     const file = validFiles[0];
@@ -518,7 +589,7 @@ const WelcomeScreen: React.FC<{ onLoadSample: () => void; loading: boolean }> = 
           onChange={handleFileInput}
         />
         {uploading ? (
-          <p className="text-sm text-zinc-500 animate-pulse">{sillyText || 'uploading...'}</p>
+          <p className="text-sm text-zinc-500 animate-pulse">{loadingText}</p>
         ) : isDragOver ? (
           <p className="text-sm text-blue-500 font-medium">drop to load</p>
         ) : (
@@ -548,6 +619,9 @@ const WelcomeScreen: React.FC<{ onLoadSample: () => void; loading: boolean }> = 
           {status.message}
         </div>
       )}
+
+      {/* Donate Widget */}
+      <DonateWidget />
     </div>
   );
 };
@@ -787,9 +861,10 @@ const TableRow: React.FC<{
   onActivate: () => void;
   onDelete: (e: React.MouseEvent) => void;
   onRename: (name: string) => void;
+  onDuplicate: () => void;
   folders: any[];
   onMoveToFolder: (folderId: string | null) => void;
-}> = ({ table, isActive, onActivate, onDelete, onRename, folders, onMoveToFolder }) => {
+}> = ({ table, isActive, onActivate, onDelete, onRename, onDuplicate, folders, onMoveToFolder }) => {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: `tbl-${table.id}` });
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(table.name);
@@ -848,10 +923,15 @@ const TableRow: React.FC<{
         <div className="relative">
           <button
             onClick={(e) => { e.stopPropagation(); setShowMenu(!showMenu); }}
-            className="text-zinc-300 dark:text-zinc-700 hover:text-zinc-500 text-xs px-0.5"
+            className="text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 text-xs px-1"
+            title="Table options"
           >⋮</button>
           {showMenu && (
             <div ref={menuRef} className="absolute right-0 top-5 z-50 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 shadow-lg py-1 w-40 text-xs" onClick={(e) => e.stopPropagation()}>
+              <button className="w-full text-left px-3 py-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-600 dark:text-zinc-400" onClick={() => { onDuplicate(); setShowMenu(false); }}>
+                ⧉ duplicate
+              </button>
+              <div className="border-t border-zinc-200 dark:border-zinc-700 my-1" />
               {otherFolders.map((f: any) => (
                 <button key={f.id} className="w-full text-left px-3 py-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-600 dark:text-zinc-400" onClick={() => { onMoveToFolder(f.id); setShowMenu(false); }}>
                   → {f.name}
@@ -881,12 +961,13 @@ const FolderRow: React.FC<{
   onActivate: (id: string) => void;
   onDeleteTable: (id: string, e: React.MouseEvent) => void;
   onRenameTable: (id: string, name: string) => void;
+  onDuplicateTable: (table: any) => void;
   onMoveTable: (tableId: string, folderId: string | null) => void;
   onToggle: () => void;
   onRenameFolder: (name: string) => void;
   onDeleteFolder: () => void;
   allFolders: any[];
-}> = ({ folder, tables, activeTableId, onActivate, onDeleteTable, onRenameTable, onMoveTable, onToggle, onRenameFolder, onDeleteFolder, allFolders }) => {
+}> = ({ folder, tables, activeTableId, onActivate, onDeleteTable, onRenameTable, onDuplicateTable, onMoveTable, onToggle, onRenameFolder, onDeleteFolder, allFolders }) => {
   const { isOver, setNodeRef } = useDroppable({ id: `fldr-${folder.id}` });
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(folder.name);
@@ -944,6 +1025,7 @@ const FolderRow: React.FC<{
                 onActivate={() => onActivate(t.id)}
                 onDelete={(e) => onDeleteTable(t.id, e)}
                 onRename={(name) => onRenameTable(t.id, name)}
+                onDuplicate={() => onDuplicateTable(t)}
                 folders={allFolders.filter((f: any) => f.id !== folder.id)}
                 onMoveToFolder={(fid) => onMoveTable(t.id, fid)}
               />
@@ -961,10 +1043,11 @@ const RootDropZone: React.FC<{
   activeTableId: string | null;
   setActiveTable: (id: string) => void;
   deleteTable: (id: string) => void;
+  duplicateTable: (table: any) => void;
   updateTable: (id: string, u: any) => void;
   folders: any[];
   isDraggingAny: boolean;
-}> = ({ tables, activeTableId, setActiveTable, deleteTable, updateTable, folders, isDraggingAny }) => {
+}> = ({ tables, activeTableId, setActiveTable, deleteTable, duplicateTable, updateTable, folders, isDraggingAny }) => {
   const { isOver, setNodeRef } = useDroppable({ id: 'fldr-root' });
   const ungrouped = tables.filter((t: any) => !t.folderId);
   const showPlaceholder = isDraggingAny && ungrouped.length === 0;
@@ -988,6 +1071,7 @@ const RootDropZone: React.FC<{
           onActivate={() => setActiveTable(t.id)}
           onDelete={(e) => { e.stopPropagation(); deleteTable(t.id); }}
           onRename={(name) => updateTable(t.id, { name })}
+          onDuplicate={() => duplicateTable(t)}
           folders={folders}
           onMoveToFolder={(fid) => updateTable(t.id, { folderId: fid })}
         />
@@ -1079,6 +1163,28 @@ const TableList: React.FC = () => {
     setActiveTable(newTable.id);
   };
 
+  const handleDuplicate = (table: any) => {
+    const deepClone = (obj: any): any => {
+      if (obj === null || typeof obj !== 'object') return obj;
+      if (Array.isArray(obj)) return obj.map(deepClone);
+      const cloned: any = {};
+      for (const key in obj) {
+        if (key !== 'id' && key !== 'result') {
+          cloned[key] = deepClone(obj[key]);
+        }
+      }
+      return cloned;
+    };
+
+    const duplicatedTable = {
+      id: uuidv4().slice(0, 8),
+      name: `${table.name} (copy)`,
+      ...deepClone(table),
+    };
+    addTable(duplicatedTable);
+    setActiveTable(duplicatedTable.id);
+  };
+
   const handleDragEnd = (event: DndDragEndEvent) => {
     setActiveTblDragId(null);
     const { active, over } = event;
@@ -1112,6 +1218,7 @@ const TableList: React.FC = () => {
               onActivate={setActiveTable}
               onDeleteTable={(id, e) => { e.stopPropagation(); deleteTable(id); }}
               onRenameTable={(id, name) => updateTable(id, { name })}
+              onDuplicateTable={handleDuplicate}
               onMoveTable={(tableId, folderId) => updateTable(tableId, { folderId })}
               onToggle={() => toggleFolder(folder.id)}
               onRenameFolder={(name) => renameFolder(folder.id, name)}
@@ -1124,6 +1231,7 @@ const TableList: React.FC = () => {
             activeTableId={activeTableId}
             setActiveTable={setActiveTable}
             deleteTable={deleteTable}
+            duplicateTable={handleDuplicate}
             updateTable={updateTable}
             folders={folders}
             isDraggingAny={!!activeTblDragId}
@@ -1703,6 +1811,7 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
         row_items: flattenItemsForBackend(activeTable.row_items, getVisibleCodesList, '', resolveCode),
         col_items: flattenItemsForBackend(activeTable.col_items, getVisibleCodesList, '', resolveCode),
         filter_def: effectiveFilter,
+        weight_col: activeTable.weight_col || undefined,
         mean_score_mappings: meanMappings.length > 0 ? meanMappings : undefined,
         name_to_key: buildNameToKeyMap(variables),
         net_registry: buildNetRegistry(variables),
@@ -1844,14 +1953,27 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
                     })()}
                   </div>
                 </div>
-                <div className="flex justify-start">
-                  <button
-                    onClick={() => activeTable && updateTable(activeTable.id, { row_items: activeTable.col_items, col_items: activeTable.row_items })}
-                    className="px-3 py-1.5 border border-zinc-300 dark:border-zinc-700 text-zinc-500 text-xs hover:border-zinc-400 dark:hover:border-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors"
-                    title="Swap Header and Sidebreak"
-                  >
-                    ⇄ transpose
-                  </button>
+                <div className="flex justify-between items-center">
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => activeTable && updateTable(activeTable.id, { row_items: activeTable.col_items, col_items: activeTable.row_items })}
+                      className="px-3 py-1.5 border border-zinc-300 dark:border-zinc-700 text-zinc-500 text-xs hover:border-zinc-400 dark:hover:border-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors"
+                      title="Swap Header and Sidebreak"
+                    >
+                      ⇄ transpose
+                    </button>
+                    <select
+                      value={activeTable.weight_col || ''}
+                      onChange={(e) => activeTable && updateTable(activeTable.id, { weight_col: e.target.value || null })}
+                      className="px-2 py-1.5 border border-zinc-300 dark:border-zinc-700 text-zinc-500 text-xs bg-white dark:bg-zinc-900 rounded"
+                      title="Select Weight Column"
+                    >
+                      <option value="">No weight</option>
+                      {Object.keys(variables).map((varName) => (
+                        <option key={varName} value={varName}>{varName}</option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
               </div>
             )}
@@ -2514,7 +2636,7 @@ const MergeVariablesModal: React.FC<MergeVariablesModalProps> = ({ onClose }) =>
 
 // ─── Edit Variables Page ──────────────────────────────────────────────────────
 const EditVariablesPage: React.FC = () => {
-  const { variables, addVariable } = useStore();
+  const { variables, addVariable, deleteVariable, duplicateVariable } = useStore();
   const navigate = useNavigate();
   const [showMergeModal, setShowMergeModal] = useState(false);
   const [showAddVar, setShowAddVar] = useState(false);
@@ -2535,6 +2657,25 @@ const EditVariablesPage: React.FC = () => {
     setShowAddVar(false);
     setNewVarKey(''); setNewVarName(''); setNewVarLabel(''); setNewVarType('categorical'); setAddVarError('');
     navigate(`/edit-variables/${encodeURIComponent(key)}`);
+  };
+
+  const handleDuplicateVariable = (key: string) => {
+    const newKey = `${key}_copy`;
+    let counter = 1;
+    let finalKey = newKey;
+    while (variables[finalKey]) {
+      finalKey = `${newKey}_${counter}`;
+      counter++;
+    }
+    duplicateVariable(key, finalKey);
+    navigate(`/edit-variables/${encodeURIComponent(finalKey)}`);
+  };
+
+  const handleDeleteVariable = (key: string, isCustom: boolean) => {
+    if (!isCustom) return;
+    if (window.confirm(`Delete custom variable '${key}'?`)) {
+      deleteVariable(key);
+    }
   };
 
   return (
@@ -2636,6 +2777,7 @@ const EditVariablesPage: React.FC = () => {
               <th className="border-b border-zinc-200 dark:border-zinc-800 px-3 py-2 text-left text-zinc-500 dark:text-zinc-400 font-medium">definition</th>
               <th className="border-b border-zinc-200 dark:border-zinc-800 px-3 py-2 text-left text-zinc-500 dark:text-zinc-400 font-medium w-24">type</th>
               <th className="border-b border-zinc-200 dark:border-zinc-800 px-3 py-2 text-right text-zinc-500 dark:text-zinc-400 font-medium w-14">codes</th>
+              <th className="border-b border-zinc-200 dark:border-zinc-800 px-3 py-2 text-center text-zinc-500 dark:text-zinc-400 font-medium w-20">actions</th>
             </tr>
           </thead>
           <tbody>
@@ -2667,6 +2809,26 @@ const EditVariablesPage: React.FC = () => {
                       </span>
                     )}
                   </td>
+                  <td className="border-b border-zinc-100 dark:border-zinc-800/60 px-3 py-2 text-center">
+                    <div className="flex items-center justify-center gap-1">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleDuplicateVariable(key); }}
+                        className="text-zinc-300 dark:text-zinc-600 hover:text-emerald-500 dark:hover:text-emerald-400 text-xs px-1"
+                        title="Duplicate variable"
+                      >
+                        ⧉
+                      </button>
+                      {isCustom && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleDeleteVariable(key, isCustom); }}
+                          className="text-zinc-300 dark:text-zinc-600 hover:text-red-500 dark:hover:text-red-400 text-xs px-1"
+                          title="Delete custom variable"
+                        >
+                          ×
+                        </button>
+                      )}
+                    </div>
+                  </td>
                 </tr>
               );
             })}
@@ -2689,6 +2851,7 @@ interface SortableCodeRowProps {
   isSelected: boolean;
   onToggleSelect: (code: string) => void;
   onDelete: (varName: string, code: string) => void;
+  onDuplicate: (varName: string, code: string) => void;
   updateCodeLabel: (varName: string, code: string, label: string) => void;
   updateCodeFactor: (varName: string, code: string, factor: number | null) => void;
   updateCodeVisibility: (varName: string, code: string, visibility: 'visible' | 'hidden' | 'removed') => void;
@@ -2698,7 +2861,7 @@ interface SortableCodeRowProps {
 
 const SortableCodeRow: React.FC<SortableCodeRowProps> = ({
   code, varKey, varName, code_syntax, codeIndex,
-  isSelected, onToggleSelect, onDelete,
+  isSelected, onToggleSelect, onDelete, onDuplicate,
   updateCodeLabel, updateCodeFactor, updateCodeVisibility, updateCodeSyntax,
   onEditSyntax,
 }) => {
@@ -2823,15 +2986,22 @@ const SortableCodeRow: React.FC<SortableCodeRowProps> = ({
           <option value="removed">remove</option>
         </select>
       </td>
-      {/* Delete — only for user-added codes */}
-      <td className="border border-zinc-200 dark:border-zinc-700 px-1 py-1 text-center w-6">
-        {code.isNew && (
+      {/* Actions */}
+      <td className="border border-zinc-200 dark:border-zinc-700 px-1 py-1 text-center w-12">
+        <div className="flex items-center justify-center gap-1">
           <button
-            onClick={() => onDelete(varKey, code.code)}
-            title="delete code"
-            className="text-red-400 hover:text-red-600 dark:hover:text-red-300 text-xs leading-none"
-          >✕</button>
-        )}
+            onClick={() => onDuplicate(varKey, code.code)}
+            title="duplicate code"
+            className="text-zinc-400 hover:text-emerald-500 dark:hover:text-emerald-400 text-xs leading-none"
+          >⧉</button>
+          {code.isNew && (
+            <button
+              onClick={() => onDelete(varKey, code.code)}
+              title="delete code"
+              className="text-red-400 hover:text-red-600 dark:hover:text-red-300 text-xs leading-none"
+            >✕</button>
+          )}
+        </div>
       </td>
     </tr>
   );
@@ -2938,6 +3108,17 @@ const VariableDetailPage: React.FC = () => {
       if (next.has(code)) next.delete(code); else next.add(code);
       return next;
     });
+  };
+
+  const handleDuplicateCode = (varName: string, code: string) => {
+    const codeInfo = info?.codes.find((c) => c.code === code);
+    if (!codeInfo) return;
+    
+    const newLabel = `${codeInfo.label} (copy)`;
+    // Copy the exact same syntax as the original code
+    const syntax = codeInfo.syntax || `${varName}/${code}`;
+    
+    addCode(varName, newLabel, syntax);
   };
 
   const handleConfirmNet = () => {
@@ -3156,7 +3337,7 @@ const VariableDetailPage: React.FC = () => {
                       <th className="border border-zinc-200 dark:border-zinc-700 px-2 py-1.5 text-left text-zinc-500 dark:text-zinc-400 w-40">syntax</th>
                       <th className="border border-zinc-200 dark:border-zinc-700 px-2 py-1.5 text-left text-zinc-500 dark:text-zinc-400 w-24">factor</th>
                       <th className="border border-zinc-200 dark:border-zinc-700 px-2 py-1.5 text-left text-zinc-500 dark:text-zinc-400 w-28">visibility</th>
-                      <th className="border border-zinc-200 dark:border-zinc-700 px-1 py-1.5 w-6"></th>
+                      <th className="border border-zinc-200 dark:border-zinc-700 px-1 py-1.5 w-12"></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -3171,6 +3352,7 @@ const VariableDetailPage: React.FC = () => {
                         isSelected={selectedForNet.has(code.code)}
                         onToggleSelect={handleToggleSelect}
                         onDelete={removeCode}
+                        onDuplicate={handleDuplicateCode}
                         updateCodeLabel={updateCodeLabel}
                         updateCodeFactor={updateCodeFactor}
                         updateCodeVisibility={updateCodeVisibility}
