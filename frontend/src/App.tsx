@@ -2386,10 +2386,10 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
                 Will create <strong>{ezSelectedRowVars.length}</strong> tables with the same header structure
               </div>
             </div>
-            <div className="flex justify-end gap-2 px-4 py-3 border-t border-zinc-200 dark:border-zinc-700">
+            <div className="flex justify-end items-center gap-2 px-4 py-3 border-t border-zinc-200 dark:border-zinc-700">
               <button
                 onClick={() => { setShowEzTablesModal(false); setEzHeaderItems([]); setEzSelectedRowVars([]); setEzWeightCol(null); }}
-                className="px-3 py-1.5 text-xs text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded"
+                className="px-4 py-2 text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded border border-zinc-300 dark:border-zinc-600"
               >
                 Cancel
               </button>
@@ -2436,7 +2436,7 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
                   alert(`Created ${ezSelectedRowVars.length} tables!`);
                 }}
                 disabled={ezSelectedRowVars.length === 0 || ezHeaderItems.length === 0}
-                className="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-40 text-white text-xs rounded"
+                className="px-4 py-2 text-xs font-medium bg-emerald-500 hover:bg-emerald-600 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded"
               >
                 Create {ezSelectedRowVars.length} Tables
               </button>
