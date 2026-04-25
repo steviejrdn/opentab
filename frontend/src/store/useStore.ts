@@ -33,6 +33,7 @@ interface AppState {
   // Copy/Paste variable info
   copiedVariableInfo: {
     codes: { code: string; label: string; factor: number | null }[];
+    netCodes: { code: string; label: string; netOf: string[] }[];
     stats: {
       showMean: boolean;
       showStdError: boolean;
@@ -40,7 +41,14 @@ interface AppState {
       showVariance: boolean;
     };
   } | null;
-  setCopiedVariableInfo: (info: { codes: { code: string; label: string; factor: number | null }[]; stats: { showMean: boolean; showStdError: boolean; showStdDev: boolean; showVariance: boolean; } } | null) => void;
+  setCopiedVariableInfo: (info: { codes: { code: string; label: string; factor: number | null }[]; netCodes: { code: string; label: string; netOf: string[] }[]; stats: { showMean: boolean; showStdError: boolean; showStdDev: boolean; showVariance: boolean; } } | null) => void;
+
+  // Undo paste
+  lastPastedVariable: {
+    varName: string;
+    codes: VariableInfo['codes'];
+  } | null;
+  setLastPastedVariable: (info: { varName: string; codes: VariableInfo['codes'] } | null) => void;
 
   setDataLoaded: (loaded: boolean) => void;
   setVariables: (variables: Record<string, VariableInfo>) => void;
@@ -118,6 +126,7 @@ export const useStore = create<AppState>()((set, get) => ({
   sidebarVisible: false,
 
   copiedVariableInfo: null,
+  lastPastedVariable: null,
 
   setDataLoaded: (loaded) => set({ dataLoaded: loaded, sidebarVisible: loaded }),
   setVariables: (variables) => {
@@ -296,6 +305,7 @@ export const useStore = create<AppState>()((set, get) => ({
   toggleSidebar: () => set((state) => ({ sidebarVisible: !state.sidebarVisible })),
 
   setCopiedVariableInfo: (info) => set({ copiedVariableInfo: info }),
+  setLastPastedVariable: (info) => set({ lastPastedVariable: info }),
 
   updateVariableLabel: (varName, label) =>
     set((state) => ({

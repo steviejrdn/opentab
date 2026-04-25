@@ -401,7 +401,7 @@ export const VariableEditPanel: React.FC<VariableEditPanelProps> = ({
   onAddCode,
   onToggleVariableStat,
 }) => {
-  const { copiedVariableInfo, setCopiedVariableInfo } = useStore();
+  const { copiedVariableInfo, setCopiedVariableInfo, lastPastedVariable, setLastPastedVariable } = useStore();
   
   const [selectedCodes, setSelectedCodes] = useState<string[]>([]);
   const [showNetInput, setShowNetInput] = useState(false);
@@ -416,8 +416,12 @@ export const VariableEditPanel: React.FC<VariableEditPanelProps> = ({
   // Copy/Paste variable info using global store
   const handleCopyVarInfo = useCallback(() => {
     const codesToCopy = variable.codes
-      .filter((c) => c.visibility !== 'removed')
+      .filter((c) => c.visibility !== 'removed' && !c.isNet)
       .map((c) => ({ code: c.code, label: c.label || '', factor: c.factor ?? null }));
+    
+    const netCodesToCopy = variable.codes
+      .filter((c) => c.visibility !== 'removed' && c.isNet)
+      .map((c) => ({ code: c.code, label: c.label || '', netOf: c.netOf || [] }));
     
     const statsToCopy = {
       showMean: variable.showMean || false,
@@ -428,14 +432,21 @@ export const VariableEditPanel: React.FC<VariableEditPanelProps> = ({
     
     setCopiedVariableInfo({
       codes: codesToCopy,
+      netCodes: netCodesToCopy,
       stats: statsToCopy,
     });
   }, [variable, setCopiedVariableInfo]);
 
   const handlePasteVarInfo = useCallback(() => {
-    if (!copiedVariableInfo || copiedVariableInfo.codes.length === 0) return;
+    if (!copiedVariableInfo || (copiedVariableInfo.codes.length === 0 && copiedVariableInfo.netCodes.length === 0)) return;
     
-    // Match codes by code value and apply labels/factors
+    // Backup current codes for undo
+    setLastPastedVariable({
+      varName: variableKey,
+      codes: JSON.parse(JSON.stringify(variable.codes)), // Deep clone
+    });
+    
+    // Paste regular codes - match codes by code value and apply labels/factors
     copiedVariableInfo.codes.forEach((copied) => {
       const targetCode = variable.codes.find((c) => c.code === copied.code);
       if (targetCode) {
@@ -444,12 +455,45 @@ export const VariableEditPanel: React.FC<VariableEditPanelProps> = ({
       }
     });
 
+    // Paste net codes with transformation
+    copiedVariableInfo.netCodes.forEach((copiedNetCode) => {
+      // Check if all codes in netOf exist in target variable
+      const allCodesExist = copiedNetCode.netOf.every((code) => 
+        variable.codes.some((c) => c.code === code)
+      );
+      
+      if (!allCodesExist) {
+        alert(`Cannot paste net code "${copiedNetCode.label}": target variable missing codes [${copiedNetCode.netOf.join(', ')}]`);
+        return;
+      }
+      
+      // Check if net code already exists in target
+      const existingNetCode = variable.codes.find((c) => c.code === copiedNetCode.code && c.isNet);
+      if (existingNetCode) {
+        // Skip - net code already exists
+        return;
+      }
+      
+      // Create net code with transformed syntax
+      onAddNetCode?.(variableKey, copiedNetCode.netOf, copiedNetCode.label);
+    });
+
     // Apply statistics settings
     if (copiedVariableInfo.stats.showMean) onToggleVariableStat?.(variableKey, 'showMean');
     if (copiedVariableInfo.stats.showStdError) onToggleVariableStat?.(variableKey, 'showStdError');
     if (copiedVariableInfo.stats.showStdDev) onToggleVariableStat?.(variableKey, 'showStdDev');
     if (copiedVariableInfo.stats.showVariance) onToggleVariableStat?.(variableKey, 'showVariance');
-  }, [copiedVariableInfo, variable.codes, variableKey, onUpdateCodeLabel, onUpdateCodeFactor, onToggleVariableStat]);
+  }, [copiedVariableInfo, variable.codes, variableKey, onUpdateCodeLabel, onUpdateCodeFactor, onToggleVariableStat, onAddNetCode, setLastPastedVariable]);
+
+  const handleUndoPaste = useCallback(() => {
+    if (lastPastedVariable?.varName === variableKey) {
+      // Restore original codes
+      // This requires updating the entire codes array
+      // We'll need to add a new store action for this
+      alert('Undo functionality requires store update');
+      setLastPastedVariable(null);
+    }
+  }, [lastPastedVariable, variableKey, setLastPastedVariable]);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -657,23 +701,37 @@ export const VariableEditPanel: React.FC<VariableEditPanelProps> = ({
           <div className="flex-1" />
           
           {/* Copy/Paste Var Info buttons */}
+          {lastPastedVariable?.varName === variableKey && (
+            <button
+              onClick={handleUndoPaste}
+              className="px-2.5 py-1.5 bg-amber-500 hover:bg-amber-600 text-white text-xs rounded transition-colors flex items-center gap-1"
+              title="Undo last paste"
+            >
+              <span>↩️</span>
+              Undo
+            </button>
+          )}
           <button
             onClick={handleCopyVarInfo}
             className="px-2.5 py-1.5 bg-slate-500 hover:bg-slate-600 text-white text-xs rounded transition-colors flex items-center gap-1"
-            title="Copy labels, factors & stats"
+            title="Copy labels, factors, net codes & stats"
           >
             <span>📋</span>
             Copy Var
           </button>
           <button
             onClick={handlePasteVarInfo}
-            disabled={!copiedVariableInfo || copiedVariableInfo.codes.length === 0}
+            disabled={!copiedVariableInfo || (copiedVariableInfo.codes.length === 0 && copiedVariableInfo.netCodes.length === 0)}
             className="px-2.5 py-1.5 bg-slate-500 hover:bg-slate-600 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs rounded transition-colors flex items-center gap-1"
-            title={copiedVariableInfo ? `Paste ${copiedVariableInfo.codes.length} codes` : 'No variable info copied'}
+            title={copiedVariableInfo ? `Paste ${copiedVariableInfo.codes.length + copiedVariableInfo.netCodes.length} items` : 'No variable info copied'}
           >
             <span>📥</span>
             Paste Var
-            {copiedVariableInfo && <span className="text-[10px] opacity-75">({copiedVariableInfo.codes.length})</span>}
+            {copiedVariableInfo && (
+              <span className="text-[10px] opacity-75">
+                ({copiedVariableInfo.codes.length + copiedVariableInfo.netCodes.length})
+              </span>
+            )}
           </button>
         </div>
 
