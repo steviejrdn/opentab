@@ -1611,16 +1611,40 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
   };
 
   const handleGenerate = async () => {
-    if (!activeTable?.row_items.length) { alert('Add items to Sidebreak first'); return; }
+    if (!activeTable) return;
+    const canRun = (activeTable.row_items.length || 0) > 0 || (activeTable.grid_items?.length || 0) > 0;
+    if (!canRun) { alert('Add items to Sidebreak or create a Grid first'); return; }
     if (activeTable.filter_items.length > 1) {
       const hasUnsetOperator = activeTable.filter_items.slice(1).some(item => !item.operatorToNext);
       if (hasUnsetOperator) { alert('Set the operator between filter variables before running'); return; }
     }
     setIsComputing(true);
     try {
+      // Generate effective items for grid table mode
+      let effectiveRowItems = activeTable.row_items;
+      let effectiveColItems = activeTable.col_items;
+
+      if (activeTable.row_items.length === 0 && activeTable.grid_items && activeTable.grid_items.length > 0) {
+        // Grid table mode: rows = codes from first grid variable
+        const firstGridVar = activeTable.grid_items[0].variable;
+        const visibleCodes = getVisibleCodesList(firstGridVar);
+
+        // Create row_items from codes - use codeDef format
+        effectiveRowItems = visibleCodes.map(code => ({
+          id: `grid-row-${code}`,
+          variable: firstGridVar,
+          codeDef: `${firstGridVar}/${code}`,
+          codes: [code],
+          children: []
+        }));
+
+        // Col items = grid items (variables in grid)
+        effectiveColItems = activeTable.grid_items;
+      }
+
       const allVarNames = [...new Set([
-        ...getAllNestedVars(activeTable.row_items),
-        ...getAllNestedVars(activeTable.col_items),
+        ...getAllNestedVars(effectiveRowItems),
+        ...getAllNestedVars(effectiveColItems),
       ])];
       const meanMappings: { variable: string; codeScores: Record<string, number> }[] = [];
       for (const varName of allVarNames) {
@@ -1643,10 +1667,8 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
       const effectiveFilter = [...(baseFilter ? [baseFilter] : []), ...removedParts].join('.') || undefined;
 
       const result = await computeApi.crosstab({
-        row_items: flattenItemsForBackend(activeTable.row_items, getVisibleCodesList, '', resolveCode),
-        col_items: flattenItemsForBackend(activeTable.col_items, getVisibleCodesList, '', resolveCode),
-        grid_items: activeTable.grid_items?.length ? flattenItemsForBackend(activeTable.grid_items, getVisibleCodesList, '', resolveCode) : undefined,
-        is_grid_mode: activeTable.is_grid_mode,
+        row_items: flattenItemsForBackend(effectiveRowItems, getVisibleCodesList, '', resolveCode),
+        col_items: flattenItemsForBackend(effectiveColItems, getVisibleCodesList, '', resolveCode),
         filter_def: effectiveFilter,
         weight_col: activeTable.weight_col || undefined,
         mean_score_mappings: meanMappings.length > 0 ? meanMappings : undefined,

@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   DndContext,
   closestCenter,
@@ -401,7 +401,7 @@ export const VariableEditPanel: React.FC<VariableEditPanelProps> = ({
   onAddCode,
   onToggleVariableStat,
 }) => {
-  const { copiedVariableInfo, setCopiedVariableInfo, lastPastedVariable, setLastPastedVariable } = useStore();
+  const { copiedVariableInfo, setCopiedVariableInfo, lastPastedVariable, setLastPastedVariable, restoreVariableCodes } = useStore();
   
   const [selectedCodes, setSelectedCodes] = useState<string[]>([]);
   const [showNetInput, setShowNetInput] = useState(false);
@@ -488,11 +488,18 @@ export const VariableEditPanel: React.FC<VariableEditPanelProps> = ({
   const handleUndoPaste = useCallback(() => {
     if (lastPastedVariable?.varName === variableKey) {
       // Restore original codes
-      // This requires updating the entire codes array
-      // We'll need to add a new store action for this
-      alert('Undo functionality requires store update');
+      restoreVariableCodes(variableKey, lastPastedVariable.codes);
       setLastPastedVariable(null);
     }
+  }, [lastPastedVariable, variableKey, restoreVariableCodes, setLastPastedVariable]);
+
+  // Clear lastPastedVariable when panel closes (component unmounts)
+  useEffect(() => {
+    return () => {
+      if (lastPastedVariable?.varName === variableKey) {
+        setLastPastedVariable(null);
+      }
+    };
   }, [lastPastedVariable, variableKey, setLastPastedVariable]);
 
   const sensors = useSensors(

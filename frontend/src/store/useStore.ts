@@ -49,6 +49,7 @@ interface AppState {
     codes: VariableInfo['codes'];
   } | null;
   setLastPastedVariable: (info: { varName: string; codes: VariableInfo['codes'] } | null) => void;
+  restoreVariableCodes: (varName: string, codes: VariableInfo['codes']) => void;
 
   setDataLoaded: (loaded: boolean) => void;
   setVariables: (variables: Record<string, VariableInfo>) => void;
@@ -306,6 +307,13 @@ export const useStore = create<AppState>()((set, get) => ({
 
   setCopiedVariableInfo: (info) => set({ copiedVariableInfo: info }),
   setLastPastedVariable: (info) => set({ lastPastedVariable: info }),
+  restoreVariableCodes: (varName, codes) =>
+    set((state) => ({
+      variables: {
+        ...state.variables,
+        [varName]: { ...state.variables[varName], codes },
+      },
+    })),
 
   updateVariableLabel: (varName, label) =>
     set((state) => ({
