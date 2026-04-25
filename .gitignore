@@ -50,3 +50,6 @@ uploads/
 backend/temp/
 opentab/temp/
 *.log
+
+# Test data
+test_data/
