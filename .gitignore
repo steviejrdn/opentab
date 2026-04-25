@@ -48,8 +48,6 @@ CLAUDE.md
 *.opentab
 uploads/
 backend/temp/
-opentab/temp/
-temp/
 *.log
 
 # Test data
