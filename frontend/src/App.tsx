@@ -9,21 +9,6 @@ import type { FilterItem, CrosstabResult, VariableInfo, DropItem } from './lib/a
 import FilterTab from './components/FilterTab';
 import { VariableEditPanel } from './components/VariableEditPanel';
 import { v4 as uuidv4 } from 'uuid';
-import * as XLSX from 'xlsx';
-
-// ─── Funny Messages for Run All ────────────────────────────────────────────────
-const funnyMessages = [
-  "Papapooting...",
-  "ARRRRGHing...",
-  "Kocaking...",
-  "Blablab-ing...",
-  "Hehe-ing...",
-  "Wkwking..."
-];
-
-const getRandomFunnyMessage = () => 
-  funnyMessages[Math.floor(Math.random() * funnyMessages.length)];
-
 // ─── Drag State Context ───────────────────────────────────────────────────────
 const DragStateContext = React.createContext<{ activeDragId: string | null }>({ activeDragId: null });
 
@@ -570,7 +555,7 @@ const Navigation: React.FC = () => {
           <img src="/logo_white.svg" alt="opentab" className="h-5 hidden dark:block" />
         </button>
         <span className="text-xs text-zinc-400 dark:text-zinc-600 border border-zinc-300 dark:border-zinc-700 px-1.5 py-0.5 leading-none">
-          alpha
+          beta
         </span>
       </div>
       <div className="flex items-center gap-4">
@@ -1850,7 +1835,7 @@ const App: React.FC = () => {
                 );
               }
             }
-            
+
             return null;
           })()}
         </DragOverlay>
@@ -1873,21 +1858,6 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
   const [ezHeaderItems, setEzHeaderItems] = useState<DropItem[]>([]);
   const [ezSelectedRowVars, setEzSelectedRowVars] = useState<string[]>([]);
   const [ezWeightCol, setEzWeightCol] = useState<string | null>(null);
-
-  // Run All & Export state
-  const [showExportSettingsModal, setShowExportSettingsModal] = useState(false);
-  const [isRunningAll, setIsRunningAll] = useState(false);
-  const [runAllProgress, setRunAllProgress] = useState({ current: 0, total: 0 });
-  const [funnyMessage, setFunnyMessage] = useState('');
-  const [exportSettings, setExportSettings] = useState({
-    counts: true,
-    colPct: true,
-    rowPct: false,
-    totalPct: false,
-    showPctSign: true,
-    decimalPlaces: 2,
-    statDecimalPlaces: 2
-  });
 
   // Listen for EZ header item added from App component (DnD)
   useEffect(() => {
@@ -2113,15 +2083,6 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
             >
               {isComputing ? '...' : '> run'}
             </button>
-            {tables.length > 1 && (
-              <button
-                onClick={() => setShowExportSettingsModal(true)}
-                disabled={isRunningAll}
-                className="px-3 py-1.5 border border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-600 dark:text-zinc-400 text-xs font-medium disabled:opacity-40 transition-colors"
-              >
-                {isRunningAll ? `${funnyMessage} (${runAllProgress.current}/${runAllProgress.total})` : 'run all'}
-              </button>
-            )}
           </div>
         )}
       </div>
@@ -2377,184 +2338,6 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
         </div>
       )}
 
-      {/* Export Settings Modal */}
-      {showExportSettingsModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white dark:bg-zinc-900 rounded-lg shadow-xl w-[500px] max-h-[90vh] flex flex-col">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-200 dark:border-zinc-700">
-              <h3 className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">Export Settings</h3>
-              <button 
-                onClick={() => setShowExportSettingsModal(false)} 
-                className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
-              >
-                ×
-              </button>
-            </div>
-            <div className="p-4 overflow-y-auto flex-1 space-y-4">
-              {/* Display Options */}
-              <div className="space-y-2">
-                <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400 block">Display Options</label>
-                <label className="flex items-center gap-2 text-xs cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={exportSettings.counts}
-                    onChange={(e) => setExportSettings({...exportSettings, counts: e.target.checked})}
-                    className="rounded"
-                  />
-                  <span className="text-zinc-700 dark:text-zinc-300">Counts</span>
-                </label>
-                <label className="flex items-center gap-2 text-xs cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={exportSettings.colPct}
-                    onChange={(e) => setExportSettings({...exportSettings, colPct: e.target.checked})}
-                    className="rounded"
-                  />
-                  <span className="text-zinc-700 dark:text-zinc-300">Column %</span>
-                </label>
-                <label className="flex items-center gap-2 text-xs cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={exportSettings.rowPct}
-                    onChange={(e) => setExportSettings({...exportSettings, rowPct: e.target.checked})}
-                    className="rounded"
-                  />
-                  <span className="text-zinc-700 dark:text-zinc-300">Row %</span>
-                </label>
-                <label className="flex items-center gap-2 text-xs cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={exportSettings.totalPct}
-                    onChange={(e) => setExportSettings({...exportSettings, totalPct: e.target.checked})}
-                    className="rounded"
-                  />
-                  <span className="text-zinc-700 dark:text-zinc-300">Total %</span>
-                </label>
-                <label className="flex items-center gap-2 text-xs cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={exportSettings.showPctSign}
-                    onChange={(e) => setExportSettings({...exportSettings, showPctSign: e.target.checked})}
-                    className="rounded"
-                  />
-                  <span className="text-zinc-700 dark:text-zinc-300">Show % sign</span>
-                </label>
-              </div>
-
-              {/* Decimal Places */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400 block mb-1">Decimal Places</label>
-                  <select
-                    value={exportSettings.decimalPlaces}
-                    onChange={(e) => setExportSettings({...exportSettings, decimalPlaces: parseInt(e.target.value)})}
-                    className="w-full px-2 py-1.5 border border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 text-xs bg-white dark:bg-zinc-900 rounded"
-                  >
-                    <option value={0}>0</option>
-                    <option value={1}>1</option>
-                    <option value={2}>2</option>
-                    <option value={3}>3</option>
-                    <option value={4}>4</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400 block mb-1">Stat Decimal Places</label>
-                  <select
-                    value={exportSettings.statDecimalPlaces}
-                    onChange={(e) => setExportSettings({...exportSettings, statDecimalPlaces: parseInt(e.target.value)})}
-                    className="w-full px-2 py-1.5 border border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 text-xs bg-white dark:bg-zinc-900 rounded"
-                  >
-                    <option value={0}>0</option>
-                    <option value={1}>1</option>
-                    <option value={2}>2</option>
-                    <option value={3}>3</option>
-                    <option value={4}>4</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="text-xs text-zinc-500">
-                Will export <strong>{tables.length}</strong> tables to Excel
-              </div>
-            </div>
-            <div className="flex justify-end gap-2 px-4 py-3 border-t border-zinc-200 dark:border-zinc-700">
-              <button
-                onClick={() => setShowExportSettingsModal(false)}
-                className="px-3 py-1.5 text-xs text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={async () => {
-                  setShowExportSettingsModal(false);
-                  setIsRunningAll(true);
-                  setRunAllProgress({ current: 0, total: tables.length });
-                  
-                  const results: { table: any; result: any }[] = [];
-                  
-                  for (let i = 0; i < tables.length; i++) {
-                    const table = tables[i];
-                    setRunAllProgress({ current: i + 1, total: tables.length });
-                    setFunnyMessage(getRandomFunnyMessage());
-                    
-                    try {
-                      const result = await computeApi.crosstab({
-                        row_items: flattenItemsForBackend(table.row_items, (v) => {
-                          const vars = useStore.getState().variables;
-                          const variable = vars[v];
-                          if (!variable) return [];
-                          return variable.codes
-                            .filter((c: any) => c.visibility !== 'removed' && c.visibility !== 'hidden')
-                            .map((c: any) => c.code);
-                        }, '', (v, c) => {
-                          const vars = useStore.getState().variables;
-                          const codeObj = vars[v]?.codes.find((code: any) => code.code === c);
-                          return codeObj?.syntax || `${v}/${c}`;
-                        }),
-                        col_items: flattenItemsForBackend(table.col_items, (v) => {
-                          const vars = useStore.getState().variables;
-                          const variable = vars[v];
-                          if (!variable) return [];
-                          return variable.codes
-                            .filter((c: any) => c.visibility !== 'removed' && c.visibility !== 'hidden')
-                            .map((c: any) => c.code);
-                        }, '', (v, c) => {
-                          const vars = useStore.getState().variables;
-                          const codeObj = vars[v]?.codes.find((code: any) => code.code === c);
-                          return codeObj?.syntax || `${v}/${c}`;
-                        }),
-                        filter_def: table.filter_def || undefined,
-                        weight_col: table.weight_col || undefined,
-                        name_to_key: buildNameToKeyMap(variables),
-                        net_registry: {},
-                        code_registry: {}
-                      });
-                      
-                      results.push({ table, result });
-                      setTableResult(table.id, result);
-                    } catch (e) {
-                      console.error(`Error running table ${table.name}:`, e);
-                    }
-                    
-                    // Wait a bit for the funny message to show
-                    await new Promise(resolve => setTimeout(resolve, 2000));
-                  }
-                  
-                  // Export to Excel
-                  exportToExcel(results, exportSettings, variables);
-                  
-                  setIsRunningAll(false);
-                  setFunnyMessage('');
-                }}
-                className="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white text-xs rounded"
-              >
-                Start Running
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* EZ Tables Modal */}
       {showEzTablesModal && (
         <div id="ez-tables-modal" className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
@@ -2722,149 +2505,6 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
   );
 }
 
-// ─── Export to Excel Function ─────────────────────────────────────────────────
-function exportToExcel(
-  results: { table: any; result: any }[],
-  settings: {
-    counts: boolean;
-    colPct: boolean;
-    rowPct: boolean;
-    totalPct: boolean;
-    showPctSign: boolean;
-    decimalPlaces: number;
-    statDecimalPlaces: number;
-  },
-  variables: Record<string, VariableInfo>
-) {
-  const wb = XLSX.utils.book_new();
-  
-  // Create Index Sheet
-  const indexData = [['Table Name', 'Base', 'Link']];
-  results.forEach((r, idx) => {
-    const sheetName = (r.table.name || `Table_${idx + 1}`).substring(0, 31);
-    indexData.push([
-      r.table.name || `Table ${idx + 1}`,
-      r.result?.base || 0,
-      `='${sheetName}'!A1`
-    ]);
-  });
-  const indexWs = XLSX.utils.aoa_to_sheet(indexData);
-  XLSX.utils.book_append_sheet(wb, indexWs, 'Index');
-  
-  // Create individual table sheets
-  results.forEach((r, idx) => {
-    const sheetName = (r.table.name || `Table_${idx + 1}`).substring(0, 31);
-    const result = r.result;
-    if (!result) return;
-    
-    const rowNames = Object.keys(result.counts).filter(k => k !== 'Total');
-    const colNames = Object.keys(result.counts[rowNames[0]] || {}).filter(k => k !== 'Total');
-    
-    // Build data array
-    const data: (string | number)[][] = [];
-    
-    // Header row
-    const headerRow = ['', 'Total', ...colNames.map(c => {
-      const parts = c.split('/');
-      if (parts.length === 2) {
-        const varName = parts[0];
-        const code = parts[1];
-        const varInfo = variables[varName];
-        const codeInfo = varInfo?.codes.find((cd: any) => cd.code === code);
-        return codeInfo?.label || code;
-      }
-      return c;
-    })];
-    data.push(headerRow);
-    
-    // Data rows
-    rowNames.forEach(rowName => {
-      const rowData: (string | number)[] = [];
-      
-      // Row label
-      const parts = rowName.split('/');
-      if (parts.length === 2) {
-        const varName = parts[0];
-        const code = parts[1];
-        const varInfo = variables[varName];
-        const codeInfo = varInfo?.codes.find((cd: any) => cd.code === code);
-        rowData.push(codeInfo?.label || code);
-      } else {
-        rowData.push(rowName);
-      }
-      
-      // Total column
-      let totalVal = result.counts[rowName]?.Total || 0;
-      if (settings.rowPct && result.row_pct) {
-        const pct = result.row_pct[rowName]?.Total || 0;
-        totalVal = `${pct.toFixed(settings.decimalPlaces)}${settings.showPctSign ? '%' : ''}`;
-      } else if (settings.colPct && result.col_pct) {
-        const pct = result.col_pct[rowName]?.Total || 0;
-        totalVal = `${pct.toFixed(settings.decimalPlaces)}${settings.showPctSign ? '%' : ''}`;
-      } else if (settings.totalPct && result.total_pct) {
-        const pct = result.total_pct[rowName]?.Total || 0;
-        totalVal = `${pct.toFixed(settings.decimalPlaces)}${settings.showPctSign ? '%' : ''}`;
-      } else {
-        totalVal = totalVal.toFixed(settings.decimalPlaces);
-      }
-      rowData.push(totalVal);
-      
-      // Data columns
-      colNames.forEach(colName => {
-        let val = result.counts[rowName]?.[colName] || 0;
-        if (settings.rowPct && result.row_pct) {
-          const pct = result.row_pct[rowName]?.[colName] || 0;
-          val = `${pct.toFixed(settings.decimalPlaces)}${settings.showPctSign ? '%' : ''}`;
-        } else if (settings.colPct && result.col_pct) {
-          const pct = result.col_pct[rowName]?.[colName] || 0;
-          val = `${pct.toFixed(settings.decimalPlaces)}${settings.showPctSign ? '%' : ''}`;
-        } else if (settings.totalPct && result.total_pct) {
-          const pct = result.total_pct[rowName]?.[colName] || 0;
-          val = `${pct.toFixed(settings.decimalPlaces)}${settings.showPctSign ? '%' : ''}`;
-        } else if (settings.counts) {
-          val = val.toFixed(settings.decimalPlaces);
-        }
-        rowData.push(val);
-      });
-      
-      data.push(rowData);
-    });
-    
-    // Add statistics if available
-    if (result.mean && Object.keys(result.mean).length > 0) {
-      data.push([]);
-      data.push(['Statistics', '', ...colNames.map(() => '')]);
-      
-      const statTypes = [
-        { key: 'mean', label: 'Mean' },
-        { key: 'std_error', label: 'Std Error' },
-        { key: 'std_dev', label: 'Std Dev' },
-        { key: 'variance', label: 'Variance' }
-      ];
-      
-      statTypes.forEach(({ key, label }) => {
-        if (result[key] && Object.keys(result[key]).length > 0) {
-          const statRow: (string | number)[] = [label, '', ...colNames.map(col => {
-            const val = result[key]?.[col];
-            return val !== undefined ? val.toFixed(settings.statDecimalPlaces) : '';
-          })];
-          data.push(statRow);
-        }
-      });
-    }
-    
-    const ws = XLSX.utils.aoa_to_sheet(data);
-    
-    // Set column widths
-    ws['!cols'] = [{ wch: 20 }, { wch: 12 }, ...colNames.map(() => ({ wch: 12 }))];
-    
-    XLSX.utils.book_append_sheet(wb, ws, sheetName);
-  });
-  
-  // Download
-  XLSX.writeFile(wb, `opentab_export_${new Date().toISOString().slice(0, 10)}.xlsx`);
-}
-
 // ─── Result Tab ───────────────────────────────────────────────────────────────
 const ResultTab: React.FC = () => {
   const { activeTableId, tables, displayOptions, setDisplayOptions, variables } = useStore();
@@ -2967,7 +2607,7 @@ const ResultTab: React.FC = () => {
     const td = (value: string, bg: string, bold: boolean, align: string = 'center', color: string = '#666') =>
       `<td style="background:${bg};color:${color};font-weight:${bold ? 'bold' : 'normal'};text-align:${align};border:1px solid #ddd;padding:3px 8px;">${value}</td>`;
 
-    let html = `<table style="border-collapse:collapse;font-size:12px;font-family:Arial,sans-serif;">`;
+    let html = `<table style="border-collapse:collapse;font-size:10px;font-family:Arial,sans-serif;">`;
 
     if (numHeaderRows > 0) {
       html += '<thead>';

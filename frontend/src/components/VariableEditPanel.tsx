@@ -318,7 +318,7 @@ const SortableCodeRow: React.FC<SortableCodeRowProps> = ({
         </button>
       </td>
       {/* Code */}
-      <td className="px-1 py-1 border-b border-zinc-200 dark:border-zinc-700 font-mono text-xs">
+      <td className="px-1 py-1 border-b border-zinc-200 dark:border-zinc-700 font-mono text-xs dark:text-zinc-100">
         {code.code}
       </td>
       {/* Label */}
@@ -327,7 +327,7 @@ const SortableCodeRow: React.FC<SortableCodeRowProps> = ({
           type="text"
           value={code.label || ''}
           onChange={(e) => onUpdateLabel(varKey, code.code, e.target.value)}
-          className="w-full text-xs bg-transparent border border-zinc-300 dark:border-zinc-600 px-1.5 py-0.5 rounded"
+          className="w-full text-xs bg-transparent border border-zinc-300 dark:border-zinc-600 px-1.5 py-0.5 rounded dark:text-zinc-100"
           placeholder="Label"
         />
       </td>
@@ -356,7 +356,7 @@ const SortableCodeRow: React.FC<SortableCodeRowProps> = ({
             onUpdateFactor(varKey, code.code, val ? parseFloat(val) : null);
           }}
           placeholder="-"
-          className="w-14 text-xs bg-transparent border border-zinc-300 dark:border-zinc-600 px-1.5 py-0.5 rounded"
+          className="w-14 text-xs bg-transparent border border-zinc-300 dark:border-zinc-600 px-1.5 py-0.5 rounded dark:text-zinc-100"
         />
       </td>
       {/* Actions */}
@@ -616,7 +616,7 @@ export const VariableEditPanel: React.FC<VariableEditPanelProps> = ({
                 type="text"
                 value={variable.name || ''}
                 onChange={(e) => onUpdateDisplayName(variableKey, e.target.value)}
-                className="w-full px-2 py-1.5 text-sm border border-zinc-300 dark:border-zinc-600 rounded bg-white dark:bg-zinc-800"
+                className="w-full px-2 py-1.5 text-sm border border-zinc-300 dark:border-zinc-600 rounded bg-white dark:bg-zinc-800 dark:text-zinc-100"
               />
             </div>
             <div>
@@ -627,7 +627,7 @@ export const VariableEditPanel: React.FC<VariableEditPanelProps> = ({
                 type="text"
                 value={variable.label || ''}
                 onChange={(e) => onUpdateLabel(variableKey, e.target.value)}
-                className="w-full px-2 py-1.5 text-sm border border-zinc-300 dark:border-zinc-600 rounded bg-white dark:bg-zinc-800"
+                className="w-full px-2 py-1.5 text-sm border border-zinc-300 dark:border-zinc-600 rounded bg-white dark:bg-zinc-800 dark:text-zinc-100"
               />
             </div>
           </div>
@@ -766,7 +766,7 @@ export const VariableEditPanel: React.FC<VariableEditPanelProps> = ({
                     if (e.key === 'Enter') handleCreateNet(); 
                     if (e.key === 'Escape') { setShowNetInput(false); setNetLabel(''); } 
                   }}
-                  className="flex-1 text-xs px-2 py-1 border border-purple-300 dark:border-purple-700 rounded bg-white dark:bg-zinc-800"
+                  className="flex-1 text-xs px-2 py-1 border border-purple-300 dark:border-purple-700 rounded bg-white dark:bg-zinc-800 dark:text-zinc-100"
                 />
                 <button 
                   onClick={handleCreateNet} 
@@ -798,7 +798,7 @@ export const VariableEditPanel: React.FC<VariableEditPanelProps> = ({
                   placeholder="Label"
                   value={newCodeLabel}
                   onChange={(e) => setNewCodeLabel(e.target.value)}
-                  className="flex-1 text-xs px-2 py-1 border border-emerald-300 dark:border-emerald-700 rounded bg-white dark:bg-zinc-800"
+                  className="flex-1 text-xs px-2 py-1 border border-emerald-300 dark:border-emerald-700 rounded bg-white dark:bg-zinc-800 dark:text-zinc-100"
                 />
                 <div className="flex-1 flex gap-1">
                   <input
@@ -806,7 +806,7 @@ export const VariableEditPanel: React.FC<VariableEditPanelProps> = ({
                     placeholder="Syntax: Q1/1+Q1/2"
                     value={newCodeSyntax}
                     onChange={(e) => setNewCodeSyntax(e.target.value)}
-                    className="flex-1 text-xs px-2 py-1 border border-emerald-300 dark:border-emerald-700 rounded bg-white dark:bg-zinc-800 font-mono"
+                    className="flex-1 text-xs px-2 py-1 border border-emerald-300 dark:border-emerald-700 rounded bg-white dark:bg-zinc-800 dark:text-zinc-100 font-mono"
                   />
                   <button
                     onClick={handleOpenSyntaxForNewCode}
