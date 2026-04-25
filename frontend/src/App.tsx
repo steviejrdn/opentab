@@ -117,6 +117,31 @@ function getAllNestedVars(items: DropItem[]): string[] {
   ]);
 }
 
+// ─── EZ Draggable Variable (for EZ Tables Modal) ───────────────────────────────
+const EzDraggableVariable: React.FC<{ name: string; displayName: string; label: string; codeCount: number }> = ({ name, displayName, label, codeCount }) => {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: `ez-var-${name}` });
+  return (
+    <div
+      ref={setNodeRef}
+      {...listeners}
+      {...attributes}
+      className={`px-2 py-1.5 border cursor-grab select-none transition-colors rounded ${
+        isDragging
+          ? 'opacity-40 bg-zinc-200 dark:bg-zinc-700 border-zinc-300 dark:border-zinc-600'
+          : 'bg-zinc-100 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 hover:bg-zinc-200 dark:hover:bg-zinc-700 hover:border-zinc-300 dark:hover:border-zinc-600'
+      }`}
+    >
+      <div className="flex justify-between items-center gap-1">
+        <div className="min-w-0 flex-1">
+          <span className="text-[10px] font-medium text-emerald-700 dark:text-emerald-400 block truncate">{displayName}</span>
+          <span className="text-[9px] text-zinc-500 block truncate">{label}</span>
+        </div>
+        <span className="text-[9px] text-zinc-400 dark:text-zinc-600 shrink-0">{codeCount}</span>
+      </div>
+    </div>
+  );
+};
+
 // ─── Theme Toggle ────────────────────────────────────────────────────────────
 const ThemeToggle: React.FC = () => {
   const [isDark, setIsDark] = useState(() => localStorage.getItem('opentab-theme') === 'dark');
@@ -1432,15 +1457,17 @@ const App: React.FC = () => {
     // Handle EZ Tables header drop (check DOM for modal visibility)
     const ezModalOpen = document.getElementById('ez-tables-modal') !== null;
     if (ezModalOpen && over.id === 'ez-header-zone') {
-      const varInfo = variables[activeId];
+      // Extract variable name from ez-var- prefix or direct variable name
+      const varName = activeId.startsWith('ez-var-') ? activeId.slice(7) : activeId;
+      const varInfo = variables[varName];
       if (varInfo?.codes?.length) {
         const visibleCodes = varInfo.codes
           .filter((c: any) => c.visibility !== 'removed' && c.visibility !== 'hidden')
           .map((c: any) => c.code);
         const newItem: DropItem = {
           id: uuidv4(),
-          variable: activeId,
-          codeDef: `${activeId}/*`,
+          variable: varName,
+          codeDef: `${varName}/*`,
           codes: visibleCodes
         };
         // Dispatch event to notify BuildPage
@@ -2243,7 +2270,7 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
       {/* EZ Tables Modal */}
       {showEzTablesModal && (
         <div id="ez-tables-modal" className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white dark:bg-zinc-900 rounded-lg shadow-xl w-[700px] max-h-[90vh] flex flex-col">
+          <div className="bg-white dark:bg-zinc-900 rounded-lg shadow-xl w-[900px] max-h-[90vh] flex flex-col">
             <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-200 dark:border-zinc-700">
               <h3 className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">EZ Tables Constructor</h3>
               <button 
@@ -2253,74 +2280,59 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
                 ×
               </button>
             </div>
-            <div className="p-4 overflow-y-auto flex-1 space-y-4">
-              {/* Header Constructor - Droppable Zone */}
-              <div>
-                <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-2 block flex items-center gap-2">
-                  Header Structure
-                  <span className="text-[10px] font-normal text-zinc-400">← drag from sidebar or click + below</span>
-                </label>
-                <div 
-                  id="ez-header-zone"
-                  className="border-2 border-dashed border-zinc-300 dark:border-zinc-600 hover:border-blue-400 dark:hover:border-blue-500 rounded p-3 min-h-[80px] bg-zinc-50 dark:bg-zinc-800/50 transition-colors"
-                >
-                  {ezHeaderItems.length === 0 ? (
-                    <div className="text-center py-4">
-                      <div className="text-2xl mb-2">📥</div>
-                      <p className="text-xs text-zinc-500 mb-1">Drop variables here</p>
-                      <p className="text-[10px] text-zinc-400">from the sidebar on the left</p>
-                    </div>
-                  ) : (
-                    <div className="flex flex-wrap gap-2">
-                      {ezHeaderItems.map((item) => (
-                        <div key={item.id} className="flex items-center gap-1 px-2 py-1 bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-600 rounded text-xs">
-                          <span>{variables[item.variable]?.label || item.variable}</span>
-                          <button
-                            onClick={() => setEzHeaderItems(ezHeaderItems.filter(i => i.id !== item.id))}
-                            className="text-zinc-400 hover:text-red-500"
-                          >
-                            ×
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+            <div className="flex flex-1 overflow-hidden">
+              {/* Left Side - Variables List (Draggable) */}
+              <div className="w-64 border-r border-zinc-200 dark:border-zinc-700 flex flex-col">
+                <div className="px-3 py-2 border-b border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/50">
+                  <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400">Variables (drag to right →)</span>
+                </div>
+                <div className="flex-1 overflow-y-auto p-2 space-y-1">
+                  {Object.entries(variables).map(([key, info]) => (
+                    <EzDraggableVariable
+                      key={key}
+                      name={key}
+                      displayName={info.name || key}
+                      label={info.label}
+                      codeCount={info.codes.length}
+                    />
+                  ))}
                 </div>
               </div>
-
-              {/* Quick Add Variables */}
-              <div>
-                <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-2 block">
-                  Quick Add (click to add)
-                </label>
-                <div className="border border-zinc-200 dark:border-zinc-700 rounded p-2 max-h-[120px] overflow-y-auto bg-zinc-50 dark:bg-zinc-800/50">
-                  <div className="flex flex-wrap gap-1">
-                    {Object.entries(variables).slice(0, 20).map(([key, info]) => (
-                      <button
-                        key={key}
-                        onClick={() => {
-                          if (ezHeaderItems.some(item => item.variable === key)) return;
-                          const visibleCodes = info.codes
-                            .filter((c: any) => c.visibility !== 'removed' && c.visibility !== 'hidden')
-                            .map((c: any) => c.code);
-                          const newItem: DropItem = {
-                            id: crypto.randomUUID(),
-                            variable: key,
-                            codeDef: `${key}/*`,
-                            codes: visibleCodes
-                          };
-                          setEzHeaderItems([...ezHeaderItems, newItem]);
-                        }}
-                        disabled={ezHeaderItems.some(item => item.variable === key)}
-                        className="px-2 py-1 text-[10px] border border-zinc-300 dark:border-zinc-600 rounded bg-white dark:bg-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                        title={info.label || key}
-                      >
-                        + {info.name || key}
-                      </button>
-                    ))}
+              
+              {/* Right Side - Form */}
+              <div className="flex-1 p-4 overflow-y-auto space-y-4">
+                {/* Header Constructor - Droppable Zone */}
+                <div>
+                  <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-2 block">
+                    Header Structure (drop variables here)
+                  </label>
+                  <div 
+                    id="ez-header-zone"
+                    className="border-2 border-dashed border-zinc-300 dark:border-zinc-600 hover:border-blue-400 dark:hover:border-blue-500 rounded p-3 min-h-[80px] bg-zinc-50 dark:bg-zinc-800/50 transition-colors"
+                  >
+                    {ezHeaderItems.length === 0 ? (
+                      <div className="text-center py-4">
+                        <div className="text-2xl mb-2">📥</div>
+                        <p className="text-xs text-zinc-500 mb-1">Drag variables here</p>
+                        <p className="text-[10px] text-zinc-400">from the list on the left</p>
+                      </div>
+                    ) : (
+                      <div className="flex flex-wrap gap-2">
+                        {ezHeaderItems.map((item) => (
+                          <div key={item.id} className="flex items-center gap-1 px-2 py-1 bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-600 rounded text-xs">
+                            <span>{variables[item.variable]?.label || item.variable}</span>
+                            <button
+                              onClick={() => setEzHeaderItems(ezHeaderItems.filter(i => i.id !== item.id))}
+                              className="text-zinc-400 hover:text-red-500"
+                            >
+                              ×
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
-              </div>
 
               {/* Weight Column */}
               <div>
@@ -2431,6 +2443,7 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
             </div>
           </div>
         </div>
+      </div>
       )}
     </div>
   );
