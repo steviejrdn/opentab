@@ -14,14 +14,124 @@ A modern, interactive survey data cross-tabulation tool. Upload CSV data, define
 
 ## End User Install
 
+> **🎯 Not sure which option to choose?**
+> - **Windows/Mac users, first time:** Use [Option 1: Quick Install](#option-1-quick-install-easiest---recommended)
+> - **Have other Python apps installed:** Use [Option 2: Virtual Environment](#option-2-using-virtual-environment-safer)
+> - **Already have Docker:** Use [Option 3: Docker](#option-3-docker-for-advanced-users)
+
+### Before You Start (Prerequisites)
+
+You need to install **Python** first before installing opentab:
+
+**Windows:**
+1. Go to https://python.org/downloads
+2. Click "Download Python 3.12.x" (the big yellow button)
+3. **IMPORTANT:** During installation, check "Add Python to PATH" checkbox!
+4. Click "Install Now"
+
+**Mac:**
+1. Open Terminal (Cmd + Space, type "Terminal")
+2. Install Homebrew (if not installed):
+   ```bash
+   /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+   ```
+3. Install Python:
+   ```bash
+   brew install python
+   ```
+
+### Option 1: Quick Install (Easiest - Recommended)
+
+**Windows (Command Prompt or PowerShell):**
 ```bash
 pip install git+https://github.com/steviejrdn/opentab.git
 opentab
 ```
 
-Browser opens automatically at http://localhost:8001.
+**Mac (Terminal):**
+```bash
+pip3 install git+https://github.com/steviejrdn/opentab.git
+opentab
+```
+
+Your browser will open automatically at http://localhost:8001.
+
+### Option 2: Using Virtual Environment (Safer)
+
+If you have other Python apps installed, use this method to avoid conflicts:
+
+**Windows:**
+```bash
+# Create a folder for opentab
+mkdir %USERPROFILE%\opentab-app
+cd %USERPROFILE%\opentab-app
+
+# Create virtual environment
+python -m venv venv
+
+# Activate it
+venv\Scripts\activate
+
+# Install opentab
+pip install git+https://github.com/steviejrdn/opentab.git
+
+# Run it
+opentab
+```
+
+**Mac:**
+```bash
+# Create a folder for opentab
+mkdir ~/opentab-app
+cd ~/opentab-app
+
+# Create virtual environment
+python3 -m venv venv
+
+# Activate it
+source venv/bin/activate
+
+# Install opentab
+pip install git+https://github.com/steviejrdn/opentab.git
+
+# Run it
+opentab
+```
+
+### Option 3: Docker (For Advanced Users)
+
+If you already have Docker installed:
+
+```bash
+docker run -p 8001:8001 steviejrdn/opentab:latest
+```
+
+Then open http://localhost:8001 in your browser.
+
+---
+
+### Common Issues & Troubleshooting
+
+**"'pip' is not recognized" error (Windows)**
+- Python wasn't added to PATH. Reinstall Python and check "Add Python to PATH"
+
+**"'git' is not recognized" error**
+- **Windows:** Install Git from https://git-scm.com/download/win
+- **Mac:** Run `git --version` in Terminal, it will prompt to install
+
+**"Permission denied" error (Mac)**
+- Use `pip3 install --user git+https://github.com/steviejrdn/opentab.git` instead
+
+**Port 8001 already in use**
+- Another app is using port 8001. Close other apps or run: `opentab --port 8002`
+
+**Need help?**
+- 📖 Check the [User Guide](https://github.com/steviejrdn/opentab/wiki)
+- 🐛 [Report an issue](https://github.com/steviejrdn/opentab/issues)
 
 ## Developer Quick Start (Docker)
+
+**For developers who want to contribute or modify the code.**
 
 **Prerequisites:** [Docker](https://www.docker.com/products/docker-desktop) and Docker Compose
 
