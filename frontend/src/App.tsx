@@ -76,7 +76,8 @@ function flattenItemsForBackend(
 ): { variable: string; codeDef: string }[] {
   const result: { variable: string; codeDef: string }[] = [];
   for (const item of items) {
-    const codes = getVisibleCodesList(item.variable);
+    // Use item.codes if explicitly set (for grid rows), otherwise get visible codes
+    const codes = item.codes && item.codes.length > 0 ? item.codes : getVisibleCodesList(item.variable);
     if (!codes.length) continue;
     if (item.children?.length) {
       for (const code of codes) {
@@ -2022,9 +2023,30 @@ const ResultTab: React.FC = () => {
       .map((c: any) => c.code);
   };
 
-  const { headerRows: colHeaderRows, axisPaths: colPaths } = activeTable?.col_items.length
-    ? buildAxisStructure(activeTable.col_items, getVisibleCodesList, getCodeLabel, resolveCode)
-    : { headerRows: [[]] as ColHeaderCell[][], axisPaths: Object.keys(result.counts[rowNames[0] || 'Total'] || {}).filter((k) => k !== 'Total') };
+  // Detect grid mode and build column headers accordingly
+  const isGridMode = activeTable?.grid_items && activeTable.grid_items.length > 0 && activeTable.col_items.length === 0;
+
+  let colHeaderRows: ColHeaderCell[][], colPaths: string[];
+
+  if (isGridMode) {
+    // Grid mode: columns from grid_items, show variable labels
+    colPaths = activeTable!.grid_items.map(item => `${item.variable}/*`);
+    colHeaderRows = [[
+      ...activeTable!.grid_items.map(item => ({
+        label: variables[item.variable]?.label || item.variable,
+        colSpan: 1,
+        rowSpan: 1
+      }))
+    ]];}
+  else if (activeTable?.col_items.length) {
+    const colResult = buildAxisStructure(activeTable.col_items, getVisibleCodesList, getCodeLabel, resolveCode);
+    colHeaderRows = colResult.headerRows;
+    colPaths = colResult.axisPaths;
+  } else {
+    // Fallback for normal tables without col_items
+    colPaths = Object.keys(result.counts[rowNames[0] || 'Total'] || {}).filter((k) => k !== 'Total');
+    colHeaderRows = [[]];
+  }
   const numHeaderRows = Math.max(colHeaderRows.length, 1);
 
   const firstRow = rowNames[0] || '';
