@@ -1,13 +1,13 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, Link, useLocation, useNavigate, useParams } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, Link, useLocation } from 'react-router-dom';
 import { useStore } from './store/useStore';
-import { DndContext, useSensor, useSensors, PointerSensor, useDraggable, useDroppable, DragOverlay, closestCenter } from '@dnd-kit/core';
+import { DndContext, useSensor, useSensors, PointerSensor, useDraggable, useDroppable, DragOverlay } from '@dnd-kit/core';
 import type { DragStartEvent, DragEndEvent as DndDragEndEvent } from '@dnd-kit/core';
-import { SortableContext, useSortable, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
+
 import { computeApi, dataApi } from './lib/api';
 import type { FilterItem, CrosstabResult, VariableInfo, DropItem } from './lib/api';
 import FilterTab from './components/FilterTab';
+import { VariableEditPanel } from './components/VariableEditPanel';
 import { v4 as uuidv4 } from 'uuid';
 
 // ─── Drag State Context ───────────────────────────────────────────────────────
@@ -622,170 +622,6 @@ const WelcomeScreen: React.FC<{ onLoadSample: () => void; loading: boolean }> = 
 
       {/* Donate Widget */}
       <DonateWidget />
-    </div>
-  );
-};
-
-// ─── Syntax Builder Modal ─────────────────────────────────────────────────────
-interface SyntaxBuilderModalProps {
-  initialSyntax?: string;
-  onSave: (syntax: string) => void;
-  onClose: () => void;
-}
-
-const SyntaxBuilderModal: React.FC<SyntaxBuilderModalProps> = ({ initialSyntax = '', onSave, onClose }) => {
-  const { variables } = useStore();
-  const [rawSyntax, setRawSyntax] = useState(initialSyntax);
-  const [searchVar, setSearchVar] = useState('');
-  const [expandedVars, setExpandedVars] = useState<Set<string>>(new Set());
-  const [notMode, setNotMode] = useState(false);
-
-  const nameToKeyMap = buildNameToKeyMap(variables);
-
-  const parseSyntaxAtoms = (syntax: string) => {
-    const atomRe = /([A-Za-z_][A-Za-z0-9_]*)\/([^+()\s!.]+)/g;
-    const atoms: { varName: string; codePart: string; full: string; start: number; end: number; isNot: boolean }[] = [];
-    let match;
-    while ((match = atomRe.exec(syntax)) !== null) {
-      const codePart = match[2];
-      const isNot = codePart.startsWith('n');
-      atoms.push({ varName: match[1], codePart, full: match[0], start: match.index, end: match.index + match[0].length, isNot });
-    }
-    return atoms;
-  };
-
-  const atoms = parseSyntaxAtoms(rawSyntax);
-
-  const getLabelForAtom = (varName: string, codePart: string, isNot: boolean) => {
-    const resolvedKey = nameToKeyMap[varName] || varName;
-    const vInfo = variables[resolvedKey];
-    const cleanCodePart = isNot ? codePart.slice(1) : codePart;
-    if (!vInfo) return { varLabel: varName, codeLabel: `?${cleanCodePart}?` };
-    const varLabel = vInfo.label || varName;
-    let codeLabel = `?${cleanCodePart}?`;
-    if (cleanCodePart === '*') codeLabel = '* (any)';
-    else if (cleanCodePart.includes('..')) {
-      const [from, to] = cleanCodePart.split('..');
-      const fromCode = vInfo.codes?.find((c: any) => c.code === from);
-      const toCode = vInfo.codes?.find((c: any) => c.code === to);
-      codeLabel = `${fromCode?.label || from} .. ${toCode?.label || to}`;
-    } else {
-      const code = vInfo.codes?.find((c: any) => c.code === cleanCodePart);
-      codeLabel = code?.label || cleanCodePart;
-    }
-    return { varLabel, codeLabel };
-  };
-
-  const insertAtCursor = (insert: string) => {
-    const textarea = document.getElementById('syntax-input') as HTMLTextAreaElement;
-    const pos = textarea?.selectionStart ?? rawSyntax.length;
-    const before = rawSyntax.slice(0, pos);
-    const after = rawSyntax.slice(pos);
-    setRawSyntax(before + insert + after);
-    setTimeout(() => { textarea?.focus(); textarea?.setSelectionRange(pos + insert.length, pos + insert.length); }, 0);
-  };
-
-  const insertCode = (_varKey: string, varName: string, code: string) => {
-    const prefix = notMode ? 'n' : '';
-    insertAtCursor(`${varName}/${prefix}${code}`);
-  };
-
-  const toggleVar = (key: string) => {
-    setExpandedVars((prev) => { const next = new Set(prev); if (next.has(key)) next.delete(key); else next.add(key); return next; });
-  };
-
-  const filteredVars = Object.entries(variables).filter(([key, vInfo]) => {
-    if (!searchVar) return true;
-    const search = searchVar.toLowerCase();
-    return (vInfo.name || key).toLowerCase().includes(search) || (vInfo.label || '').toLowerCase().includes(search);
-  });
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="bg-white dark:bg-zinc-900 rounded-lg shadow-xl w-[820px] max-h-[85vh] flex flex-col">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-200 dark:border-zinc-700">
-          <h3 className="text-sm font-medium text-zinc-700 dark:text-zinc-200">Build Syntax</h3>
-          <button onClick={onClose} className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 text-lg leading-none">×</button>
-        </div>
-        <div className="flex-1 overflow-hidden flex">
-          <div className="w-80 border-r border-zinc-200 dark:border-zinc-700 flex flex-col">
-            <div className="p-2 border-b border-zinc-200 dark:border-zinc-700">
-              <input type="text" value={searchVar} onChange={(e) => setSearchVar(e.target.value)} placeholder="search variables..." className="w-full text-xs px-2 py-1.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 outline-none focus:border-blue-400" />
-            </div>
-            <div className="flex-1 overflow-auto">
-              {filteredVars.map(([key, vInfo]) => {
-                const isExpanded = expandedVars.has(key);
-                return (
-                  <div key={key} className="border-b border-zinc-100 dark:border-zinc-800">
-                    <button onClick={() => toggleVar(key)} className="w-full px-3 py-2 flex items-center justify-between hover:bg-zinc-50 dark:hover:bg-zinc-800/50 text-left">
-                      <div className="min-w-0">
-                        <div className="text-xs font-medium text-zinc-700 dark:text-zinc-200 truncate">{vInfo.name || key}</div>
-                        <div className="text-[10px] text-zinc-400 dark:text-zinc-500 truncate">{vInfo.label || ''}</div>
-                      </div>
-                      <span className={`text-zinc-400 dark:text-zinc-600 text-xs ml-2 shrink-0 transition-transform ${isExpanded ? 'rotate-90' : ''}`}>▶</span>
-                    </button>
-                    {isExpanded && (
-                      <div className="px-3 pb-2 flex flex-wrap gap-1">
-                        {vInfo.codes?.map((c: any) => (
-                          <button key={c.code} onClick={() => insertCode(key, vInfo.name || key, c.code)} className={`text-[10px] px-2 py-1 border rounded transition-colors ${notMode ? 'bg-red-50 dark:bg-red-900/30 border-red-200 dark:border-red-800 text-red-600 dark:text-red-400' : 'bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-800 text-blue-600 dark:text-blue-400'}`} title={`${c.code} — ${c.label}`}>
-                            {notMode ? <span className="flex items-center gap-1"><span>{c.label}</span><span className="text-[8px] font-bold">NOT</span></span> : c.label}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-              {filteredVars.length === 0 && <div className="p-4 text-xs text-zinc-400 dark:text-zinc-500 text-center">no variables found</div>}
-            </div>
-          </div>
-          <div className="flex-1 flex flex-col overflow-hidden">
-            <div className="p-4 border-b border-zinc-200 dark:border-zinc-700 min-h-[120px] max-h-[180px] overflow-auto">
-              <div className="text-xs font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wide mb-2">preview</div>
-              {atoms.length === 0 ? (
-                <div className="text-xs text-zinc-400 dark:text-zinc-500 italic">click codes to add them here</div>
-              ) : (
-                <div className="text-xs space-y-2">
-                  {(() => {
-                    const rows: React.ReactNode[][] = []; let currentRow: React.ReactNode[] = []; let lastEnd = 0;
-                    atoms.forEach((atom, idx) => {
-                      const before = rawSyntax.slice(lastEnd, atom.start);
-                      if (before) { const tokens = before.match(/[+.]|\(|\)/g) || []; tokens.forEach((tok, ti) => { if (tok === '+') currentRow.push(<span key={`op-${idx}-${ti}`} className="mx-1 text-emerald-600 dark:text-emerald-400 font-medium">OR</span>); else if (tok === '.') currentRow.push(<span key={`op-${idx}-${ti}`} className="mx-1 text-blue-500 font-medium">AND</span>); else if (tok === '(') currentRow.push(<span key={`op-${idx}-${ti}`} className="text-zinc-400">(</span>); else if (tok === ')') currentRow.push(<span key={`op-${idx}-${ti}`} className="text-zinc-400">)</span>); }); }
-                      const cleanCode = atom.isNot ? atom.codePart.slice(1) : atom.codePart;
-                      const { varLabel, codeLabel } = getLabelForAtom(atom.varName, atom.codePart, atom.isNot);
-                      const displayCode = atom.isNot ? `n${cleanCode}` : cleanCode;
-                      currentRow.push(<span key={`atom-${idx}`} className="inline-flex items-center gap-1 bg-zinc-50 dark:bg-zinc-800 px-2 py-1 rounded">{atom.isNot && <span className="text-[9px] font-bold text-red-500 dark:text-red-400">NOT</span>}<span className="font-mono text-purple-600 dark:text-purple-400">{atom.varName}/{displayCode}</span><span className="text-zinc-300 dark:text-zinc-600">=</span><span className="text-zinc-600 dark:text-zinc-300">{varLabel}/{codeLabel}</span></span>);
-                      lastEnd = atom.end;
-                    });
-                    const after = rawSyntax.slice(lastEnd);
-                    if (after) { const tokens = after.match(/[+.]|\(|\)/g) || []; tokens.forEach((tok, ti) => { if (tok === '+') currentRow.push(<span key={`op-after-${ti}`} className="mx-1 text-emerald-600 dark:text-emerald-400 font-medium">OR</span>); else if (tok === '.') currentRow.push(<span key={`op-after-${ti}`} className="mx-1 text-blue-500 font-medium">AND</span>); else if (tok === '(') currentRow.push(<span key={`op-after-${ti}`} className="text-zinc-400">(</span>); else if (tok === ')') currentRow.push(<span key={`op-after-${ti}`} className="text-zinc-400">)</span>); }); }
-                    if (currentRow.length > 0) rows.push(currentRow);
-                    return rows.map((row, ri) => <div key={`row-${ri}`} className="flex items-center gap-1 flex-wrap">{row}</div>);
-                  })()}
-                </div>
-              )}
-            </div>
-            <div className="px-4 py-2 border-b border-zinc-200 dark:border-zinc-700">
-              <div className="flex items-center gap-1 flex-wrap">
-                <button onClick={() => insertAtCursor('+')} className="text-xs px-3 py-1.5 bg-zinc-100 dark:bg-zinc-700 hover:bg-zinc-200 dark:hover:bg-zinc-600 text-zinc-600 dark:text-zinc-300 rounded font-medium">OR</button>
-                <button onClick={() => insertAtCursor('.')} className="text-xs px-3 py-1.5 bg-zinc-100 dark:bg-zinc-700 hover:bg-zinc-200 dark:hover:bg-zinc-600 text-zinc-600 dark:text-zinc-300 rounded font-medium">AND</button>
-                <button onClick={() => insertAtCursor('(')} className="text-xs px-3 py-1.5 bg-zinc-100 dark:bg-zinc-700 hover:bg-zinc-200 dark:hover:bg-zinc-600 text-zinc-600 dark:text-zinc-300 rounded font-medium">(</button>
-                <button onClick={() => insertAtCursor(')')} className="text-xs px-3 py-1.5 bg-zinc-100 dark:bg-zinc-700 hover:bg-zinc-200 dark:hover:bg-zinc-600 text-zinc-600 dark:text-zinc-300 rounded font-medium">)</button>
-                <button onClick={() => setNotMode((prev) => !prev)} className={`text-xs px-3 py-1.5 rounded font-medium transition-colors ${notMode ? 'bg-red-500 text-white hover:bg-red-600' : 'bg-zinc-100 dark:bg-zinc-700 hover:bg-zinc-200 dark:hover:bg-zinc-600 text-zinc-600 dark:text-zinc-300'}`}>NOT</button>
-              </div>
-              {notMode && <div className="text-[10px] text-red-500 dark:text-red-400 mt-1">NOT mode: next code will be negated (e.g. ol/n8)</div>}
-            </div>
-            <div className="flex-1 p-4">
-              <div className="text-xs font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wide mb-2">syntax</div>
-              <textarea id="syntax-input" value={rawSyntax} onChange={(e) => setRawSyntax(e.target.value)} className="w-full h-full min-h-[80px] text-sm font-mono bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 px-3 py-2 text-zinc-700 dark:text-zinc-300 outline-none focus:border-blue-400 dark:focus:border-blue-500 resize-none" placeholder="e.g. ol/8+ol/9 or (ses/2+ses/3).age/2" autoFocus />
-            </div>
-          </div>
-        </div>
-        <div className="flex justify-end gap-2 px-4 py-3 border-t border-zinc-200 dark:border-zinc-700">
-          <button onClick={onClose} className="text-xs px-4 py-1.5 text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-300 transition-colors">cancel</button>
-          <button onClick={() => { onSave(rawSyntax); onClose(); }} disabled={!rawSyntax.trim()} className="text-xs px-4 py-1.5 bg-blue-500 hover:bg-blue-600 disabled:opacity-40 text-white transition-colors">save</button>
-        </div>
-      </div>
     </div>
   );
 };
@@ -1649,11 +1485,6 @@ const App: React.FC = () => {
             <Route path="/edit-variables" element={
               <div className="flex-1 overflow-hidden bg-white dark:bg-zinc-950">
                 {dataLoaded ? <EditVariablesPage /> : <div className="p-6 text-zinc-500 text-sm">load data first</div>}
-              </div>
-            } />
-            <Route path="/edit-variables/:varName" element={
-              <div className="flex-1 overflow-hidden bg-white dark:bg-zinc-950">
-                {dataLoaded ? <VariableDetailPage /> : <div className="p-6 text-zinc-500 text-sm">load data first</div>}
               </div>
             } />
             <Route path="/" element={<Navigate to="/build" replace />} />
@@ -2644,8 +2475,19 @@ const MergeVariablesModal: React.FC<MergeVariablesModalProps> = ({ onClose }) =>
 
 // ─── Edit Variables Page ──────────────────────────────────────────────────────
 const EditVariablesPage: React.FC = () => {
-  const { variables, addVariable, deleteVariable, duplicateVariable } = useStore();
-  const navigate = useNavigate();
+  const {
+    variables,
+    addVariable,
+    deleteVariable,
+    duplicateVariable,
+    updateVariableLabel,
+    updateVariableDisplayName,
+    updateCodeLabel,
+    updateCodeVisibility,
+    updateCodeFactor,
+    reorderCodes,
+    addNetCode,
+  } = useStore();
   const [showMergeModal, setShowMergeModal] = useState(false);
   const [showAddVar, setShowAddVar] = useState(false);
   const [newVarKey, setNewVarKey] = useState('');
@@ -2654,6 +2496,7 @@ const EditVariablesPage: React.FC = () => {
   const [newVarType, setNewVarType] = useState('categorical');
   const [newVarAnswerType, setNewVarAnswerType] = useState<'single_answer' | 'multiple_answer'>('single_answer');
   const [addVarError, setAddVarError] = useState('');
+  const [selectedVariableKey, setSelectedVariableKey] = useState<string | null>(null);
 
   const variableEntries = Object.entries(variables);
 
@@ -2665,7 +2508,7 @@ const EditVariablesPage: React.FC = () => {
     addVariable(key, name || key, newVarLabel.trim(), newVarType, newVarAnswerType);
     setShowAddVar(false);
     setNewVarKey(''); setNewVarName(''); setNewVarLabel(''); setNewVarType('categorical'); setNewVarAnswerType('single_answer'); setAddVarError('');
-    navigate(`/edit-variables/${encodeURIComponent(key)}`);
+    setSelectedVariableKey(key);
   };
 
   const handleDuplicateVariable = (key: string) => {
@@ -2677,15 +2520,20 @@ const EditVariablesPage: React.FC = () => {
       counter++;
     }
     duplicateVariable(key, finalKey);
-    navigate(`/edit-variables/${encodeURIComponent(finalKey)}`);
+    setSelectedVariableKey(finalKey);
   };
 
   const handleDeleteVariable = (key: string, isCustom: boolean) => {
     if (!isCustom) return;
     if (window.confirm(`Delete custom variable '${key}'?`)) {
       deleteVariable(key);
+      if (selectedVariableKey === key) {
+        setSelectedVariableKey(null);
+      }
     }
   };
+
+  const selectedVariable = selectedVariableKey ? variables[selectedVariableKey] : null;
 
   return (
     <div className="h-full flex flex-col p-4 overflow-auto">
@@ -2808,11 +2656,12 @@ const EditVariablesPage: React.FC = () => {
               const hiddenCount = info.codes.filter((c: any) => c.visibility === 'hidden').length;
               const removedCount = info.codes.filter((c: any) => c.visibility === 'removed').length;
               const isCustom = info.isCustom;
+              const isSelected = selectedVariableKey === key;
               return (
                 <tr
                   key={key}
-                  className="hover:bg-zinc-50 dark:hover:bg-zinc-800/40 cursor-pointer"
-                  onClick={() => navigate(`/edit-variables/${encodeURIComponent(key)}`)}
+                  className={`hover:bg-zinc-50 dark:hover:bg-zinc-800/40 cursor-pointer ${isSelected ? 'bg-emerald-50 dark:bg-emerald-900/20' : ''}`}
+                  onClick={() => setSelectedVariableKey(key)}
                 >
                   <td className="border-b border-zinc-100 dark:border-zinc-800/60 px-2 py-2 text-center">
                     {isCustom
@@ -2875,543 +2724,21 @@ const EditVariablesPage: React.FC = () => {
       </div>
 
       {showMergeModal && <MergeVariablesModal onClose={() => setShowMergeModal(false)} />}
-    </div>
-  );
-};
 
-// ─── Sortable Code Row ────────────────────────────────────────────────────────
-interface SortableCodeRowProps {
-  code: NonNullable<VariableInfo['codes']>[number];
-  varKey: string;
-  varName: string;
-  code_syntax?: string[];
-  codeIndex: number;
-  isSelected: boolean;
-  onToggleSelect: (code: string) => void;
-  onDelete: (varName: string, code: string) => void;
-  onDuplicate: (varName: string, code: string) => void;
-  updateCodeLabel: (varName: string, code: string, label: string) => void;
-  updateCodeFactor: (varName: string, code: string, factor: number | null) => void;
-  updateCodeVisibility: (varName: string, code: string, visibility: 'visible' | 'hidden' | 'removed') => void;
-  updateCodeSyntax: (varName: string, code: string, syntax: string) => void;
-  onEditSyntax?: (code: string, currentSyntax: string) => void;
-}
-
-const SortableCodeRow: React.FC<SortableCodeRowProps> = ({
-  code, varKey, varName, code_syntax, codeIndex,
-  isSelected, onToggleSelect, onDelete, onDuplicate,
-  updateCodeLabel, updateCodeFactor, updateCodeVisibility, updateCodeSyntax,
-  onEditSyntax,
-}) => {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: code.code });
-  const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 };
-  const vis = code.visibility ?? 'visible';
-  const rowClass = vis === 'removed'
-    ? 'bg-red-50 dark:bg-red-900/10 opacity-50'
-    : vis === 'hidden' ? 'opacity-60' : '';
-
-  const netSyntax = code.isNet && code.netOf
-    ? code.netOf.map((nc) => `${varName}/${nc}`).join('+')
-    : null;
-
-  return (
-    <tr ref={setNodeRef} style={style} className={`${rowClass} hover:bg-zinc-50 dark:hover:bg-zinc-800/30`}>
-      {/* Drag handle */}
-      <td className="border border-zinc-200 dark:border-zinc-700 px-1 py-1 w-6 text-center">
-        <span
-          {...attributes}
-          {...listeners}
-          className="cursor-grab active:cursor-grabbing text-zinc-300 dark:text-zinc-600 hover:text-zinc-500 dark:hover:text-zinc-400 select-none text-xs"
-          title="drag to reorder"
-        >⠿</span>
-      </td>
-      {/* Checkbox */}
-      <td className="border border-zinc-200 dark:border-zinc-700 px-1 py-1 w-6 text-center">
-        <input
-          type="checkbox"
-          checked={isSelected}
-          onChange={() => onToggleSelect(code.code)}
-          className="cursor-pointer"
+      {selectedVariable && selectedVariableKey && (
+        <VariableEditPanel
+          variableKey={selectedVariableKey}
+          variable={selectedVariable}
+          onClose={() => setSelectedVariableKey(null)}
+          onUpdateLabel={updateVariableLabel}
+          onUpdateDisplayName={updateVariableDisplayName}
+          onUpdateCodeLabel={updateCodeLabel}
+          onUpdateCodeVisibility={updateCodeVisibility}
+          onUpdateCodeFactor={updateCodeFactor}
+          onReorderCodes={reorderCodes}
+          onAddNetCode={addNetCode}
         />
-      </td>
-      {/* Code value */}
-      <td className="border border-zinc-200 dark:border-zinc-700 px-2 py-1 w-24 text-zinc-700 dark:text-zinc-300 font-medium font-mono text-[10px]">
-        {code.isNet ? (
-          <span className="inline-flex items-center gap-1">
-            <span className="bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 text-[9px] px-1 py-0.5 font-bold">NET</span>
-            <span className="text-purple-500">{code.code}</span>
-          </span>
-        ) : code.isNew ? (
-          <span className="inline-flex items-center gap-1">
-            <span className="bg-cyan-100 dark:bg-cyan-900/30 text-cyan-600 dark:text-cyan-400 text-[9px] px-1 py-0.5 font-bold">C</span>
-            <span className="text-cyan-600 dark:text-cyan-400">{code.code}</span>
-          </span>
-        ) : code.code}
-      </td>
-      {/* Label */}
-      <td className="border border-zinc-200 dark:border-zinc-700 px-2 py-1">
-        <input
-          type="text"
-          value={code.label}
-          onChange={(e) => updateCodeLabel(varKey, code.code, e.target.value)}
-          className="w-full text-xs bg-transparent border border-transparent hover:border-zinc-200 dark:hover:border-zinc-700 focus:border-blue-400 dark:focus:border-blue-500 px-1.5 py-0.5 text-zinc-600 dark:text-zinc-400 outline-none"
-        />
-      </td>
-      {/* Syntax */}
-      <td className="border border-zinc-200 dark:border-zinc-700 px-2 py-1 text-zinc-400 dark:text-zinc-500 font-mono text-[10px]">
-        {netSyntax ? (
-          <div className="flex items-center gap-1">
-            <span className="text-purple-500 dark:text-purple-400">{netSyntax}</span>
-            {onEditSyntax && (
-              <button
-                onClick={() => onEditSyntax(code.code, netSyntax)}
-                className="text-[10px] px-1 py-0.5 bg-blue-100 dark:bg-blue-900/30 hover:bg-blue-200 dark:hover:bg-blue-800 text-blue-600 dark:text-blue-400 rounded transition-colors shrink-0"
-                title="edit net syntax"
-              >
-                edit
-              </button>
-            )}
-          </div>
-        ) : (code.isNew && !netSyntax) ? (
-          <div className="flex items-center gap-1">
-            <input
-              type="text"
-              value={code.syntax || code_syntax?.[codeIndex] || `${varName}/${code.code}`}
-              onChange={(e) => updateCodeSyntax(varKey, code.code, e.target.value)}
-              className="flex-1 w-full text-xs bg-zinc-50 dark:bg-zinc-800 border border-transparent hover:border-zinc-200 dark:hover:border-zinc-700 focus:border-blue-400 dark:focus:border-blue-500 px-1 py-0.5 text-zinc-600 dark:text-zinc-300 outline-none font-mono"
-            />
-            {onEditSyntax && (
-              <button
-                onClick={() => onEditSyntax(code.code, code.syntax || code_syntax?.[codeIndex] || `${varName}/${code.code}`)}
-                className="text-[10px] px-1 py-0.5 bg-blue-100 dark:bg-blue-900/30 hover:bg-blue-200 dark:hover:bg-blue-800 text-blue-600 dark:text-blue-400 rounded transition-colors shrink-0"
-                title="edit syntax"
-              >
-                edit
-              </button>
-            )}
-          </div>
-        ) : (
-          <span>{varName}/{code.code}</span>
-        )}
-      </td>
-      {/* Factor */}
-      <td className="border border-zinc-200 dark:border-zinc-700 px-2 py-1">
-        <input
-          type="number"
-          step="any"
-          value={code.factor ?? ''}
-          placeholder="—"
-          onChange={(e) => {
-            const val = e.target.value === '' ? null : parseFloat(e.target.value);
-            updateCodeFactor(varKey, code.code, val);
-          }}
-          className="w-full text-xs bg-transparent border border-transparent hover:border-zinc-200 dark:hover:border-zinc-700 focus:border-blue-400 dark:focus:border-blue-500 px-1.5 py-0.5 text-zinc-700 dark:text-zinc-300 outline-none"
-        />
-      </td>
-      {/* Visibility */}
-      <td className="border border-zinc-200 dark:border-zinc-700 px-2 py-1">
-        <select
-          value={vis}
-          onChange={(e) => updateCodeVisibility(varKey, code.code, e.target.value as 'visible' | 'hidden' | 'removed')}
-          className={`w-full text-xs bg-transparent border border-transparent hover:border-zinc-200 dark:hover:border-zinc-700 focus:border-blue-400 dark:focus:border-blue-500 px-1 py-0.5 outline-none cursor-pointer ${
-            vis === 'removed' ? 'text-red-500 dark:text-red-400' :
-            vis === 'hidden' ? 'text-zinc-400' :
-            'text-zinc-600 dark:text-zinc-400'
-          }`}
-        >
-          <option value="visible">visible</option>
-          <option value="hidden">hide</option>
-          <option value="removed">remove</option>
-        </select>
-      </td>
-      {/* Actions */}
-      <td className="border border-zinc-200 dark:border-zinc-700 px-1 py-1 text-center w-12">
-        <div className="flex items-center justify-center gap-1">
-          <button
-            onClick={() => onDuplicate(varKey, code.code)}
-            title="duplicate code"
-            className="text-zinc-400 hover:text-emerald-500 dark:hover:text-emerald-400 text-xs leading-none"
-          >⧉</button>
-          {code.isNew && (
-            <button
-              onClick={() => onDelete(varKey, code.code)}
-              title="delete code"
-              className="text-red-400 hover:text-red-600 dark:hover:text-red-300 text-xs leading-none"
-            >✕</button>
-          )}
-        </div>
-      </td>
-    </tr>
-  );
-};
-
-// ─── Variable Detail Page ─────────────────────────────────────────────────────
-const VariableDetailPage: React.FC = () => {
-  const { varName: encodedVarName } = useParams<{ varName: string }>();
-  const varKey = encodedVarName ? decodeURIComponent(encodedVarName) : '';
-  const navigate = useNavigate();
-  const {
-    variables,
-    updateVariableLabel,
-    updateVariableDisplayName,
-    updateCodeLabel,
-    updateCodeFactor,
-    updateCodeVisibility,
-    updateCodeSyntax,
-    updateNetCode,
-    toggleVariableStat,
-    addNetCode,
-    addCode,
-    removeCode,
-    reorderCodes,
-  } = useStore();
-
-  const [selectedForNet, setSelectedForNet] = useState<Set<string>>(new Set());
-  const [showNetInput, setShowNetInput] = useState(false);
-  const [netLabelInput, setNetLabelInput] = useState('');
-  const [showAddCode, setShowAddCode] = useState(false);
-  const [newCodeLabel, setNewCodeLabel] = useState('');
-  const [newCodeSyntax, setNewCodeSyntax] = useState('');
-  const [syntaxErrors, setSyntaxErrors] = useState<string[]>([]);
-  const [showSyntaxBuilder, setShowSyntaxBuilder] = useState(false);
-  const [editingCodeKey, setEditingCodeKey] = useState<string | null>(null);
-  const [editingCodeSyntax, setEditingCodeSyntax] = useState<string>('');
-  const sortSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
-
-  const handleEditSyntax = (code: string, currentSyntax: string) => {
-    setEditingCodeKey(code);
-    setEditingCodeSyntax(currentSyntax);
-    setShowSyntaxBuilder(true);
-  };
-
-  const handleSaveSyntax = (syntax: string) => {
-    const errs = validateSyntax(syntax);
-    if (errs.length > 0) { setSyntaxErrors(errs); return; }
-    if (editingCodeKey) {
-      const codeInfo = info?.codes.find((c) => c.code === editingCodeKey);
-      if (codeInfo?.isNet) {
-        updateNetCode(varKey, editingCodeKey, syntax);
-      } else {
-        updateCodeSyntax(varKey, editingCodeKey, syntax);
-      }
-      setShowSyntaxBuilder(false);
-      setEditingCodeKey(null);
-    } else {
-      setNewCodeSyntax(syntax);
-      setShowSyntaxBuilder(false);
-    }
-  };
-
-  const info: VariableInfo | undefined = variables[varKey];
-
-  if (!info) {
-    return (
-      <div className="p-6 text-zinc-500 text-sm">
-        Variable <span className="font-mono">{varKey}</span> not found.{' '}
-        <button onClick={() => navigate('/edit-variables')} className="text-blue-500 underline">back</button>
-      </div>
-    );
-  }
-
-  const hiddenCount = info.codes.filter((c: any) => c.visibility === 'hidden').length;
-  const removedCount = info.codes.filter((c: any) => c.visibility === 'removed').length;
-  const varName = info.name || varKey;
-
-  const validateSyntax = (_syntax: string): string[] => {
-    return [];
-  };
-
-  const handleConfirmAddCode = () => {
-    const label = newCodeLabel.trim();
-    const syntax = newCodeSyntax.trim();
-    if (!label || !syntax) return;
-    const errs = validateSyntax(syntax);
-    if (errs.length > 0) { setSyntaxErrors(errs); return; }
-    const existingSyntaxes = (info.codes || [])
-      .filter((c: any) => c.isNew && c.syntax)
-      .map((c: any) => c.syntax);
-    if (existingSyntaxes.includes(syntax)) {
-      setSyntaxErrors([`Syntax "${syntax}" already exists in this variable`]);
-      return;
-    }
-    addCode(varKey, label, syntax);
-    setNewCodeLabel(''); setNewCodeSyntax('');
-    setSyntaxErrors([]);
-    setShowAddCode(false);
-  };
-
-  const handleToggleSelect = (code: string) => {
-    setSelectedForNet((prev) => {
-      const next = new Set(prev);
-      if (next.has(code)) next.delete(code); else next.add(code);
-      return next;
-    });
-  };
-
-  const handleDuplicateCode = (varName: string, code: string) => {
-    const codeInfo = info?.codes.find((c) => c.code === code);
-    if (!codeInfo) return;
-    
-    const newLabel = `${codeInfo.label} (copy)`;
-    // Copy the exact same syntax as the original code
-    const syntax = codeInfo.syntax || `${varName}/${code}`;
-    
-    addCode(varName, newLabel, syntax);
-  };
-
-  const handleConfirmNet = () => {
-    const label = netLabelInput.trim();
-    if (!label || selectedForNet.size < 2) return;
-    addNetCode(varKey, [...selectedForNet], label);
-    setSelectedForNet(new Set());
-    setNetLabelInput('');
-    setShowNetInput(false);
-  };
-
-  const handleDragEnd = (event: DndDragEndEvent) => {
-    const { active, over } = event;
-    if (!over || active.id === over.id) return;
-    const oldIndex = info.codes.findIndex((c) => c.code === active.id);
-    const newIndex = info.codes.findIndex((c) => c.code === over.id);
-    if (oldIndex === -1 || newIndex === -1) return;
-    reorderCodes(varKey, arrayMove(info.codes, oldIndex, newIndex).map((c) => c.code));
-  };
-
-  const canNet = selectedForNet.size >= 2;
-
-  return (
-    <div className="h-full flex flex-col overflow-auto">
-      {/* Breadcrumb */}
-      <div className="flex items-center gap-2 px-4 py-3 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900">
-        <button
-          onClick={() => navigate('/edit-variables')}
-          className="text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors"
-        >
-          ← variables
-        </button>
-        <span className="text-xs text-zinc-300 dark:text-zinc-600">/</span>
-        <span className="text-xs text-emerald-700 dark:text-emerald-400 font-medium">{varKey}</span>
-        {(hiddenCount > 0 || removedCount > 0) && (
-          <span className="text-xs text-orange-500 dark:text-orange-400 ml-1">
-            {hiddenCount > 0 && `${hiddenCount} hidden`}
-            {hiddenCount > 0 && removedCount > 0 && ', '}
-            {removedCount > 0 && `${removedCount} removed`}
-          </span>
-        )}
-      </div>
-
-      <div className="flex-1 overflow-hidden flex gap-4 p-4">
-        {/* Left: Metadata + Stats */}
-        <div className="w-80 shrink-0 overflow-auto space-y-6 pr-2">
-          <div className="space-y-4">
-            <div>
-              <label className="text-xs text-zinc-500 dark:text-zinc-400 block mb-1">name</label>
-              <input
-                type="text"
-                value={info.name || varKey}
-                onChange={(e) => updateVariableDisplayName(varKey, e.target.value)}
-                className="w-full text-xs bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 px-2 py-1.5 text-zinc-700 dark:text-zinc-300 focus:border-blue-400 dark:focus:border-blue-500 outline-none"
-              />
-            </div>
-            <div>
-              <label className="text-xs text-zinc-500 dark:text-zinc-400 block mb-1">definition</label>
-              <input
-                type="text"
-                value={info.label}
-                onChange={(e) => updateVariableLabel(varKey, e.target.value)}
-                className="w-full text-xs bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 px-2 py-1.5 text-zinc-700 dark:text-zinc-300 focus:border-blue-400 dark:focus:border-blue-500 outline-none"
-              />
-            </div>
-          </div>
-
-          {/* Stats toggles */}
-          <div>
-            <label className="text-xs text-zinc-500 dark:text-zinc-400 block mb-2">show statistics</label>
-            <div className="flex flex-col gap-2">
-              {([
-                ['showMean', 'mean'],
-                ['showStdError', 'std error'],
-                ['showStdDev', 'std dev'],
-                ['showVariance', 'variance'],
-              ] as const).map(([stat, label]) => (
-                <button
-                  key={stat}
-                  onClick={() => toggleVariableStat(varKey, stat)}
-                  className={`px-2 py-1.5 text-xs border transition-colors text-left ${
-                    info[stat]
-                      ? 'bg-blue-500 text-white border-blue-500'
-                      : 'bg-zinc-50 dark:bg-zinc-800 text-zinc-500 border-zinc-200 dark:border-zinc-700 hover:border-zinc-300 dark:hover:border-zinc-600'
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Right: Codes table */}
-        <div className="flex-1 overflow-hidden flex flex-col">
-          {/* Toolbar */}
-          <div className="flex flex-col gap-2 mb-2">
-            <div className="flex items-center gap-2">
-              <label className="text-xs text-zinc-500 dark:text-zinc-400">codes ({info.codes.length})</label>
-              <div className="ml-auto flex items-center gap-1">
-                {canNet && !showNetInput && !showAddCode && (
-                  <button
-                    onClick={() => setShowNetInput(true)}
-                    className="text-xs px-2 py-1 bg-purple-500 hover:bg-purple-600 text-white transition-colors"
-                  >
-                    net selected ({selectedForNet.size})
-                  </button>
-                )}
-                {!showAddCode && !showNetInput && (
-                  <button
-                    onClick={() => setShowAddCode(true)}
-                    className="text-xs px-2 py-1 bg-emerald-500 hover:bg-emerald-600 text-white transition-colors"
-                  >
-                    + add code
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {showNetInput && (
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-zinc-400 dark:text-zinc-500">net label:</span>
-                <input
-                  autoFocus
-                  type="text"
-                  placeholder="e.g. T2B"
-                  value={netLabelInput}
-                  onChange={(e) => setNetLabelInput(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') handleConfirmNet(); if (e.key === 'Escape') { setShowNetInput(false); setNetLabelInput(''); } }}
-                  className="text-xs bg-zinc-50 dark:bg-zinc-800 border border-purple-400 px-2 py-1 text-zinc-700 dark:text-zinc-300 outline-none w-44"
-                />
-                <div className="flex flex-col items-center gap-1">
-                  <button onClick={handleConfirmNet} disabled={!netLabelInput.trim()} className="text-xs px-3 py-1 bg-purple-500 hover:bg-purple-600 disabled:opacity-40 text-white transition-colors">create</button>
-                  <button onClick={() => { setShowNetInput(false); setNetLabelInput(''); }} className="text-xs px-3 py-1 text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-300 transition-colors">cancel</button>
-                </div>
-              </div>
-            )}
-
-            {showAddCode && (
-              <div className="border border-emerald-300 dark:border-emerald-700 p-2 space-y-2 bg-emerald-50 dark:bg-emerald-900/10">
-                <div className="flex items-center gap-2">
-                  <div className="flex flex-col gap-0.5 flex-1">
-                    <span className="text-[10px] text-zinc-400 dark:text-zinc-500">label</span>
-                    <input
-                      autoFocus
-                      type="text"
-                      placeholder="display name"
-                      value={newCodeLabel}
-                      onChange={(e) => setNewCodeLabel(e.target.value)}
-                      className="text-xs bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 px-2 py-1 text-zinc-700 dark:text-zinc-300 outline-none w-full"
-                    />
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="flex flex-col gap-0.5 flex-1">
-                    <span className="text-[10px] text-zinc-400 dark:text-zinc-500">syntax — e.g. <span className="font-mono">ol/8+ol/9</span> or <span className="font-mono">(ses/2+ses/3).age/2</span></span>
-                    <div className="flex items-center gap-1">
-                      <input
-                        type="text"
-                        placeholder="syntax expression"
-                        value={newCodeSyntax}
-                        onChange={(e) => { setNewCodeSyntax(e.target.value); setSyntaxErrors([]); }}
-                        onKeyDown={(e) => { if (e.key === 'Enter') handleConfirmAddCode(); if (e.key === 'Escape') { setShowAddCode(false); setSyntaxErrors([]); } }}
-                        className="flex-1 text-xs bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 px-2 py-1 text-zinc-700 dark:text-zinc-300 outline-none w-full font-mono"
-                      />
-                      <button
-                        onClick={() => { setSyntaxErrors([]); setShowSyntaxBuilder(true); }}
-                        className="text-xs px-2 py-1 bg-blue-500 hover:bg-blue-600 text-white transition-colors shrink-0"
-                        title="select response"
-                      >
-                        select
-                      </button>
-                    </div>
-                  </div>
-                  <div className="flex flex-col items-center gap-1">
-                    <button
-                      onClick={handleConfirmAddCode}
-                      disabled={!newCodeLabel.trim() || !newCodeSyntax.trim()}
-                      className="text-xs px-3 py-1 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-40 text-white transition-colors"
-                    >
-                      add
-                    </button>
-                    <button
-                      onClick={() => { setShowAddCode(false); setSyntaxErrors([]); setNewCodeLabel(''); setNewCodeSyntax(''); }}
-                      className="text-xs px-3 py-1 text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-300 transition-colors"
-                    >
-                      cancel
-                    </button>
-                  </div>
-                </div>
-                {syntaxErrors.length > 0 && (
-                  <div className="space-y-0.5">
-                    {syntaxErrors.map((err, i) => (
-                      <p key={i} className="text-[10px] text-red-500 dark:text-red-400 font-mono">{err}</p>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
-          <div className="flex-1 overflow-auto border border-zinc-200 dark:border-zinc-700">
-            <DndContext
-              sensors={sortSensors}
-              collisionDetection={closestCenter}
-              onDragEnd={handleDragEnd}
-            >
-              <SortableContext items={info.codes.map((c) => c.code)} strategy={verticalListSortingStrategy}>
-                <table className="w-full border-collapse text-xs">
-                  <thead className="sticky top-0 z-10">
-                    <tr className="bg-zinc-50 dark:bg-zinc-800">
-                      <th className="border border-zinc-200 dark:border-zinc-700 px-1 py-1.5 w-6"></th>
-                      <th className="border border-zinc-200 dark:border-zinc-700 px-1 py-1.5 w-6"></th>
-                      <th className="border border-zinc-200 dark:border-zinc-700 px-2 py-1.5 text-left text-zinc-500 dark:text-zinc-400 w-24">code</th>
-                      <th className="border border-zinc-200 dark:border-zinc-700 px-2 py-1.5 text-left text-zinc-500 dark:text-zinc-400 flex-1">label</th>
-                      <th className="border border-zinc-200 dark:border-zinc-700 px-2 py-1.5 text-left text-zinc-500 dark:text-zinc-400 w-40">syntax</th>
-                      <th className="border border-zinc-200 dark:border-zinc-700 px-2 py-1.5 text-left text-zinc-500 dark:text-zinc-400 w-24">factor</th>
-                      <th className="border border-zinc-200 dark:border-zinc-700 px-2 py-1.5 text-left text-zinc-500 dark:text-zinc-400 w-28">visibility</th>
-                      <th className="border border-zinc-200 dark:border-zinc-700 px-1 py-1.5 w-12"></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {info.codes.map((code, idx) => (
-                      <SortableCodeRow
-                        key={code.code}
-                        code={code}
-                        varKey={varKey}
-                        varName={varName}
-                        code_syntax={info.code_syntax}
-                        codeIndex={idx}
-                        isSelected={selectedForNet.has(code.code)}
-                        onToggleSelect={handleToggleSelect}
-                        onDelete={removeCode}
-                        onDuplicate={handleDuplicateCode}
-                        updateCodeLabel={updateCodeLabel}
-                        updateCodeFactor={updateCodeFactor}
-                        updateCodeVisibility={updateCodeVisibility}
-                        updateCodeSyntax={updateCodeSyntax}
-                        onEditSyntax={handleEditSyntax}
-                      />
-                    ))}
-                  </tbody>
-                </table>
-              </SortableContext>
-            </DndContext>
-          </div>
-        </div>
-        {showSyntaxBuilder && (
-          <SyntaxBuilderModal
-            initialSyntax={editingCodeKey ? editingCodeSyntax : newCodeSyntax}
-            onSave={handleSaveSyntax}
-            onClose={() => { setShowSyntaxBuilder(false); setEditingCodeKey(null); }}
-          />
-        )}
-      </div>
+      )}
     </div>
   );
 };
