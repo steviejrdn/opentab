@@ -30,6 +30,18 @@ interface AppState {
   sidebarWidth: number;
   sidebarVisible: boolean;
 
+  // Copy/Paste variable info
+  copiedVariableInfo: {
+    codes: { code: string; label: string; factor: number | null }[];
+    stats: {
+      showMean: boolean;
+      showStdError: boolean;
+      showStdDev: boolean;
+      showVariance: boolean;
+    };
+  } | null;
+  setCopiedVariableInfo: (info: { codes: { code: string; label: string; factor: number | null }[]; stats: { showMean: boolean; showStdError: boolean; showStdDev: boolean; showVariance: boolean; } } | null) => void;
+
   setDataLoaded: (loaded: boolean) => void;
   setVariables: (variables: Record<string, VariableInfo>) => void;
   setDataInfo: (fileName: string, rowCount: number) => void;
@@ -104,6 +116,8 @@ export const useStore = create<AppState>()((set, get) => ({
   },
   sidebarWidth: 256,
   sidebarVisible: false,
+
+  copiedVariableInfo: null,
 
   setDataLoaded: (loaded) => set({ dataLoaded: loaded, sidebarVisible: loaded }),
   setVariables: (variables) => {
@@ -280,6 +294,8 @@ export const useStore = create<AppState>()((set, get) => ({
     })),
   setSidebarWidth: (width) => set({ sidebarWidth: Math.max(200, Math.min(600, width)) }),
   toggleSidebar: () => set((state) => ({ sidebarVisible: !state.sidebarVisible })),
+
+  setCopiedVariableInfo: (info) => set({ copiedVariableInfo: info }),
 
   updateVariableLabel: (varName, label) =>
     set((state) => ({

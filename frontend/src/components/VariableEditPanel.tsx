@@ -17,6 +17,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { VariableInfo, VariableCode } from '../lib/api';
+import { useStore } from '../store/useStore';
 
 // Simple icons using text/symbols
 const XIcon = () => <span className="text-xl">×</span>;
@@ -400,6 +401,8 @@ export const VariableEditPanel: React.FC<VariableEditPanelProps> = ({
   onAddCode,
   onToggleVariableStat,
 }) => {
+  const { copiedVariableInfo, setCopiedVariableInfo } = useStore();
+  
   const [selectedCodes, setSelectedCodes] = useState<string[]>([]);
   const [showNetInput, setShowNetInput] = useState(false);
   const [netLabel, setNetLabel] = useState('');
@@ -410,28 +413,43 @@ export const VariableEditPanel: React.FC<VariableEditPanelProps> = ({
   const [editingCode, setEditingCode] = useState<VariableCode | null>(null);
   const [editingSyntax, setEditingSyntax] = useState('');
 
-  // Copy/Paste labels & factors state
-  const [copiedLabels, setCopiedLabels] = useState<{code: string; label: string; factor: number | null}[] | null>(null);
-
-  const handleCopyLabels = useCallback(() => {
-    const labelsToCopy = variable.codes
+  // Copy/Paste variable info using global store
+  const handleCopyVarInfo = useCallback(() => {
+    const codesToCopy = variable.codes
       .filter((c) => c.visibility !== 'removed')
       .map((c) => ({ code: c.code, label: c.label || '', factor: c.factor ?? null }));
-    setCopiedLabels(labelsToCopy);
-  }, [variable.codes]);
+    
+    const statsToCopy = {
+      showMean: variable.showMean || false,
+      showStdError: variable.showStdError || false,
+      showStdDev: variable.showStdDev || false,
+      showVariance: variable.showVariance || false,
+    };
+    
+    setCopiedVariableInfo({
+      codes: codesToCopy,
+      stats: statsToCopy,
+    });
+  }, [variable, setCopiedVariableInfo]);
 
-  const handlePasteLabels = useCallback(() => {
-    if (!copiedLabels || copiedLabels.length === 0) return;
+  const handlePasteVarInfo = useCallback(() => {
+    if (!copiedVariableInfo || copiedVariableInfo.codes.length === 0) return;
     
     // Match codes by code value and apply labels/factors
-    copiedLabels.forEach((copied) => {
+    copiedVariableInfo.codes.forEach((copied) => {
       const targetCode = variable.codes.find((c) => c.code === copied.code);
       if (targetCode) {
         onUpdateCodeLabel(variableKey, copied.code, copied.label);
         onUpdateCodeFactor(variableKey, copied.code, copied.factor);
       }
     });
-  }, [copiedLabels, variable.codes, variableKey, onUpdateCodeLabel, onUpdateCodeFactor]);
+
+    // Apply statistics settings
+    if (copiedVariableInfo.stats.showMean) onToggleVariableStat?.(variableKey, 'showMean');
+    if (copiedVariableInfo.stats.showStdError) onToggleVariableStat?.(variableKey, 'showStdError');
+    if (copiedVariableInfo.stats.showStdDev) onToggleVariableStat?.(variableKey, 'showStdDev');
+    if (copiedVariableInfo.stats.showVariance) onToggleVariableStat?.(variableKey, 'showVariance');
+  }, [copiedVariableInfo, variable.codes, variableKey, onUpdateCodeLabel, onUpdateCodeFactor, onToggleVariableStat]);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -638,24 +656,24 @@ export const VariableEditPanel: React.FC<VariableEditPanelProps> = ({
           
           <div className="flex-1" />
           
-          {/* Copy/Paste Labels buttons */}
+          {/* Copy/Paste Var Info buttons */}
           <button
-            onClick={handleCopyLabels}
+            onClick={handleCopyVarInfo}
             className="px-2.5 py-1.5 bg-slate-500 hover:bg-slate-600 text-white text-xs rounded transition-colors flex items-center gap-1"
-            title="Copy labels and factor scores"
+            title="Copy labels, factors & stats"
           >
             <span>📋</span>
-            Copy Labels
+            Copy Var
           </button>
           <button
-            onClick={handlePasteLabels}
-            disabled={!copiedLabels || copiedLabels.length === 0}
+            onClick={handlePasteVarInfo}
+            disabled={!copiedVariableInfo || copiedVariableInfo.codes.length === 0}
             className="px-2.5 py-1.5 bg-slate-500 hover:bg-slate-600 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs rounded transition-colors flex items-center gap-1"
-            title={copiedLabels ? `Paste ${copiedLabels.length} codes` : 'No labels copied'}
+            title={copiedVariableInfo ? `Paste ${copiedVariableInfo.codes.length} codes` : 'No variable info copied'}
           >
             <span>📥</span>
-            Paste Labels
-            {copiedLabels && <span className="text-[10px] opacity-75">({copiedLabels.length})</span>}
+            Paste Var
+            {copiedVariableInfo && <span className="text-[10px] opacity-75">({copiedVariableInfo.codes.length})</span>}
           </button>
         </div>
 
