@@ -399,6 +399,14 @@ const Navigation: React.FC = () => {
           </button>
           <input ref={openFileRef} type="file" accept=".opentab" className="hidden" onChange={handleOpenFallback} />
         </div>
+        <a
+          href="https://github.com/steviejrdn/opentab/issues"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="px-2.5 py-1 text-xs text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+        >
+          feedback
+        </a>
         <ThemeToggle />
       </div>
     </nav>
