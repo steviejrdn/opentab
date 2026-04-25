@@ -118,26 +118,255 @@ function getAllNestedVars(items: DropItem[]): string[] {
 }
 
 // ─── EZ Draggable Variable (for EZ Tables Modal) ───────────────────────────────
-const EzDraggableVariable: React.FC<{ name: string; displayName: string; label: string; codeCount: number }> = ({ name, displayName, label, codeCount }) => {
+const EzDraggableVariable: React.FC<{ 
+  name: string; 
+  displayName: string; 
+  label: string; 
+  codeCount: number;
+  onAddNested?: (varName: string) => void;
+  isNesting?: boolean;
+}> = ({ name, displayName, label, codeCount, onAddNested, isNesting }) => {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: `ez-var-${name}` });
+  
+  return (
+    <div className="relative group">
+      <div
+        ref={setNodeRef}
+        {...listeners}
+        {...attributes}
+        className={`px-2 py-1.5 border cursor-grab select-none transition-colors rounded ${
+          isDragging
+            ? 'opacity-40 bg-zinc-200 dark:bg-zinc-700 border-zinc-300 dark:border-zinc-600'
+            : 'bg-zinc-100 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 hover:bg-zinc-200 dark:hover:bg-zinc-700 hover:border-zinc-300 dark:hover:border-zinc-600'
+        }`}
+      >
+        <div className="flex justify-between items-center gap-1">
+          <div className="min-w-0 flex-1">
+            <span className="text-[10px] font-medium text-emerald-700 dark:text-emerald-400 block truncate">{displayName}</span>
+            <span className="text-[9px] text-zinc-500 block truncate">{label}</span>
+          </div>
+          <span className="text-[9px] text-zinc-400 dark:text-zinc-600 shrink-0">{codeCount}</span>
+        </div>
+      </div>
+      
+      {/* Nesting button - appears on hover */}
+      {isNesting && onAddNested && (
+        <button
+          onClick={() => onAddNested(name)}
+          className="absolute -right-1 -top-1 w-4 h-4 bg-blue-500 hover:bg-blue-600 text-white rounded-full text-[10px] flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-sm"
+          title={`Nest ${displayName} under selected`}
+        >
+          +
+        </button>
+      )}
+    </div>
+  );
+};
+
+// ─── EZ Header Drop Zone (for EZ Tables Modal) ─────────────────────────────────
+const EzHeaderDropZone: React.FC<{
+  items: DropItem[];
+  onRemove: (id: string) => void;
+  variables: Record<string, VariableInfo>;
+}> = ({ items, onRemove, variables }) => {
+  const { isOver, setNodeRef } = useDroppable({ id: 'ez-header-zone' });
+  const [showPicker, setShowPicker] = useState(false);
+  const [selectedParentId, setSelectedParentId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const pickerRef = useRef<HTMLDivElement>(null);
+  const pickerButtonRef = useRef<HTMLButtonElement>(null);
+
+  // Close picker when clicking outside
+  useEffect(() => {
+    if (!showPicker) return;
+    const handler = (e: MouseEvent) => {
+      if (pickerRef.current && !pickerRef.current.contains(e.target as Node) &&
+          pickerButtonRef.current && !pickerButtonRef.current.contains(e.target as Node)) {
+        setShowPicker(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showPicker]);
+
+  const handleShowPicker = (parentId: string, buttonRef: HTMLButtonElement | null) => {
+    setSelectedParentId(parentId);
+    setShowPicker(true);
+    setSearchQuery('');
+    if (buttonRef) {
+      pickerButtonRef.current = buttonRef;
+    }
+  };
+
+  const handleSelectVar = (varName: string) => {
+    if (!selectedParentId) return;
+    const varInfo = variables[varName];
+    if (varInfo?.codes?.length) {
+      const visibleCodes = varInfo.codes
+        .filter((c: any) => c.visibility !== 'removed' && c.visibility !== 'hidden')
+        .map((c: any) => c.code);
+      const newItem: DropItem = {
+        id: uuidv4(),
+        variable: varName,
+        codeDef: `${varName}/*`,
+        codes: visibleCodes
+      };
+      window.dispatchEvent(new CustomEvent('ez-header-item-nested', {
+        detail: { parentId: selectedParentId, newItem }
+      }));
+    }
+    setShowPicker(false);
+    setSelectedParentId(null);
+  };
+
+  const filteredVars = Object.entries(variables).filter(([key, info]) => {
+    const query = searchQuery.toLowerCase();
+    return key.toLowerCase().includes(query) ||
+           (info.name || '').toLowerCase().includes(query) ||
+           (info.label || '').toLowerCase().includes(query);
+  });
+
   return (
     <div
       ref={setNodeRef}
-      {...listeners}
-      {...attributes}
-      className={`px-2 py-1.5 border cursor-grab select-none transition-colors rounded ${
-        isDragging
-          ? 'opacity-40 bg-zinc-200 dark:bg-zinc-700 border-zinc-300 dark:border-zinc-600'
-          : 'bg-zinc-100 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 hover:bg-zinc-200 dark:hover:bg-zinc-700 hover:border-zinc-300 dark:hover:border-zinc-600'
+      className={`border-2 border-dashed rounded p-2 min-h-[100px] max-h-[160px] overflow-y-auto ${
+        isOver
+          ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30'
+          : 'border-zinc-300 dark:border-zinc-600 hover:border-blue-400 dark:hover:border-blue-500 bg-white dark:bg-zinc-900'
       }`}
     >
-      <div className="flex justify-between items-center gap-1">
-        <div className="min-w-0 flex-1">
-          <span className="text-[10px] font-medium text-emerald-700 dark:text-emerald-400 block truncate">{displayName}</span>
-          <span className="text-[9px] text-zinc-500 block truncate">{label}</span>
+      {items.length === 0 ? (
+        <div className="text-center py-4">
+          <div className="text-2xl mb-1">📥</div>
+          <p className="text-[10px] text-zinc-500 dark:text-zinc-400">Drop variables here</p>
+          <p className="text-[9px] text-zinc-400 dark:text-zinc-500 mt-0.5">Click + to nest</p>
         </div>
-        <span className="text-[9px] text-zinc-400 dark:text-zinc-600 shrink-0">{codeCount}</span>
+      ) : (
+        <div className="space-y-0.5">
+          {items.map((item) => (
+            <EzHeaderItem
+              key={item.id}
+              item={item}
+              onRemove={onRemove}
+              onShowPicker={handleShowPicker}
+              isPickerOpen={showPicker && selectedParentId === item.id}
+              variables={variables}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* Variable Picker - rendered at dropzone level to avoid clipping */}
+      {showPicker && selectedParentId && (
+        <div
+          ref={pickerRef}
+          className="fixed z-[60] w-64 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg shadow-xl"
+          style={{
+            top: pickerButtonRef.current ? pickerButtonRef.current.getBoundingClientRect().bottom + 4 : '50%',
+            left: pickerButtonRef.current ? pickerButtonRef.current.getBoundingClientRect().left : '50%',
+          }}
+        >
+          <div className="p-2 border-b border-zinc-200 dark:border-zinc-700">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search variables..."
+              className="w-full px-2 py-1 text-xs bg-zinc-100 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-600 rounded text-zinc-700 dark:text-zinc-200 placeholder-zinc-400"
+              autoFocus
+            />
+          </div>
+          <div className="max-h-[200px] overflow-y-auto p-1">
+            {filteredVars.length === 0 ? (
+              <div className="px-2 py-3 text-xs text-zinc-400 text-center">No variables found</div>
+            ) : (
+              filteredVars.map(([key, info]) => (
+                <button
+                  key={key}
+                  onClick={() => handleSelectVar(key)}
+                  className="w-full text-left px-2 py-1.5 text-xs hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded flex items-center gap-2"
+                >
+                  <span className="font-medium text-emerald-700 dark:text-emerald-400 truncate">{info.name || key}</span>
+                  <span className="text-zinc-400 truncate flex-1">{info.label}</span>
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ─── EZ Header Item (with nesting support - same as Build tab) ──────────────────
+const EzHeaderItem: React.FC<{
+  item: DropItem;
+  onRemove: (id: string) => void;
+  onShowPicker: (parentId: string, buttonRef: HTMLButtonElement | null) => void;
+  isPickerOpen: boolean;
+  variables: Record<string, VariableInfo>;
+  depth?: number;
+}> = ({ item, onRemove, onShowPicker, isPickerOpen, variables, depth = 0 }) => {
+  const displayName = variables[item.variable]?.label || item.variable;
+  const hasChildren = item.children && item.children.length > 0;
+  const maxDepth = 3;
+  const canNest = depth < maxDepth;
+  const addButtonRef = useRef<HTMLButtonElement>(null);
+
+  const handleAddClick = () => {
+    onShowPicker(item.id, addButtonRef.current);
+  };
+
+  return (
+    <div className="flex flex-col">
+      <div className={`flex items-center gap-1 px-2 py-1 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 ${depth === 0 ? 'rounded-t-md' : 'border-t-0'} ${hasChildren ? 'rounded-b-md' : 'rounded-md'}`}>
+        <div className="flex-1 min-w-0">
+          <div className={`text-[10px] font-medium truncate ${depth === 0 ? 'text-emerald-700 dark:text-emerald-400' : 'text-blue-600 dark:text-blue-400'}`}>
+            {displayName}
+          </div>
+        </div>
+
+        {/* Add child button - same as Build tab */}
+        {canNest && (
+          <button
+            ref={addButtonRef}
+            onClick={handleAddClick}
+            className={`w-5 h-5 flex items-center justify-center rounded transition-colors text-xs ${
+              isPickerOpen
+                ? 'text-blue-500 bg-blue-50 dark:text-blue-400 dark:bg-blue-900/30'
+                : 'text-zinc-400 dark:text-zinc-500 hover:text-blue-500 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30'
+            }`}
+            title="Add nested variable"
+          >
+            +
+          </button>
+        )}
+
+        {/* Remove button */}
+        <button
+          onClick={() => onRemove(item.id)}
+          className="w-5 h-5 flex items-center justify-center text-zinc-400 dark:text-zinc-600 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded transition-colors text-xs"
+        >
+          ×
+        </button>
       </div>
+
+      {/* Children */}
+      {hasChildren && (
+        <div className="ml-3 pl-2 border-l border-blue-200 dark:border-blue-800 mt-0.5 space-y-0.5">
+          {item.children!.map((child) => (
+            <EzHeaderItem
+              key={child.id}
+              item={child}
+              onRemove={onRemove}
+              onShowPicker={onShowPicker}
+              isPickerOpen={isPickerOpen}
+              variables={variables}
+              depth={depth + 1}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 };
@@ -1455,7 +1684,10 @@ const App: React.FC = () => {
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
-  const handleDragStart = (event: DragStartEvent) => setActiveDragId(String(event.active.id));
+  const handleDragStart = (event: DragStartEvent) => {
+    const id = String(event.active.id);
+    setActiveDragId(id);
+  };
   const handleDragCancel = () => setActiveDragId(null);
 
   const handleDragEnd = (event: any) => {
@@ -1467,7 +1699,6 @@ const App: React.FC = () => {
     // Handle EZ Tables header drop (check DOM for modal visibility)
     const ezModalOpen = document.getElementById('ez-tables-modal') !== null;
     if (ezModalOpen && over.id === 'ez-header-zone') {
-      // Extract variable name from ez-var- prefix or direct variable name
       const varName = activeId.startsWith('ez-var-') ? activeId.slice(7) : activeId;
       const varInfo = variables[varName];
       if (varInfo?.codes?.length) {
@@ -1600,6 +1831,26 @@ const App: React.FC = () => {
                 </div>
               );
             }
+            
+            // EZ Tables variable drag (from modal sidebar)
+            if (activeDragId.startsWith('ez-var-')) {
+              const varName = activeDragId.slice(7);
+              const info = variables[varName];
+              if (info) {
+                return (
+                  <div className="px-3 py-2 border-2 border-blue-400 bg-blue-50 dark:bg-blue-900/30 shadow-2xl cursor-grabbing w-48 rotate-1">
+                    <div className="flex justify-between items-center gap-2">
+                      <div className="min-w-0">
+                        <span className="text-xs font-medium text-blue-700 dark:text-blue-400 block">{info.name || varName}</span>
+                        <span className="text-xs text-zinc-500 block truncate">{info.label}</span>
+                      </div>
+                      <span className="text-xs text-zinc-400 dark:text-zinc-600 shrink-0">{info.codes.length}</span>
+                    </div>
+                  </div>
+                );
+              }
+            }
+            
             return null;
           })()}
         </DragOverlay>
@@ -1640,12 +1891,39 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
 
   // Listen for EZ header item added from App component (DnD)
   useEffect(() => {
-    const handler = (e: CustomEvent) => {
+    const addHandler = (e: CustomEvent) => {
       const newItem = e.detail as DropItem;
       setEzHeaderItems(prev => [...prev, newItem]);
     };
-    window.addEventListener('ez-header-item-added', handler as EventListener);
-    return () => window.removeEventListener('ez-header-item-added', handler as EventListener);
+    
+    const nestHandler = (e: CustomEvent) => {
+      const { parentId, newItem } = e.detail;
+      setEzHeaderItems(prev => {
+        const addToParent = (items: DropItem[]): DropItem[] => {
+          return items.map(item => {
+            if (item.id === parentId) {
+              return {
+                ...item,
+                children: [...(item.children || []), newItem]
+              };
+            }
+            if (item.children?.length) {
+              return { ...item, children: addToParent(item.children) };
+            }
+            return item;
+          });
+        };
+        return addToParent(prev);
+      });
+    };
+    
+    window.addEventListener('ez-header-item-added', addHandler as EventListener);
+    window.addEventListener('ez-header-item-nested', nestHandler as EventListener);
+    
+    return () => {
+      window.removeEventListener('ez-header-item-added', addHandler as EventListener);
+      window.removeEventListener('ez-header-item-nested', nestHandler as EventListener);
+    };
   }, []);
 
   const activeTable = tables.find((t) => t.id === activeTableId);
@@ -2316,31 +2594,19 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
                   <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-2 block">
                     Header Structure (drop variables here)
                   </label>
-                    <div 
-                    id="ez-header-zone"
-                    className="border-2 border-dashed border-zinc-300 dark:border-zinc-600 hover:border-blue-400 dark:hover:border-blue-500 rounded p-3 h-[100px] overflow-hidden bg-zinc-50 dark:bg-zinc-800/50 transition-colors flex items-center justify-center"
-                  >
-                    {ezHeaderItems.length === 0 ? (
-                      <div className="text-center">
-                        <div className="text-2xl mb-1">📥</div>
-                        <p className="text-xs text-zinc-500">Drag variables here</p>
-                      </div>
-                    ) : (
-                      <div className="flex flex-wrap gap-2">
-                        {ezHeaderItems.map((item) => (
-                          <div key={item.id} className="flex items-center gap-1 px-2 py-1 bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-600 rounded text-xs">
-                            <span>{variables[item.variable]?.label || item.variable}</span>
-                            <button
-                              onClick={() => setEzHeaderItems(ezHeaderItems.filter(i => i.id !== item.id))}
-                              className="text-zinc-400 hover:text-red-500"
-                            >
-                              ×
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                  <EzHeaderDropZone 
+                    items={ezHeaderItems}
+                    onRemove={(id) => {
+                      const removeFromItems = (items: DropItem[]): DropItem[] => {
+                        return items.filter(item => item.id !== id).map(item => ({
+                          ...item,
+                          children: item.children ? removeFromItems(item.children) : undefined
+                        }));
+                      };
+                      setEzHeaderItems(removeFromItems(ezHeaderItems));
+                    }}
+                    variables={variables}
+                  />
                 </div>
 
               {/* Weight Column */}
@@ -2413,22 +2679,18 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
                         return;
                       }
                       
-                      // Create tables
+                       // Create tables
                       const { addTable } = useStore.getState();
                       ezSelectedRowVars.forEach((rowVar) => {
-                        const visibleCodes = Object.values(variables).find(v => v.name === rowVar || Object.keys(variables).find(k => k === rowVar))?.codes
-                          .filter((c: any) => c.visibility !== 'removed' && c.visibility !== 'hidden')
-                          .map((c: any) => c.code) || [];
-                        
                         addTable({
                           id: crypto.randomUUID(),
                           name: variables[rowVar]?.label || rowVar,
-                          row_items: visibleCodes.map(code => ({
+                          row_items: [{
                             id: crypto.randomUUID(),
                             variable: rowVar,
-                            codeDef: `${rowVar}/${code}`,
-                            codes: [code]
-                          })),
+                            codeDef: `${rowVar}/*`,
+                            codes: []
+                          }],
                           col_items: JSON.parse(JSON.stringify(ezHeaderItems)),
                           grid_items: [],
                           filter_items: [],
