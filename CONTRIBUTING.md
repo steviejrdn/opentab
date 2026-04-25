@@ -61,15 +61,17 @@ git commit -m "feat: add code validation for crosstabs"
 ## Testing
 
 ### Backend
+Backend tests use pytest:
 ```bash
-cd backend
-python test_phase1.py
+pip install pytest pytest-asyncio
+pytest tests/ -v
 ```
 
 ### Frontend
 ```bash
 cd frontend
 npm run lint
+npm run build
 ```
 
 ## Submitting Changes
