@@ -2256,17 +2256,19 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
             <div className="p-4 overflow-y-auto flex-1 space-y-4">
               {/* Header Constructor - Droppable Zone */}
               <div>
-                <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-2 block">
-                  Header Structure (drag variables here)
+                <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-2 block flex items-center gap-2">
+                  Header Structure
+                  <span className="text-[10px] font-normal text-zinc-400">← drag from sidebar or click + below</span>
                 </label>
                 <div 
                   id="ez-header-zone"
-                  className="border-2 border-dashed border-zinc-300 dark:border-zinc-600 hover:border-blue-400 dark:hover:border-blue-500 rounded p-3 min-h-[100px] bg-zinc-50 dark:bg-zinc-800/50 transition-colors"
+                  className="border-2 border-dashed border-zinc-300 dark:border-zinc-600 hover:border-blue-400 dark:hover:border-blue-500 rounded p-3 min-h-[80px] bg-zinc-50 dark:bg-zinc-800/50 transition-colors"
                 >
                   {ezHeaderItems.length === 0 ? (
                     <div className="text-center py-4">
-                      <p className="text-xs text-zinc-400 mb-1">Drag variables here to build header</p>
-                      <p className="text-[10px] text-zinc-300">or click + below</p>
+                      <div className="text-2xl mb-2">📥</div>
+                      <p className="text-xs text-zinc-500 mb-1">Drop variables here</p>
+                      <p className="text-[10px] text-zinc-400">from the sidebar on the left</p>
                     </div>
                   ) : (
                     <div className="flex flex-wrap gap-2">
@@ -2283,6 +2285,40 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
                       ))}
                     </div>
                   )}
+                </div>
+              </div>
+
+              {/* Quick Add Variables */}
+              <div>
+                <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-2 block">
+                  Quick Add (click to add)
+                </label>
+                <div className="border border-zinc-200 dark:border-zinc-700 rounded p-2 max-h-[120px] overflow-y-auto bg-zinc-50 dark:bg-zinc-800/50">
+                  <div className="flex flex-wrap gap-1">
+                    {Object.entries(variables).slice(0, 20).map(([key, info]) => (
+                      <button
+                        key={key}
+                        onClick={() => {
+                          if (ezHeaderItems.some(item => item.variable === key)) return;
+                          const visibleCodes = info.codes
+                            .filter((c: any) => c.visibility !== 'removed' && c.visibility !== 'hidden')
+                            .map((c: any) => c.code);
+                          const newItem: DropItem = {
+                            id: crypto.randomUUID(),
+                            variable: key,
+                            codeDef: `${key}/*`,
+                            codes: visibleCodes
+                          };
+                          setEzHeaderItems([...ezHeaderItems, newItem]);
+                        }}
+                        disabled={ezHeaderItems.some(item => item.variable === key)}
+                        className="px-2 py-1 text-[10px] border border-zinc-300 dark:border-zinc-600 rounded bg-white dark:bg-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                        title={info.label || key}
+                      >
+                        + {info.name || key}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
 
