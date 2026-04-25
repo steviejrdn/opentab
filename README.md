@@ -56,6 +56,11 @@ opentab
 
 Your browser will open automatically at http://localhost:8001.
 
+> **Tip:** Use a custom port if 8001 is taken:
+> ```bash
+> opentab --port 8080
+> ```
+
 ### Option 2: Using Virtual Environment (Safer)
 
 If you have other Python apps installed, use this method to avoid conflicts:
@@ -123,7 +128,11 @@ Then open http://localhost:8001 in your browser.
 - Use `pip3 install --user git+https://github.com/steviejrdn/opentab.git` instead
 
 **Port 8001 already in use**
-- Another app is using port 8001. Close other apps or run: `opentab --port 8002`
+- Another app is using port 8001. Use a different port:
+  ```bash
+  opentab --port 8080
+  ```
+- Or close the other app using port 8001
 
 **Need help?**
 - 📖 Check the [User Guide](https://github.com/steviejrdn/opentab/wiki)
