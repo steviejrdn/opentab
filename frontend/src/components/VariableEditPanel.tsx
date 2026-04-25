@@ -41,6 +41,7 @@ interface VariableEditPanelProps {
   onReorderCodes: (varName: string, orderedCodes: string[]) => void;
   onAddNetCode: (varName: string, netOf: string[], label: string) => void;
   onAddCode?: (varName: string, label: string, syntax: string) => void;
+  onToggleVariableStat?: (varName: string, stat: 'showMean' | 'showStdError' | 'showStdDev' | 'showVariance') => void;
 }
 
 interface SortableCodeRowProps {
@@ -296,45 +297,45 @@ const SortableCodeRow: React.FC<SortableCodeRowProps> = ({
       className={`${isRemoved ? 'opacity-40 bg-red-50' : ''} ${isHidden ? 'opacity-60' : ''}`}
     >
       {/* Checkbox for netting */}
-      <td className="px-2 py-2 border-b border-zinc-200 dark:border-zinc-700 text-center">
+      <td className="px-1 py-1 border-b border-zinc-200 dark:border-zinc-700 text-center">
         <input
           type="checkbox"
           checked={isSelected}
           onChange={() => onToggleSelect(code.code)}
-          className="cursor-pointer w-4 h-4"
+          className="cursor-pointer w-3.5 h-3.5"
         />
       </td>
       {/* Drag handle */}
-      <td className="px-2 py-2 border-b border-zinc-200 dark:border-zinc-700">
+      <td className="px-1 py-1 border-b border-zinc-200 dark:border-zinc-700">
         <button
           {...attributes}
           {...listeners}
-          className="cursor-grab active:cursor-grabbing text-zinc-400 hover:text-zinc-600"
+          className="cursor-grab active:cursor-grabbing text-zinc-400 hover:text-zinc-600 text-xs"
         >
           <GripIcon />
         </button>
       </td>
       {/* Code */}
-      <td className="px-2 py-2 border-b border-zinc-200 dark:border-zinc-700 font-mono text-sm">
+      <td className="px-1 py-1 border-b border-zinc-200 dark:border-zinc-700 font-mono text-xs">
         {code.code}
       </td>
       {/* Label */}
-      <td className="px-2 py-2 border-b border-zinc-200 dark:border-zinc-700">
+      <td className="px-1 py-1 border-b border-zinc-200 dark:border-zinc-700">
         <input
           type="text"
           value={code.label || ''}
           onChange={(e) => onUpdateLabel(varKey, code.code, e.target.value)}
-          className="w-full text-sm bg-transparent border border-zinc-300 dark:border-zinc-600 px-2 py-1 rounded"
+          className="w-full text-xs bg-transparent border border-zinc-300 dark:border-zinc-600 px-1.5 py-0.5 rounded"
           placeholder="Label"
         />
       </td>
       {/* Syntax */}
-      <td className="px-2 py-2 border-b border-zinc-200 dark:border-zinc-700 font-mono text-xs text-zinc-500">
-        <div className="flex items-center gap-1">
-          <span className="truncate max-w-[150px]">{displaySyntax}</span>
+      <td className="px-1 py-1 border-b border-zinc-200 dark:border-zinc-700 font-mono text-[10px] text-zinc-500">
+        <div className="flex items-center gap-0.5">
+          <span className="truncate max-w-[120px]">{displaySyntax}</span>
           <button
             onClick={() => onEditSyntax(code, displaySyntax)}
-            className="p-1 rounded text-zinc-400 hover:text-blue-600 shrink-0"
+            className="p-0.5 rounded text-zinc-400 hover:text-blue-600 shrink-0"
             title="Edit syntax"
           >
             <EditIcon />
@@ -342,7 +343,7 @@ const SortableCodeRow: React.FC<SortableCodeRowProps> = ({
         </div>
       </td>
       {/* Factor */}
-      <td className="px-2 py-2 border-b border-zinc-200 dark:border-zinc-700">
+      <td className="px-1 py-1 border-b border-zinc-200 dark:border-zinc-700">
         <input
           type="number"
           value={code.factor ?? ''}
@@ -350,17 +351,17 @@ const SortableCodeRow: React.FC<SortableCodeRowProps> = ({
             const val = e.target.value;
             onUpdateFactor(varKey, code.code, val ? parseFloat(val) : null);
           }}
-          placeholder="Factor"
-          className="w-20 text-sm bg-transparent border border-zinc-300 dark:border-zinc-600 px-2 py-1 rounded"
+          placeholder="-"
+          className="w-14 text-xs bg-transparent border border-zinc-300 dark:border-zinc-600 px-1.5 py-0.5 rounded"
         />
       </td>
       {/* Actions */}
-      <td className="px-2 py-2 border-b border-zinc-200 dark:border-zinc-700">
-        <div className="flex items-center gap-1">
+      <td className="px-1 py-1 border-b border-zinc-200 dark:border-zinc-700 text-right">
+        <div className="flex items-center justify-end gap-0.5">
           {/* Visibility toggle */}
           <button
             onClick={() => onUpdateVisibility(varKey, code.code, visibility === 'visible' ? 'hidden' : 'visible')}
-            className={`p-1 rounded ${visibility === 'visible' ? 'text-emerald-600' : 'text-zinc-400'}`}
+            className={`p-0.5 rounded ${visibility === 'visible' ? 'text-emerald-600' : 'text-zinc-400'}`}
             title={visibility === 'visible' ? 'Visible' : 'Hidden'}
           >
             {visibility === 'visible' ? <EyeIcon /> : <EyeOffIcon />}
@@ -368,7 +369,7 @@ const SortableCodeRow: React.FC<SortableCodeRowProps> = ({
           {/* Remove button */}
           <button
             onClick={() => onUpdateVisibility(varKey, code.code, visibility === 'removed' ? 'visible' : 'removed')}
-            className={`p-1 rounded ${visibility === 'removed' ? 'text-red-600' : 'text-zinc-400'}`}
+            className={`p-0.5 rounded ${visibility === 'removed' ? 'text-red-600' : 'text-zinc-400'}`}
             title={visibility === 'removed' ? 'Removed' : 'Remove'}
           >
             <TrashIcon />
@@ -393,6 +394,7 @@ export const VariableEditPanel: React.FC<VariableEditPanelProps> = ({
   onReorderCodes,
   onAddNetCode,
   onAddCode,
+  onToggleVariableStat,
 }) => {
   const [selectedCodes, setSelectedCodes] = useState<string[]>([]);
   const [showNetInput, setShowNetInput] = useState(false);
@@ -485,225 +487,270 @@ export const VariableEditPanel: React.FC<VariableEditPanelProps> = ({
       {/* Slide-over Panel */}
       <div className="fixed inset-y-0 right-0 w-[750px] bg-white dark:bg-zinc-900 shadow-2xl z-50 flex flex-col animate-slide-in-right">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-200 dark:border-zinc-700">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-200 dark:border-zinc-700 shrink-0">
           <div>
-            <h2 className="text-lg font-semibold text-zinc-800 dark:text-zinc-100">
+            <h2 className="text-base font-semibold text-zinc-800 dark:text-zinc-100">
               {variable.name || variableKey}
             </h2>
-            <p className="text-sm text-zinc-500">
+            <p className="text-xs text-zinc-500">
               {variable.type} • {variable.answerType === 'multiple_answer' ? 'Multiple Answer' : 'Single Answer'}
               {variable.codes.length > 0 && ` • ${variable.codes.length} codes`}
             </p>
           </div>
           <button
             onClick={onClose}
-            className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg transition-colors"
+            className="p-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg transition-colors"
           >
             <XIcon />
           </button>
         </div>
 
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-6">
-          {/* Variable Info */}
-          <div className="space-y-4">
+        {/* Fixed Content - Variable Info & Statistics */}
+        <div className="px-4 py-3 space-y-3 border-b border-zinc-200 dark:border-zinc-700 shrink-0">
+          {/* Variable Info - Compact */}
+          <div className="space-y-2">
             <div>
-              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+              <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-0.5">
                 Display Name
               </label>
               <input
                 type="text"
                 value={variable.name || ''}
                 onChange={(e) => onUpdateDisplayName(variableKey, e.target.value)}
-                className="w-full px-3 py-2 border border-zinc-300 dark:border-zinc-600 rounded-lg bg-white dark:bg-zinc-800"
+                className="w-full px-2 py-1.5 text-sm border border-zinc-300 dark:border-zinc-600 rounded bg-white dark:bg-zinc-800"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+              <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-0.5">
                 Label / Definition
               </label>
               <input
                 type="text"
                 value={variable.label || ''}
                 onChange={(e) => onUpdateLabel(variableKey, e.target.value)}
-                className="w-full px-3 py-2 border border-zinc-300 dark:border-zinc-600 rounded-lg bg-white dark:bg-zinc-800"
+                className="w-full px-2 py-1.5 text-sm border border-zinc-300 dark:border-zinc-600 rounded bg-white dark:bg-zinc-800"
               />
             </div>
           </div>
 
-          {/* Codes Section */}
-          <div>
-            {/* Codes Header with Toolbar */}
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">
-                Codes
-                {hiddenCount > 0 && (
-                  <span className="ml-2 text-xs font-normal text-orange-500">
-                    {hiddenCount} hidden
-                  </span>
-                )}
-              </h3>
-              <div className="flex items-center gap-2">
-                {/* Netting button - appears when 2+ codes selected */}
-                {canNet && !showNetInput && (
-                  <button
-                    onClick={() => setShowNetInput(true)}
-                    className="px-3 py-1.5 bg-purple-500 hover:bg-purple-600 text-white text-xs rounded-lg transition-colors flex items-center gap-1"
-                  >
-                    <PlusIcon />
-                    Netting ({selectedCodes.length})
-                  </button>
-                )}
-                {/* Add new code button */}
-                {!showAddCode && (
-                  <button
-                    onClick={() => setShowAddCode(true)}
-                    className="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white text-xs rounded-lg transition-colors flex items-center gap-1"
-                  >
-                    <PlusIcon />
-                    New Code
-                  </button>
-                )}
+          {/* Statistics Section - Compact */}
+          {onToggleVariableStat && (
+            <div className="flex items-center gap-3">
+              <span className="text-xs font-medium text-zinc-700 dark:text-zinc-300 whitespace-nowrap">Stats:</span>
+              <div className="flex flex-wrap gap-1.5">
+                <button
+                  onClick={() => onToggleVariableStat(variableKey, 'showMean')}
+                  className={`px-2 py-1 text-xs font-medium rounded transition-colors ${
+                    variable.showMean
+                      ? 'bg-blue-500 text-white'
+                      : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700'
+                  }`}
+                >
+                  Mean
+                </button>
+                <button
+                  onClick={() => onToggleVariableStat(variableKey, 'showStdError')}
+                  className={`px-2 py-1 text-xs font-medium rounded transition-colors ${
+                    variable.showStdError
+                      ? 'bg-blue-500 text-white'
+                      : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700'
+                  }`}
+                >
+                  Std Error
+                </button>
+                <button
+                  onClick={() => onToggleVariableStat(variableKey, 'showStdDev')}
+                  className={`px-2 py-1 text-xs font-medium rounded transition-colors ${
+                    variable.showStdDev
+                      ? 'bg-blue-500 text-white'
+                      : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700'
+                  }`}
+                >
+                  Std Dev
+                </button>
+                <button
+                  onClick={() => onToggleVariableStat(variableKey, 'showVariance')}
+                  className={`px-2 py-1 text-xs font-medium rounded transition-colors ${
+                    variable.showVariance
+                      ? 'bg-blue-500 text-white'
+                      : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700'
+                  }`}
+                >
+                  Variance
+                </button>
               </div>
             </div>
+          )}
+        </div>
 
-            {/* Net Input */}
-            {showNetInput && (
-              <div className="mb-4 p-3 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-purple-600 dark:text-purple-400 font-medium">
-                    Net label:
-                  </span>
-                  <input
-                    autoFocus
-                    type="text"
-                    placeholder="e.g. T2B"
-                    value={netLabel}
-                    onChange={(e) => setNetLabel(e.target.value)}
-                    onKeyDown={(e) => { 
-                      if (e.key === 'Enter') handleCreateNet(); 
-                      if (e.key === 'Escape') { setShowNetInput(false); setNetLabel(''); } 
-                    }}
-                    className="flex-1 text-xs px-2 py-1.5 border border-purple-300 dark:border-purple-700 rounded bg-white dark:bg-zinc-800"
-                  />
-                  <button 
-                    onClick={handleCreateNet} 
-                    disabled={!netLabel.trim()}
-                    className="text-xs px-3 py-1.5 bg-purple-500 hover:bg-purple-600 disabled:opacity-40 text-white rounded"
-                  >
-                    Create
-                  </button>
-                  <button 
-                    onClick={() => { setShowNetInput(false); setNetLabel(''); }}
-                    className="text-xs px-3 py-1.5 text-zinc-500 hover:text-zinc-700"
-                  >
-                    Cancel
-                  </button>
-                </div>
-                <p className="text-[10px] text-purple-500 mt-1">
-                  Selected: {selectedCodes.join(', ')}
-                </p>
-              </div>
-            )}
-
-            {/* Add Code Input */}
-            {showAddCode && (
-              <div className="mb-4 p-3 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg space-y-2">
-                <div>
-                  <label className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">Label</label>
-                  <input
-                    autoFocus
-                    type="text"
-                    placeholder="Code label"
-                    value={newCodeLabel}
-                    onChange={(e) => setNewCodeLabel(e.target.value)}
-                    className="w-full text-xs px-2 py-1.5 border border-emerald-300 dark:border-emerald-700 rounded bg-white dark:bg-zinc-800 mt-1"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">Syntax</label>
-                  <div className="flex items-center gap-2 mt-1">
-                    <input
-                      type="text"
-                      placeholder="e.g. Q1/1+Q1/2"
-                      value={newCodeSyntax}
-                      onChange={(e) => setNewCodeSyntax(e.target.value)}
-                      className="flex-1 text-xs px-2 py-1.5 border border-emerald-300 dark:border-emerald-700 rounded bg-white dark:bg-zinc-800 font-mono"
-                    />
-                    <button
-                      onClick={handleOpenSyntaxForNewCode}
-                      className="px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white text-xs rounded transition-colors"
-                    >
-                      Select
-                    </button>
-                  </div>
-                </div>
-                <div className="flex gap-2 pt-1">
-                  <button 
-                    onClick={handleAddNewCode}
-                    disabled={!newCodeLabel.trim() || !newCodeSyntax.trim()}
-                    className="text-xs px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-40 text-white rounded"
-                  >
-                    Add
-                  </button>
-                  <button 
-                    onClick={() => { setShowAddCode(false); setNewCodeLabel(''); setNewCodeSyntax(''); }}
-                    className="text-xs px-3 py-1.5 text-zinc-500 hover:text-zinc-700"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Codes Table */}
-            <DndContext
-              sensors={sensors}
-              collisionDetection={closestCenter}
-              onDragEnd={handleDragEnd}
-            >
-              <SortableContext
-                items={visibleCodes.map((c) => c.code)}
-                strategy={verticalListSortingStrategy}
-              >
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="text-left text-xs text-zinc-500 border-b border-zinc-200 dark:border-zinc-700">
-                      <th className="px-2 py-2 w-8 text-center">☑</th>
-                      <th className="px-2 py-2 w-8"></th>
-                      <th className="px-2 py-2 w-16">Code</th>
-                      <th className="px-2 py-2">Label</th>
-                      <th className="px-2 py-2 w-40">Syntax</th>
-                      <th className="px-2 py-2 w-24">Factor</th>
-                      <th className="px-2 py-2 w-20">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {visibleCodes.map((code) => (
-                      <SortableCodeRow
-                        key={code.code}
-                        code={code}
-                        varKey={variableKey}
-                        varName={varName}
-                        isSelected={selectedCodes.includes(code.code)}
-                        onToggleSelect={toggleCodeSelection}
-                        onUpdateLabel={onUpdateCodeLabel}
-                        onUpdateVisibility={onUpdateCodeVisibility}
-                        onUpdateFactor={onUpdateCodeFactor}
-                        onEditSyntax={handleEditSyntax}
-                      />
-                    ))}
-                  </tbody>
-                </table>
-              </SortableContext>
-            </DndContext>
-
-            {visibleCodes.length === 0 && (
-              <p className="text-sm text-zinc-500 text-center py-8">
-                No codes available
-              </p>
-            )}
+        {/* Scrollable Codes Section */}
+        <div className="flex-1 overflow-y-auto px-4 py-3">
+          {/* Codes Header with Toolbar */}
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">
+              Codes
+              {hiddenCount > 0 && (
+                <span className="ml-2 text-xs font-normal text-orange-500">
+                  {hiddenCount} hidden
+                </span>
+              )}
+            </h3>
+            <div className="flex items-center gap-2">
+              {/* Netting button - appears when 2+ codes selected */}
+              {canNet && !showNetInput && (
+                <button
+                  onClick={() => setShowNetInput(true)}
+                  className="px-2.5 py-1.5 bg-purple-500 hover:bg-purple-600 text-white text-xs rounded transition-colors flex items-center gap-1"
+                >
+                  <PlusIcon />
+                  Net ({selectedCodes.length})
+                </button>
+              )}
+              {/* Add new code button */}
+              {!showAddCode && (
+                <button
+                  onClick={() => setShowAddCode(true)}
+                  className="px-2.5 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white text-xs rounded transition-colors flex items-center gap-1"
+                >
+                  <PlusIcon />
+                  New
+                </button>
+              )}
+            </div>
           </div>
+
+          {/* Net Input */}
+          {showNetInput && (
+            <div className="mb-3 p-2.5 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded">
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-purple-600 dark:text-purple-400 font-medium whitespace-nowrap">
+                  Label:
+                </span>
+                <input
+                  autoFocus
+                  type="text"
+                  placeholder="e.g. T2B"
+                  value={netLabel}
+                  onChange={(e) => setNetLabel(e.target.value)}
+                  onKeyDown={(e) => { 
+                    if (e.key === 'Enter') handleCreateNet(); 
+                    if (e.key === 'Escape') { setShowNetInput(false); setNetLabel(''); } 
+                  }}
+                  className="flex-1 text-xs px-2 py-1 border border-purple-300 dark:border-purple-700 rounded bg-white dark:bg-zinc-800"
+                />
+                <button 
+                  onClick={handleCreateNet} 
+                  disabled={!netLabel.trim()}
+                  className="text-xs px-2.5 py-1 bg-purple-500 hover:bg-purple-600 disabled:opacity-40 text-white rounded"
+                >
+                  Create
+                </button>
+                <button 
+                  onClick={() => { setShowNetInput(false); setNetLabel(''); }}
+                  className="text-xs px-2 py-1 text-zinc-500 hover:text-zinc-700"
+                >
+                  ×
+                </button>
+              </div>
+              <p className="text-[10px] text-purple-500 mt-1 truncate">
+                Selected: {selectedCodes.join(', ')}
+              </p>
+            </div>
+          )}
+
+          {/* Add Code Input */}
+          {showAddCode && (
+            <div className="mb-3 p-2.5 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded space-y-2">
+              <div className="flex gap-2">
+                <input
+                  autoFocus
+                  type="text"
+                  placeholder="Label"
+                  value={newCodeLabel}
+                  onChange={(e) => setNewCodeLabel(e.target.value)}
+                  className="flex-1 text-xs px-2 py-1 border border-emerald-300 dark:border-emerald-700 rounded bg-white dark:bg-zinc-800"
+                />
+                <div className="flex-1 flex gap-1">
+                  <input
+                    type="text"
+                    placeholder="Syntax: Q1/1+Q1/2"
+                    value={newCodeSyntax}
+                    onChange={(e) => setNewCodeSyntax(e.target.value)}
+                    className="flex-1 text-xs px-2 py-1 border border-emerald-300 dark:border-emerald-700 rounded bg-white dark:bg-zinc-800 font-mono"
+                  />
+                  <button
+                    onClick={handleOpenSyntaxForNewCode}
+                    className="px-2 py-1 bg-blue-500 hover:bg-blue-600 text-white text-xs rounded transition-colors"
+                  >
+                    ...
+                  </button>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <button 
+                  onClick={handleAddNewCode}
+                  disabled={!newCodeLabel.trim() || !newCodeSyntax.trim()}
+                  className="text-xs px-2.5 py-1 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-40 text-white rounded"
+                >
+                  Add
+                </button>
+                <button 
+                  onClick={() => { setShowAddCode(false); setNewCodeLabel(''); setNewCodeSyntax(''); }}
+                  className="text-xs px-2 py-1 text-zinc-500 hover:text-zinc-700"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Codes Table */}
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleDragEnd}
+          >
+            <SortableContext
+              items={visibleCodes.map((c) => c.code)}
+              strategy={verticalListSortingStrategy}
+            >
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="text-left text-[10px] text-zinc-500 border-b border-zinc-200 dark:border-zinc-700">
+                    <th className="px-1 py-1.5 w-6 text-center">☑</th>
+                    <th className="px-1 py-1.5 w-6"></th>
+                    <th className="px-1 py-1.5 w-12">Code</th>
+                    <th className="px-1 py-1.5">Label</th>
+                    <th className="px-1 py-1.5 w-32">Syntax</th>
+                    <th className="px-1 py-1.5 w-16">Factor</th>
+                    <th className="px-1 py-1.5 w-16 text-right">Act</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {visibleCodes.map((code) => (
+                    <SortableCodeRow
+                      key={code.code}
+                      code={code}
+                      varKey={variableKey}
+                      varName={varName}
+                      isSelected={selectedCodes.includes(code.code)}
+                      onToggleSelect={toggleCodeSelection}
+                      onUpdateLabel={onUpdateCodeLabel}
+                      onUpdateVisibility={onUpdateCodeVisibility}
+                      onUpdateFactor={onUpdateCodeFactor}
+                      onEditSyntax={handleEditSyntax}
+                    />
+                  ))}
+                </tbody>
+              </table>
+            </SortableContext>
+          </DndContext>
+
+          {visibleCodes.length === 0 && (
+            <p className="text-sm text-zinc-500 text-center py-8">
+              No codes available
+            </p>
+          )}
         </div>
       </div>
 

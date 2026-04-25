@@ -2490,6 +2490,7 @@ const EditVariablesPage: React.FC = () => {
     reorderCodes,
     addNetCode,
     addCode,
+    toggleVariableStat,
   } = useStore();
   const [showMergeModal, setShowMergeModal] = useState(false);
   const [showAddVar, setShowAddVar] = useState(false);
@@ -2743,6 +2744,7 @@ const EditVariablesPage: React.FC = () => {
           onReorderCodes={reorderCodes}
           onAddNetCode={addNetCode}
           onAddCode={addCode}
+          onToggleVariableStat={toggleVariableStat}
         />
       )}
     </div>
