@@ -2300,15 +2300,15 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
               </div>
               
               {/* Right Side - Form */}
-              <div className="flex-1 p-4 overflow-y-auto space-y-4">
-                {/* Header Constructor - Droppable Zone */}
+              <div className="flex-1 p-4 space-y-4 overflow-hidden">
+                {/* Header Constructor - Droppable Zone (Fixed height, no scroll) */}
                 <div>
                   <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-2 block">
                     Header Structure (drop variables here)
                   </label>
                   <div 
                     id="ez-header-zone"
-                    className="border-2 border-dashed border-zinc-300 dark:border-zinc-600 hover:border-blue-400 dark:hover:border-blue-500 rounded p-3 min-h-[80px] bg-zinc-50 dark:bg-zinc-800/50 transition-colors"
+                    className="border-2 border-dashed border-zinc-300 dark:border-zinc-600 hover:border-blue-400 dark:hover:border-blue-500 rounded p-3 h-[100px] overflow-hidden bg-zinc-50 dark:bg-zinc-800/50 transition-colors"
                   >
                     {ezHeaderItems.length === 0 ? (
                       <div className="text-center py-4">
@@ -2381,65 +2381,67 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
                 </div>
               </div>
 
-              {/* Summary */}
-              <div className="text-xs text-zinc-500">
-                Will create <strong>{ezSelectedRowVars.length}</strong> tables with the same header structure
+              {/* Summary and Buttons */}
+              <div className="flex items-center justify-between pt-2 border-t border-zinc-200 dark:border-zinc-700">
+                <span className="text-xs text-zinc-500">
+                  Will create <strong>{ezSelectedRowVars.length}</strong> tables
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => { setShowEzTablesModal(false); setEzHeaderItems([]); setEzSelectedRowVars([]); setEzWeightCol(null); }}
+                    className="px-3 py-1.5 text-xs text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded border border-zinc-300 dark:border-zinc-600"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (ezHeaderItems.length === 0) {
+                        alert('Add at least one variable to header structure');
+                        return;
+                      }
+                      if (ezSelectedRowVars.length === 0) {
+                        alert('Select at least one row variable');
+                        return;
+                      }
+                      
+                      // Create tables
+                      const { addTable } = useStore.getState();
+                      ezSelectedRowVars.forEach((rowVar) => {
+                        const visibleCodes = Object.values(variables).find(v => v.name === rowVar || Object.keys(variables).find(k => k === rowVar))?.codes
+                          .filter((c: any) => c.visibility !== 'removed' && c.visibility !== 'hidden')
+                          .map((c: any) => c.code) || [];
+                        
+                        addTable({
+                          id: crypto.randomUUID(),
+                          name: variables[rowVar]?.label || rowVar,
+                          row_items: visibleCodes.map(code => ({
+                            id: crypto.randomUUID(),
+                            variable: rowVar,
+                            codeDef: `${rowVar}/${code}`,
+                            codes: [code]
+                          })),
+                          col_items: JSON.parse(JSON.stringify(ezHeaderItems)),
+                          grid_items: [],
+                          filter_items: [],
+                          weight_col: ezWeightCol,
+                          filter_def: null,
+                          result: null
+                        });
+                      });
+                      
+                      setShowEzTablesModal(false);
+                      setEzHeaderItems([]);
+                      setEzSelectedRowVars([]);
+                      setEzWeightCol(null);
+                      alert(`Created ${ezSelectedRowVars.length} tables!`);
+                    }}
+                    disabled={ezSelectedRowVars.length === 0 || ezHeaderItems.length === 0}
+                    className="px-3 py-1.5 text-xs bg-emerald-500 hover:bg-emerald-600 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded"
+                  >
+                    Create {ezSelectedRowVars.length} Tables
+                  </button>
+                </div>
               </div>
-            </div>
-            <div className="flex justify-end items-center gap-2 px-4 py-3 border-t border-zinc-200 dark:border-zinc-700">
-              <button
-                onClick={() => { setShowEzTablesModal(false); setEzHeaderItems([]); setEzSelectedRowVars([]); setEzWeightCol(null); }}
-                className="px-4 py-2 text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded border border-zinc-300 dark:border-zinc-600"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => {
-                  if (ezHeaderItems.length === 0) {
-                    alert('Add at least one variable to header structure');
-                    return;
-                  }
-                  if (ezSelectedRowVars.length === 0) {
-                    alert('Select at least one row variable');
-                    return;
-                  }
-                  
-                  // Create tables
-                  const { addTable } = useStore.getState();
-                  ezSelectedRowVars.forEach((rowVar) => {
-                    const visibleCodes = Object.values(variables).find(v => v.name === rowVar || Object.keys(variables).find(k => k === rowVar))?.codes
-                      .filter((c: any) => c.visibility !== 'removed' && c.visibility !== 'hidden')
-                      .map((c: any) => c.code) || [];
-                    
-                    addTable({
-                      id: crypto.randomUUID(),
-                      name: variables[rowVar]?.label || rowVar,
-                      row_items: visibleCodes.map(code => ({
-                        id: crypto.randomUUID(),
-                        variable: rowVar,
-                        codeDef: `${rowVar}/${code}`,
-                        codes: [code]
-                      })),
-                      col_items: JSON.parse(JSON.stringify(ezHeaderItems)),
-                      grid_items: [],
-                      filter_items: [],
-                      weight_col: ezWeightCol,
-                      filter_def: null,
-                      result: null
-                    });
-                  });
-                  
-                  setShowEzTablesModal(false);
-                  setEzHeaderItems([]);
-                  setEzSelectedRowVars([]);
-                  setEzWeightCol(null);
-                  alert(`Created ${ezSelectedRowVars.length} tables!`);
-                }}
-                disabled={ezSelectedRowVars.length === 0 || ezHeaderItems.length === 0}
-                className="px-4 py-2 text-xs font-medium bg-emerald-500 hover:bg-emerald-600 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded"
-              >
-                Create {ezSelectedRowVars.length} Tables
-              </button>
             </div>
           </div>
         </div>
