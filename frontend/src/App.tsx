@@ -2457,12 +2457,16 @@ const MergeVariablesModal: React.FC<MergeVariablesModalProps> = ({ onClose }) =>
           name: result.name,
           label: result.label,
           type: result.type,
+          answerType: 'multiple_answer',
           codes: result.codes.map((c: any) => ({
             code: c.code,
             label: c.label,
             factor: null,
             visibility: 'visible' as const,
           })),
+          responseCount: 0,
+          baseCount: 0,
+          isValid: true,
           syntax: result.syntax,
           code_syntax: result.code_syntax,
           isCustom: true,
@@ -2483,12 +2487,16 @@ const MergeVariablesModal: React.FC<MergeVariablesModalProps> = ({ onClose }) =>
           name: result.name,
           label: result.label,
           type: result.type,
+          answerType: 'multiple_answer',
           codes: result.codes.map((c: any) => ({
             code: c.code,
             label: c.label,
             factor: null,
             visibility: 'visible' as const,
           })),
+          responseCount: 0,
+          baseCount: 0,
+          isValid: true,
           syntax: result.syntax,
           code_syntax: result.code_syntax,
           isCustom: true,
@@ -2644,6 +2652,7 @@ const EditVariablesPage: React.FC = () => {
   const [newVarName, setNewVarName] = useState('');
   const [newVarLabel, setNewVarLabel] = useState('');
   const [newVarType, setNewVarType] = useState('categorical');
+  const [newVarAnswerType, setNewVarAnswerType] = useState<'single_answer' | 'multiple_answer'>('single_answer');
   const [addVarError, setAddVarError] = useState('');
 
   const variableEntries = Object.entries(variables);
@@ -2653,9 +2662,9 @@ const EditVariablesPage: React.FC = () => {
     const name = newVarName.trim();
     if (!key) { setAddVarError('key is required'); return; }
     if (variables[key]) { setAddVarError(`variable '${key}' already exists`); return; }
-    addVariable(key, name || key, newVarLabel.trim(), newVarType);
+    addVariable(key, name || key, newVarLabel.trim(), newVarType, newVarAnswerType);
     setShowAddVar(false);
-    setNewVarKey(''); setNewVarName(''); setNewVarLabel(''); setNewVarType('categorical'); setAddVarError('');
+    setNewVarKey(''); setNewVarName(''); setNewVarLabel(''); setNewVarType('categorical'); setNewVarAnswerType('single_answer'); setAddVarError('');
     navigate(`/edit-variables/${encodeURIComponent(key)}`);
   };
 
@@ -2757,6 +2766,17 @@ const EditVariablesPage: React.FC = () => {
                   <option value="numeric">numeric</option>
                 </select>
               </div>
+              <div className="flex flex-col gap-0.5">
+                <span className="text-[10px] text-zinc-400 dark:text-zinc-500">answer type</span>
+                <select
+                  value={newVarAnswerType}
+                  onChange={(e) => setNewVarAnswerType(e.target.value as 'single_answer' | 'multiple_answer')}
+                  className="text-xs bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 px-2 py-1 text-zinc-700 dark:text-zinc-300 outline-none"
+                >
+                  <option value="single_answer">single answer</option>
+                  <option value="multiple_answer">multiple answer</option>
+                </select>
+              </div>
               <div className="flex flex-col items-center gap-1">
                 <button onClick={handleAddVariable} className="text-xs px-3 py-1 bg-emerald-500 hover:bg-emerald-600 text-white transition-colors">create</button>
                 <button onClick={() => { setShowAddVar(false); setAddVarError(''); }} className="text-xs px-3 py-1 text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-300 transition-colors">cancel</button>
@@ -2776,6 +2796,9 @@ const EditVariablesPage: React.FC = () => {
               <th className="border-b border-zinc-200 dark:border-zinc-800 px-3 py-2 text-left text-zinc-500 dark:text-zinc-400 font-medium w-44">name</th>
               <th className="border-b border-zinc-200 dark:border-zinc-800 px-3 py-2 text-left text-zinc-500 dark:text-zinc-400 font-medium">definition</th>
               <th className="border-b border-zinc-200 dark:border-zinc-800 px-3 py-2 text-left text-zinc-500 dark:text-zinc-400 font-medium w-24">type</th>
+              <th className="border-b border-zinc-200 dark:border-zinc-800 px-3 py-2 text-left text-zinc-500 dark:text-zinc-400 font-medium w-28">answer type</th>
+              <th className="border-b border-zinc-200 dark:border-zinc-800 px-3 py-2 text-right text-zinc-500 dark:text-zinc-400 font-medium w-24">responses</th>
+              <th className="border-b border-zinc-200 dark:border-zinc-800 px-3 py-2 text-center text-zinc-500 dark:text-zinc-400 font-medium w-16">valid</th>
               <th className="border-b border-zinc-200 dark:border-zinc-800 px-3 py-2 text-right text-zinc-500 dark:text-zinc-400 font-medium w-14">codes</th>
               <th className="border-b border-zinc-200 dark:border-zinc-800 px-3 py-2 text-center text-zinc-500 dark:text-zinc-400 font-medium w-20">actions</th>
             </tr>
@@ -2801,6 +2824,21 @@ const EditVariablesPage: React.FC = () => {
                   <td className="border-b border-zinc-100 dark:border-zinc-800/60 px-3 py-2 text-zinc-700 dark:text-zinc-300 truncate">{info.name || key}</td>
                   <td className="border-b border-zinc-100 dark:border-zinc-800/60 px-3 py-2 text-zinc-500 dark:text-zinc-400 truncate">{info.label}</td>
                   <td className="border-b border-zinc-100 dark:border-zinc-800/60 px-3 py-2 text-zinc-400 dark:text-zinc-500">{info.type}</td>
+                  <td className="border-b border-zinc-100 dark:border-zinc-800/60 px-3 py-2 text-zinc-500 dark:text-zinc-400">
+                    {info.answerType === 'multiple_answer' ? 'Multiple Answer' : 'Single Answer'}
+                  </td>
+                  <td className="border-b border-zinc-100 dark:border-zinc-800/60 px-3 py-2 text-right text-zinc-400 dark:text-zinc-500">
+                    {info.responseCount} / {info.baseCount}
+                  </td>
+                  <td className="border-b border-zinc-100 dark:border-zinc-800/60 px-3 py-2 text-center">
+                    {info.answerType === 'single_answer' ? (
+                      <span className={info.isValid ? 'text-green-600' : 'text-amber-600'}>
+                        {info.isValid ? 'Valid' : 'Invalid'}
+                      </span>
+                    ) : (
+                      <span className="text-gray-400">-</span>
+                    )}
+                  </td>
                   <td className="border-b border-zinc-100 dark:border-zinc-800/60 px-3 py-2 text-right text-zinc-400 dark:text-zinc-500">
                     {info.codes.length}
                     {(hiddenCount > 0 || removedCount > 0) && (

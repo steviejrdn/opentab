@@ -30,7 +30,11 @@ class VariableInfo(BaseModel):
     name: str
     label: str
     type: str
+    answer_type: str = 'single_answer'  # 'single_answer' | 'multiple_answer'
     codes: list[dict]
+    response_count: int = 0
+    base_count: int = 0
+    is_valid: bool = True
     syntax: Optional[str] = None
     code_syntax: Optional[list[str]] = None
     is_custom: Optional[bool] = False
@@ -107,6 +111,8 @@ async def merge_mr(request: MergeMRRequest):
 
     data_store['merged_variables'][request.name] = {
         'label': label,
+        'type': 'multiple_response',
+        'answer_type': 'multiple_answer',
         'codes': codes,
         'source_columns': request.source_columns,
     }
@@ -188,7 +194,8 @@ async def merge_variables(request: MergeVariablesRequest):
 
     data_store['merged_variables'][request.new_variable_name] = {
         'label': label,
-        'type': request.merge_type,
+        'type': 'multiple_response',
+        'answer_type': 'multiple_answer',
         'codes': codes,
         'syntax': ",".join(code_syntax),
         'code_syntax': code_syntax,
@@ -290,6 +297,7 @@ async def merge_codes(request: MergeCodesRequest):
     data_store['merged_variables'][request.new_variable_name] = {
         'label': label,
         'type': 'code_merge',
+        'answer_type': 'multiple_answer',
         'codes': codes,
         'syntax': syntax,
         'code_syntax': code_syntax,
@@ -337,12 +345,28 @@ async def get_variables():
     metadata = data_store['metadata']
 
     variables = {}
+    base_count = len(df)
+
     for col in df.columns:
         if col in data_store['merged_variables']:
             merged = data_store['merged_variables'][col]
+            # Calculate response count for merged variable
+            response_count = 0
+            if col in df.columns:
+                for val in df[col].dropna():
+                    if val:
+                        response_count += len(str(val).split(';'))
+
             variables[col] = VariableInfo(
-                name=col, label=merged['label'], type='multiple_response',
-                codes=merged['codes']
+                name=col,
+                label=merged['label'],
+                type='multiple_response',
+                answer_type='multiple_answer',
+                codes=merged['codes'],
+                response_count=response_count,
+                base_count=base_count,
+                is_valid=True,
+                is_custom=True
             )
             continue
 
@@ -352,6 +376,9 @@ async def get_variables():
             codes = sorted(codes, key=lambda x: (int(x['code']) if str(x['code']).isdigit() else float('inf'), str(x['code'])))
         label = col
         var_type = metadata.get(col, {}).get('type', 'categorical')
+        answer_type = metadata.get(col, {}).get('answer_type', 'single_answer')
+        response_count = metadata.get(col, {}).get('response_count', len(df[col].dropna()))
+        is_valid = metadata.get(col, {}).get('is_valid', True)
 
         normalized_codes = []
         for c in codes:
@@ -370,7 +397,16 @@ async def get_variables():
         # Sort normalized_codes by code value
         normalized_codes = sorted(normalized_codes, key=lambda x: (int(x['code']) if str(x['code']).isdigit() else float('inf'), str(x['code'])))
 
-        variables[col] = VariableInfo(name=col, label=label, type=var_type, codes=normalized_codes)
+        variables[col] = VariableInfo(
+            name=col,
+            label=label,
+            type=var_type,
+            answer_type=answer_type,
+            codes=normalized_codes,
+            response_count=response_count,
+            base_count=base_count,
+            is_valid=is_valid
+        )
 
     return VariablesResponse(variables=variables)
 

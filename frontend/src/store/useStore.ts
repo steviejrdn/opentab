@@ -72,7 +72,7 @@ interface AppState {
   addNetCode: (varName: string, netOf: string[], label: string) => void;
   addCode: (varName: string, label: string, syntax: string, factor?: number | null) => void;
   reorderCodes: (varName: string, orderedCodes: string[]) => void;
-  addVariable: (key: string, name: string, label: string, type: string) => void;
+  addVariable: (key: string, name: string, label: string, type: string, answerType?: 'single_answer' | 'multiple_answer') => void;
   duplicateVariable: (sourceKey: string, targetKey: string) => void;
   toggleVariableStat: (varName: string, stat: 'showMean' | 'showStdError' | 'showStdDev' | 'showVariance') => void;
   deleteVariable: (varName: string) => void;
@@ -418,13 +418,27 @@ export const useStore = create<AppState>()((set, get) => ({
       return { variables: { ...state.variables, [varName]: { ...v, codes: reordered, code_syntax: reorderedCodeSyntax } } };
     }),
 
-  addVariable: (key, name, label, type) =>
+  addVariable: (key, name, label, type, answerType: 'single_answer' | 'multiple_answer' = 'single_answer') =>
     set((state) => {
       if (state.variables[key]) return state;
       return {
         variables: {
           ...state.variables,
-          [key]: { name, label, type, codes: [], isCustom: true, showMean: false, showStdError: false, showStdDev: false, showVariance: false },
+          [key]: {
+            name,
+            label,
+            type,
+            answerType,
+            codes: [],
+            responseCount: 0,
+            baseCount: state.rowCount,
+            isValid: true,
+            isCustom: true,
+            showMean: false,
+            showStdError: false,
+            showStdDev: false,
+            showVariance: false
+          },
         },
       };
     }),

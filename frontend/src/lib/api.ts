@@ -24,7 +24,11 @@ export interface VariableInfo {
   name: string;
   label: string;
   type: string;
+  answerType: 'single_answer' | 'multiple_answer';
   codes: VariableCode[];
+  responseCount: number;
+  baseCount: number;
+  isValid: boolean;
   syntax?: string;
   code_syntax?: string[];
   isCustom?: boolean;
