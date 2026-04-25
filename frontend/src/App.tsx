@@ -2316,15 +2316,14 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
                   <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-2 block">
                     Header Structure (drop variables here)
                   </label>
-                  <div 
+                    <div 
                     id="ez-header-zone"
-                    className="border-2 border-dashed border-zinc-300 dark:border-zinc-600 hover:border-blue-400 dark:hover:border-blue-500 rounded p-3 h-[100px] overflow-hidden bg-zinc-50 dark:bg-zinc-800/50 transition-colors"
+                    className="border-2 border-dashed border-zinc-300 dark:border-zinc-600 hover:border-blue-400 dark:hover:border-blue-500 rounded p-3 h-[100px] overflow-hidden bg-zinc-50 dark:bg-zinc-800/50 transition-colors flex items-center justify-center"
                   >
                     {ezHeaderItems.length === 0 ? (
-                      <div className="text-center py-4">
-                        <div className="text-2xl mb-2">📥</div>
-                        <p className="text-xs text-zinc-500 mb-1">Drag variables here</p>
-                        <p className="text-[10px] text-zinc-400">from the list on the left</p>
+                      <div className="text-center">
+                        <div className="text-2xl mb-1">📥</div>
+                        <p className="text-xs text-zinc-500">Drag variables here</p>
                       </div>
                     ) : (
                       <div className="flex flex-wrap gap-2">
