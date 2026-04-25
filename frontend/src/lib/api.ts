@@ -108,7 +108,21 @@ export const dataApi = {
 
   getVariables: async (): Promise<Record<string, VariableInfo>> => {
     const response = await api.get('/api/data/variables');
-    return response.data.variables;
+    const variables = response.data.variables;
+    
+    // Transform snake_case to camelCase for new fields
+    const transformed: Record<string, VariableInfo> = {};
+    for (const [key, varData] of Object.entries(variables)) {
+      const v = varData as any;
+      transformed[key] = {
+        ...v,
+        answerType: v.answer_type || 'single_answer',
+        responseCount: v.response_count || 0,
+        baseCount: v.base_count || 0,
+        isValid: v.is_valid ?? true,
+      } as VariableInfo;
+    }
+    return transformed;
   },
 
   getInfo: async () => {

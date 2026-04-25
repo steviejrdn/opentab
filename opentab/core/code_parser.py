@@ -83,7 +83,7 @@ def _parse_atomic_unit(unit, df):
         range_codes = set(str(c) for c in range(int(start_code), int(end_code) + 1))
         col_str = df[var_name].astype(str).str.strip()
         if col_str.str.contains(';', regex=False).any():
-            mask = col_str.apply(lambda x: bool(range_codes & set(x.split(';'))))
+            mask = col_str.apply(lambda x: bool(range_codes & set(str(x).split(';'))) if pd.notna(x) and str(x) not in ('nan', 'NaN', '') else False)
         else:
             mask = col_str.isin(range_codes)
         return ~mask if negate else mask
@@ -91,7 +91,7 @@ def _parse_atomic_unit(unit, df):
     codes = [c.strip() for c in code_part.split(',')]
     col_str = df[var_name].astype(str).str.strip()
     if col_str.str.contains(';', regex=False).any():
-        mask = col_str.apply(lambda x: any(c in x.split(';') for c in codes))
+        mask = col_str.apply(lambda x: any(c in str(x).split(';') for c in codes) if pd.notna(x) and str(x) not in ('nan', 'NaN', '') else False)
     else:
         mask = col_str.isin(codes)
     return ~mask if negate else mask
@@ -147,7 +147,7 @@ def validate_code_def(code_def, df):
         if has_semicolon:
             all_codes = set()
             for v in col_values:
-                all_codes.update(v.split(';'))
+                all_codes.update(str(v).split(';'))
             for code in codes:
                 if code not in all_codes:
                     errors.append(f"Code '{code}' not found in variable '{var_name}'")
