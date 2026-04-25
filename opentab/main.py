@@ -26,4 +26,8 @@ if static_dir.exists():
 
     @app.get("/{full_path:path}")
     async def serve_spa(full_path: str):
+        # Serve static files if they exist, otherwise serve index.html for SPA routing
+        file_path = static_dir / full_path
+        if file_path.exists() and file_path.is_file():
+            return FileResponse(file_path)
         return FileResponse(static_dir / "index.html")
