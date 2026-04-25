@@ -49,6 +49,9 @@ interface AppState {
   addColItem: (tableId: string, item: DropItem) => void;
   removeRowItem: (tableId: string, itemId: string) => void;
   removeColItem: (tableId: string, itemId: string) => void;
+  addGridItem: (tableId: string, item: DropItem) => void;
+  removeGridItem: (tableId: string, itemId: string) => void;
+  setGridMode: (tableId: string, enabled: boolean) => void;
   addFilterItem: (tableId: string, item: FilterItem) => void;
   updateFilterItem: (tableId: string, itemId: string, updates: Partial<FilterItem>) => void;
   removeFilterItem: (tableId: string, itemId: string) => void;
@@ -194,6 +197,31 @@ export const useStore = create<AppState>()((set, get) => ({
         ...i, children: i.children ? removeFrom(i.children) : undefined,
       }));
     get().updateTable(tableId, { col_items: removeFrom(table.col_items) });
+  },
+
+  addGridItem: (tableId, item) => {
+    const state = get();
+    const table = state.tables.find((t) => t.id === tableId);
+    if (table) {
+      get().updateTable(tableId, {
+        grid_items: [...(table.grid_items || []), item],
+      });
+    }
+  },
+
+  removeGridItem: (tableId, itemId) => {
+    const table = get().tables.find((t) => t.id === tableId);
+    if (!table || !table.grid_items) return;
+    get().updateTable(tableId, {
+      grid_items: table.grid_items.filter((i) => i.id !== itemId),
+    });
+  },
+
+  setGridMode: (tableId, enabled) => {
+    const table = get().tables.find((t) => t.id === tableId);
+    if (table) {
+      get().updateTable(tableId, { is_grid_mode: enabled });
+    }
   },
 
   addFilterItem: (tableId, item) => {

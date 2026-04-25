@@ -38,6 +38,7 @@ interface VariableEditPanelProps {
   onUpdateCodeVisibility: (varName: string, code: string, visibility: 'visible' | 'hidden' | 'removed') => void;
   onUpdateCodeFactor: (varName: string, code: string, factor: number | null) => void;
   onUpdateCodeSyntax: (varName: string, code: string, syntax: string) => void;
+  onUpdateNetCode?: (varName: string, code: string, syntax: string) => void;
   onReorderCodes: (varName: string, orderedCodes: string[]) => void;
   onAddNetCode: (varName: string, netOf: string[], label: string) => void;
   onAddCode?: (varName: string, label: string, syntax: string) => void;
@@ -333,13 +334,15 @@ const SortableCodeRow: React.FC<SortableCodeRowProps> = ({
       <td className="px-1 py-1 border-b border-zinc-200 dark:border-zinc-700 font-mono text-[10px] text-zinc-500">
         <div className="flex items-center gap-0.5">
           <span className="truncate max-w-[120px]">{displaySyntax}</span>
-          <button
-            onClick={() => onEditSyntax(code, displaySyntax)}
-            className="p-0.5 rounded text-zinc-400 hover:text-blue-600 shrink-0"
-            title="Edit syntax"
-          >
-            <EditIcon />
-          </button>
+          {(code.isNet || code.isCustom) && (
+            <button
+              onClick={() => onEditSyntax(code, displaySyntax)}
+              className="p-0.5 rounded text-zinc-400 hover:text-blue-600 shrink-0"
+              title="Edit syntax"
+            >
+              <EditIcon />
+            </button>
+          )}
         </div>
       </td>
       {/* Factor */}
@@ -391,6 +394,7 @@ export const VariableEditPanel: React.FC<VariableEditPanelProps> = ({
   onUpdateCodeVisibility,
   onUpdateCodeFactor,
   onUpdateCodeSyntax,
+  onUpdateNetCode,
   onReorderCodes,
   onAddNetCode,
   onAddCode,
@@ -405,6 +409,29 @@ export const VariableEditPanel: React.FC<VariableEditPanelProps> = ({
   const [showSyntaxBuilder, setShowSyntaxBuilder] = useState(false);
   const [editingCode, setEditingCode] = useState<VariableCode | null>(null);
   const [editingSyntax, setEditingSyntax] = useState('');
+
+  // Copy/Paste labels & factors state
+  const [copiedLabels, setCopiedLabels] = useState<{code: string; label: string; factor: number | null}[] | null>(null);
+
+  const handleCopyLabels = useCallback(() => {
+    const labelsToCopy = variable.codes
+      .filter((c) => c.visibility !== 'removed')
+      .map((c) => ({ code: c.code, label: c.label || '', factor: c.factor ?? null }));
+    setCopiedLabels(labelsToCopy);
+  }, [variable.codes]);
+
+  const handlePasteLabels = useCallback(() => {
+    if (!copiedLabels || copiedLabels.length === 0) return;
+    
+    // Match codes by code value and apply labels/factors
+    copiedLabels.forEach((copied) => {
+      const targetCode = variable.codes.find((c) => c.code === copied.code);
+      if (targetCode) {
+        onUpdateCodeLabel(variableKey, copied.code, copied.label);
+        onUpdateCodeFactor(variableKey, copied.code, copied.factor);
+      }
+    });
+  }, [copiedLabels, variable.codes, variableKey, onUpdateCodeLabel, onUpdateCodeFactor]);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -455,7 +482,11 @@ export const VariableEditPanel: React.FC<VariableEditPanelProps> = ({
 
   const handleSaveSyntax = useCallback((syntax: string) => {
     if (editingCode) {
-      onUpdateCodeSyntax(variableKey, editingCode.code, syntax);
+      if (editingCode.isNet && onUpdateNetCode) {
+        onUpdateNetCode(variableKey, editingCode.code, syntax);
+      } else {
+        onUpdateCodeSyntax(variableKey, editingCode.code, syntax);
+      }
       setEditingCode(null);
       setEditingSyntax('');
     } else {
@@ -463,7 +494,7 @@ export const VariableEditPanel: React.FC<VariableEditPanelProps> = ({
       setNewCodeSyntax(syntax);
     }
     setShowSyntaxBuilder(false);
-  }, [editingCode, variableKey, onUpdateCodeSyntax]);
+  }, [editingCode, variableKey, onUpdateCodeSyntax, onUpdateNetCode]);
 
   const handleOpenSyntaxForNewCode = useCallback(() => {
     setEditingCode(null);
@@ -604,6 +635,28 @@ export const VariableEditPanel: React.FC<VariableEditPanelProps> = ({
               Code
             </button>
           )}
+          
+          <div className="flex-1" />
+          
+          {/* Copy/Paste Labels buttons */}
+          <button
+            onClick={handleCopyLabels}
+            className="px-2.5 py-1.5 bg-slate-500 hover:bg-slate-600 text-white text-xs rounded transition-colors flex items-center gap-1"
+            title="Copy labels and factor scores"
+          >
+            <span>📋</span>
+            Copy Labels
+          </button>
+          <button
+            onClick={handlePasteLabels}
+            disabled={!copiedLabels || copiedLabels.length === 0}
+            className="px-2.5 py-1.5 bg-slate-500 hover:bg-slate-600 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs rounded transition-colors flex items-center gap-1"
+            title={copiedLabels ? `Paste ${copiedLabels.length} codes` : 'No labels copied'}
+          >
+            <span>📥</span>
+            Paste Labels
+            {copiedLabels && <span className="text-[10px] opacity-75">({copiedLabels.length})</span>}
+          </button>
         </div>
 
         {/* Scrollable Codes Section */}

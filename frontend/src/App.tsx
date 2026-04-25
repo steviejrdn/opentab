@@ -363,7 +363,7 @@ const Navigation: React.FC = () => {
       </div>
     </nav>
     {restoreStatus && (
-      <div className={`fixed bottom-4 right-4 z-50 px-4 py-3 text-xs border shadow-lg max-w-xs
+      <div className={`fixed bottom-4 right-4 z-[60] px-4 py-3 text-xs border shadow-lg max-w-xs
         ${restoreStatus.loading
           ? 'bg-zinc-100 dark:bg-zinc-800 border-zinc-300 dark:border-zinc-600 text-zinc-600 dark:text-zinc-400 animate-pulse'
           : 'bg-zinc-50 dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300'}`}>
@@ -991,6 +991,7 @@ const TableList: React.FC = () => {
       name: `table_${tables.length + 1}`,
       row_items: [],
       col_items: [],
+      grid_items: [] as DropItem[],
       filter_items: [],
       weight_col: null,
       filter_def: null,
@@ -1536,9 +1537,11 @@ const App: React.FC = () => {
 
 // ─── Build Page ───────────────────────────────────────────────────────────────
 const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ onLoadSample, loading }) => {
-  const { dataLoaded, activeTableId, tables, variables, removeRowItem, removeColItem, setTableResult, updateTable } = useStore();
+  const { dataLoaded, activeTableId, tables, variables, removeRowItem, removeColItem, removeGridItem, setTableResult, updateTable, addGridItem, setGridMode } = useStore();
   const [localTab, setLocalTab] = useState<'build' | 'filter' | 'result'>('build');
   const [isComputing, setIsComputing] = useState(false);
+  const [showGridModal, setShowGridModal] = useState(false);
+  const [selectedGridVars, setSelectedGridVars] = useState<string[]>([]);
 
   const activeTable = tables.find((t) => t.id === activeTableId);
 
@@ -1569,7 +1572,7 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
     const v = variables[variable];
     if (!v) return [];
     return v.codes
-      .filter((c: any) => c.visibility !== 'removed')
+      .filter((c: any) => c.visibility !== 'removed' && c.visibility !== 'hidden')
       .map((c: any) => c.code);
   };
 
@@ -1642,6 +1645,8 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
       const result = await computeApi.crosstab({
         row_items: flattenItemsForBackend(activeTable.row_items, getVisibleCodesList, '', resolveCode),
         col_items: flattenItemsForBackend(activeTable.col_items, getVisibleCodesList, '', resolveCode),
+        grid_items: activeTable.grid_items?.length ? flattenItemsForBackend(activeTable.grid_items, getVisibleCodesList, '', resolveCode) : undefined,
+        is_grid_mode: activeTable.is_grid_mode,
         filter_def: effectiveFilter,
         weight_col: activeTable.weight_col || undefined,
         mean_score_mappings: meanMappings.length > 0 ? meanMappings : undefined,
@@ -1706,6 +1711,15 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
                   onRemove={(id) => removeColItem(activeTable.id, id)}
                   orientation="horizontal"
                 />
+                {activeTable.grid_items && activeTable.grid_items.length > 0 && (
+                  <DropZone
+                    id="grid-zone"
+                    label="Variable Grid"
+                    items={activeTable.grid_items}
+                    onRemove={(id) => removeGridItem(activeTable.id, id)}
+                    orientation="horizontal"
+                  />
+                )}
                 <div className="flex-1 flex gap-4">
                   <div className="w-48">
                     <DropZone
@@ -1794,6 +1808,13 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
                     >
                       ⇄ transpose
                     </button>
+                    <button
+                      onClick={() => setShowGridModal(true)}
+                      className="px-3 py-1.5 bg-indigo-500 hover:bg-indigo-600 text-white text-xs rounded transition-colors flex items-center gap-1"
+                      title="Create Variable Grid"
+                    >
+                      ⊞ Create Grid
+                    </button>
                     <select
                       value={activeTable.weight_col || ''}
                       onChange={(e) => activeTable && updateTable(activeTable.id, { weight_col: e.target.value || null })}
@@ -1814,6 +1835,78 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
           </>
         )}
       </div>
+      
+      {/* Create Grid Modal */}
+      {showGridModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white dark:bg-zinc-900 rounded-lg shadow-xl w-[500px] max-h-[80vh] flex flex-col">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-200 dark:border-zinc-700">
+              <h3 className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">Create Variable Grid</h3>
+              <button onClick={() => { setShowGridModal(false); setSelectedGridVars([]); }} className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300">×</button>
+            </div>
+            <div className="p-4 overflow-y-auto flex-1">
+              <p className="text-xs text-zinc-500 mb-3">Select variables with the same code structure (e.g., Q11A-D)</p>
+              <div className="space-y-1">
+                {Object.entries(variables).map(([key, info]) => {
+                  const isSelected = selectedGridVars.includes(key);
+                  return (
+                    <label key={key} className={`flex items-center gap-2 p-2 rounded cursor-pointer ${isSelected ? 'bg-indigo-50 dark:bg-indigo-900/20' : 'hover:bg-zinc-50 dark:hover:bg-zinc-800'}`}>
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedGridVars([...selectedGridVars, key]);
+                          } else {
+                            setSelectedGridVars(selectedGridVars.filter((v) => v !== key));
+                          }
+                        }}
+                        className="rounded border-zinc-300"
+                      />
+                      <span className="text-xs font-medium text-zinc-700 dark:text-zinc-300">{key}</span>
+                      <span className="text-xs text-zinc-500">({info.codes.length} codes)</span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 px-4 py-3 border-t border-zinc-200 dark:border-zinc-700">
+              <button onClick={() => { setShowGridModal(false); setSelectedGridVars([]); }} className="px-3 py-1.5 text-xs text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300">Cancel</button>
+              <button
+                onClick={() => {
+                  if (selectedGridVars.length < 2) {
+                    alert('Select at least 2 variables');
+                    return;
+                  }
+                  // Validate that all selected variables have same codes
+                  const firstVar = variables[selectedGridVars[0]];
+                  const firstCodes = firstVar.codes.map((c) => c.code).sort();
+                  const allSameStructure = selectedGridVars.every((varKey) => {
+                    const varCodes = variables[varKey].codes.map((c) => c.code).sort();
+                    return JSON.stringify(varCodes) === JSON.stringify(firstCodes);
+                  });
+                  if (!allSameStructure) {
+                    alert('Selected variables must have the same code structure');
+                    return;
+                  }
+                  // Add grid items
+                  selectedGridVars.forEach((varKey) => {
+                    const allCodes = variables[varKey].codes.map((c) => c.code).join(',');
+                    addGridItem(activeTable!.id, { id: crypto.randomUUID(), variable: varKey, codeDef: allCodes });
+                  });
+                  setGridMode(activeTable!.id, true);
+                  setShowGridModal(false);
+                  setSelectedGridVars([]);
+                }}
+                disabled={selectedGridVars.length < 2}
+                className="px-3 py-1.5 bg-indigo-500 hover:bg-indigo-600 disabled:opacity-40 text-white text-xs rounded"
+              >
+                Create Grid ({selectedGridVars.length})
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -1857,7 +1950,7 @@ const ResultTab: React.FC = () => {
     const v = variables[variable];
     if (!v) return [];
     return v.codes
-      .filter((c: any) => c.visibility !== 'removed')
+      .filter((c: any) => c.visibility !== 'removed' && c.visibility !== 'hidden')
       .map((c: any) => c.code);
   };
 
@@ -2474,6 +2567,7 @@ const EditVariablesPage: React.FC = () => {
     updateCodeVisibility,
     updateCodeFactor,
     updateCodeSyntax,
+    updateNetCode,
     reorderCodes,
     addNetCode,
     addCode,
@@ -2727,6 +2821,7 @@ const EditVariablesPage: React.FC = () => {
           onUpdateCodeVisibility={updateCodeVisibility}
           onUpdateCodeFactor={updateCodeFactor}
           onUpdateCodeSyntax={updateCodeSyntax}
+          onUpdateNetCode={updateNetCode}
           onReorderCodes={reorderCodes}
           onAddNetCode={addNetCode}
           onAddCode={addCode}

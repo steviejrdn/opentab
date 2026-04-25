@@ -17,6 +17,7 @@ export interface VariableCode {
   isNet?: boolean;
   netOf?: string[];
   isNew?: boolean;
+  isCustom?: boolean;
   syntax?: string;
 }
 
@@ -44,10 +45,12 @@ export interface Table {
   folderId?: string | null;
   row_items: DropItem[];
   col_items: DropItem[];
+  grid_items: DropItem[];  // Variables for variable grid display
   filter_items: FilterItem[];
   weight_col: string | null;
   filter_def: string | null;
   result: CrosstabResult | null;
+  is_grid_mode?: boolean;  // Whether to display as variable grid
 }
 
 export interface DropItem {
@@ -71,6 +74,8 @@ export interface FilterItem {
 export interface CrosstabRequest {
   row_items: { variable: string; codeDef: string }[];
   col_items: { variable: string; codeDef: string }[];
+  grid_items?: { variable: string; codeDef: string }[];  // For variable grid
+  is_grid_mode?: boolean;
   filter_def?: string;
   weight_col?: string;
   mean_score_mappings?: { variable: string; codeScores: Record<string, number> }[];
