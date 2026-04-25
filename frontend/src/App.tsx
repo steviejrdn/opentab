@@ -1623,8 +1623,9 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
       // Generate effective items for grid table mode
       let effectiveRowItems = activeTable.row_items;
       let effectiveColItems = activeTable.col_items;
+      const isGridMode = activeTable.row_items.length === 0 && activeTable.grid_items && activeTable.grid_items.length > 0;
 
-      if (activeTable.row_items.length === 0 && activeTable.grid_items && activeTable.grid_items.length > 0) {
+      if (isGridMode) {
         // Grid table mode: rows = codes from first grid variable
         const firstGridVar = activeTable.grid_items[0].variable;
         const visibleCodes = getVisibleCodesList(firstGridVar);
@@ -1666,9 +1667,21 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
       const baseFilter = buildFilterDef(activeTable.filter_items);
       const effectiveFilter = [...(baseFilter ? [baseFilter] : []), ...removedParts].join('.') || undefined;
 
+      // Prepare column items for backend
+      let colItemsForBackend;
+      if (isGridMode) {
+        // For grid mode: each grid variable is a single column (any code)
+        colItemsForBackend = activeTable.grid_items!.map(item => ({
+          variable: item.variable,
+          codeDef: `${item.variable}/*`  // Any code in this variable
+        }));
+      } else {
+        colItemsForBackend = flattenItemsForBackend(effectiveColItems, getVisibleCodesList, '', resolveCode);
+      }
+
       const result = await computeApi.crosstab({
         row_items: flattenItemsForBackend(effectiveRowItems, getVisibleCodesList, '', resolveCode),
-        col_items: flattenItemsForBackend(effectiveColItems, getVisibleCodesList, '', resolveCode),
+        col_items: colItemsForBackend,
         filter_def: effectiveFilter,
         weight_col: activeTable.weight_col || undefined,
         mean_score_mappings: meanMappings.length > 0 ? meanMappings : undefined,
@@ -1754,11 +1767,38 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
                   </div>
                   <div className="flex-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 overflow-auto">
                     {(() => {
-                      const { headerRows: colHeaderRows, axisPaths: previewColPaths } =
-                        buildAxisStructure(activeTable.col_items, getVisibleCodesList, getCodeLabel, resolveCode);
-                      const { axisPaths: previewRowPaths } =
-                        buildAxisStructure(activeTable.row_items, getVisibleCodesList, getCodeLabel, resolveCode);
-                      const numHeaderRows = Math.max(colHeaderRows.length, 1);
+                      // Check if we're in grid mode
+                      const isGridMode = activeTable.grid_items && activeTable.grid_items.length > 0 && activeTable.row_items.length === 0;
+
+                      let colHeaderRows, previewColPaths, previewRowPaths, numHeaderRows;
+
+                      if (isGridMode) {
+                        // Grid mode: columns = grid items (show variable labels), rows = codes from first grid var
+                        const firstGridVar = activeTable.grid_items[0].variable;
+                        const visibleCodes = getVisibleCodesList(firstGridVar);
+
+                        // Build column headers from grid items - show variable labels
+                        previewColPaths = activeTable.grid_items.map(item => item.variable);
+                        colHeaderRows = [[
+                          ...activeTable.grid_items.map(item => ({
+                            label: variables[item.variable]?.label || item.variable,
+                            colSpan: 1,
+                            rowSpan: 1
+                          }))
+                        ]];
+
+                        // Build row paths from codes of first grid variable
+                        previewRowPaths = visibleCodes.map(code => `${firstGridVar}/${code}`);
+                        numHeaderRows = 1;
+                      } else {
+                        // Normal crosstab mode
+                        const colResult = buildAxisStructure(activeTable.col_items, getVisibleCodesList, getCodeLabel, resolveCode);
+                        colHeaderRows = colResult.headerRows;
+                        previewColPaths = colResult.axisPaths;
+                        const rowResult = buildAxisStructure(activeTable.row_items, getVisibleCodesList, getCodeLabel, resolveCode);
+                        previewRowPaths = rowResult.axisPaths;
+                        numHeaderRows = Math.max(colHeaderRows.length, 1);
+                      }
 
                       if (previewRowPaths.length === 0 && previewColPaths.length === 0) {
                         return (
