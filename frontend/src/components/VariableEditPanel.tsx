@@ -472,7 +472,6 @@ export const VariableEditPanel: React.FC<VariableEditPanelProps> = ({
   }, [newCodeSyntax]);
 
   const visibleCodes = variable.codes.filter((c) => c.visibility !== 'removed');
-  const hiddenCount = variable.codes.filter((c) => c.visibility === 'hidden').length;
   const canNet = selectedCodes.length >= 2;
   const varName = variable.name || variableKey;
 
@@ -583,40 +582,35 @@ export const VariableEditPanel: React.FC<VariableEditPanelProps> = ({
           )}
         </div>
 
+        {/* Fixed Toolbar */}
+        <div className="px-4 py-2 border-b border-zinc-200 dark:border-zinc-700 shrink-0 flex items-center gap-2">
+          {/* Netting button - appears when 2+ codes selected */}
+          {canNet && !showNetInput && (
+            <button
+              onClick={() => setShowNetInput(true)}
+              className="px-2.5 py-1.5 bg-purple-500 hover:bg-purple-600 text-white text-xs rounded transition-colors flex items-center gap-1"
+            >
+              <PlusIcon />
+              Net ({selectedCodes.length})
+            </button>
+          )}
+          {/* Add new code button */}
+          {!showAddCode && (
+            <button
+              onClick={() => setShowAddCode(true)}
+              className="px-2.5 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white text-xs rounded transition-colors flex items-center gap-1"
+            >
+              <PlusIcon />
+              Code
+            </button>
+          )}
+        </div>
+
         {/* Scrollable Codes Section */}
         <div className="flex-1 overflow-y-auto px-4 py-3">
-          {/* Codes Header with Toolbar */}
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">
-              Codes
-              {hiddenCount > 0 && (
-                <span className="ml-2 text-xs font-normal text-orange-500">
-                  {hiddenCount} hidden
-                </span>
-              )}
-            </h3>
-            <div className="flex items-center gap-2">
-              {/* Netting button - appears when 2+ codes selected */}
-              {canNet && !showNetInput && (
-                <button
-                  onClick={() => setShowNetInput(true)}
-                  className="px-2.5 py-1.5 bg-purple-500 hover:bg-purple-600 text-white text-xs rounded transition-colors flex items-center gap-1"
-                >
-                  <PlusIcon />
-                  Net ({selectedCodes.length})
-                </button>
-              )}
-              {/* Add new code button */}
-              {!showAddCode && (
-                <button
-                  onClick={() => setShowAddCode(true)}
-                  className="px-2.5 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white text-xs rounded transition-colors flex items-center gap-1"
-                >
-                  <PlusIcon />
-                  New
-                </button>
-              )}
-            </div>
+          {/* Codes Header */}
+          <div className="mb-3">
+            <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Codes</h3>
           </div>
 
           {/* Net Input */}

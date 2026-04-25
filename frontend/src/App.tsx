@@ -2109,19 +2109,6 @@ const ResultTab: React.FC = () => {
       <div className="flex flex-wrap gap-6 text-xs text-zinc-500 items-center">
         <span>row: <span className="text-zinc-700 dark:text-zinc-300">{rowVarLabel}</span></span>
         <span>base: <span className="text-zinc-700 dark:text-zinc-300">{result.base}</span></span>
-        {(() => {
-          const removedSummary: string[] = [];
-          Object.entries(variables).forEach(([varKey, info]) => {
-            const removed = info.codes.filter((c: any) => c.visibility === 'removed').map((c: any) => c.code);
-            if (removed.length > 0) removedSummary.push(`${varKey}=${removed.join(',')}`);
-          });
-          if (removedSummary.length === 0) return null;
-          return (
-            <span className="text-orange-600 dark:text-orange-400">
-              removed: {removedSummary.join(' ')}
-            </span>
-          );
-        })()}
       </div>
 
       {/* Table */}
@@ -2656,9 +2643,8 @@ const EditVariablesPage: React.FC = () => {
             </tr>
           </thead>
           <tbody>
-            {variableEntries.map(([key, info]) => {
+             {variableEntries.map(([key, info]) => {
               const hiddenCount = info.codes.filter((c: any) => c.visibility === 'hidden').length;
-              const removedCount = info.codes.filter((c: any) => c.visibility === 'removed').length;
               const isCustom = info.isCustom;
               const isSelected = selectedVariableKey === key;
               return (
@@ -2692,11 +2678,11 @@ const EditVariablesPage: React.FC = () => {
                       <span className="text-gray-400">-</span>
                     )}
                   </td>
-                  <td className="border-b border-zinc-100 dark:border-zinc-800/60 px-3 py-2 text-right text-zinc-400 dark:text-zinc-500">
+                   <td className="border-b border-zinc-100 dark:border-zinc-800/60 px-3 py-2 text-right text-zinc-400 dark:text-zinc-500">
                     {info.codes.length}
-                    {(hiddenCount > 0 || removedCount > 0) && (
+                    {hiddenCount > 0 && (
                       <span className="ml-1 text-orange-500 dark:text-orange-400">
-                        {hiddenCount > 0 && `−${hiddenCount}`}{removedCount > 0 && ` ✕${removedCount}`}
+                        −{hiddenCount}
                       </span>
                     )}
                   </td>

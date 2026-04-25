@@ -150,10 +150,14 @@ def validate_code_def(code_def, df):
                 all_codes.update(str(v).split(';'))
             for code in codes:
                 if code not in all_codes:
-                    errors.append(f"Code '{code}' not found in variable '{var_name}'")
+                    # Skip validation error for missing codes - they just won't match anything
+                    # This allows filters to reference codes that don't exist in the data
+                    pass
         else:
             for code in codes:
                 if code not in col_values:
-                    errors.append(f"Code '{code}' not found in variable '{var_name}'")
+                    # Skip validation error for missing codes - they just won't match anything
+                    # This allows filters to reference codes that don't exist in the data
+                    pass
 
     return errors

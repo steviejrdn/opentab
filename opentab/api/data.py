@@ -468,3 +468,43 @@ async def register_merged(request: RegisterMergedRequest):
         raise HTTPException(status_code=400, detail=f"Column '{request.name}' not found in data.")
     data_store['merged_variables'][request.name] = request.metadata
     return {"status": "ok", "name": request.name}
+
+
+# ─── Register net code metadata ──────────────────────────────────────────────
+class RegisterNetRequest(BaseModel):
+    code: str
+    variable: str
+    label: str
+    netOf: list[str]
+    syntax: str
+
+@router.post("/register-net")
+async def register_net(request: RegisterNetRequest):
+    if data_store['df'] is None:
+        raise HTTPException(status_code=400, detail="No data loaded.")
+    # Store net code metadata in data_store
+    if 'net_registry' not in data_store:
+        data_store['net_registry'] = {}
+    data_store['net_registry'][request.code] = {
+        'variable': request.variable,
+        'label': request.label,
+        'netOf': request.netOf,
+        'syntax': request.syntax
+    }
+    return {"status": "ok", "code": request.code}
+
+
+@router.get("/net-registry")
+async def get_net_registry():
+    """Get the net code registry and name-to-key mapping."""
+    net_registry = data_store.get('net_registry', {})
+    # Build name_to_key mapping from current variables
+    name_to_key = {}
+    if data_store['df'] is not None:
+        for col in data_store['df'].columns:
+            # Use column name as both key and display name
+            name_to_key[col] = col
+    return {
+        "net_registry": net_registry,
+        "name_to_key": name_to_key
+    }
