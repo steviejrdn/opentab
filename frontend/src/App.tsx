@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, Link, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useStore } from './store/useStore';
 import { DndContext, useSensor, useSensors, PointerSensor, useDraggable, useDroppable, DragOverlay } from '@dnd-kit/core';
 import type { DragStartEvent, DragEndEvent as DndDragEndEvent } from '@dnd-kit/core';
@@ -137,6 +137,7 @@ const ThemeToggle: React.FC = () => {
 // ─── Navigation ──────────────────────────────────────────────────────────────
 const Navigation: React.FC = () => {
   const location = useLocation();
+  const navigate = useNavigate();
   const { dataLoaded, variables, tables, folders, displayOptions, activeTableId, fileName, rowCount,
           importState, setDataLoaded, resetSession } = useStore();
   const openFileRef = useRef<HTMLInputElement>(null);
@@ -292,7 +293,7 @@ const Navigation: React.FC = () => {
       <div className="flex items-center gap-3">
         {/* Logo — click to reset session */}
         <button
-          onClick={() => { if (window.confirm('Start a new session? All tables and data will be cleared.')) { resetSession(); opentabHandle.current = null; } }}
+          onClick={() => { if (window.confirm('Start a new session? All tables and data will be cleared.')) { resetSession(); opentabHandle.current = null; navigate('/build'); } }}
           className="flex items-center focus:outline-none"
           title="New session"
         >

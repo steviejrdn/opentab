@@ -325,7 +325,13 @@ export const useStore = create<AppState>()((set, get) => ({
       return {
         variables: {
           ...state.variables,
-          [varName]: { ...v, code_syntax: newCodeSyntax },
+          [varName]: {
+            ...v,
+            code_syntax: newCodeSyntax,
+            codes: v.codes.map((c, idx) =>
+              idx === codeIdx ? { ...c, syntax } : c
+            ),
+          },
         },
       };
     }),

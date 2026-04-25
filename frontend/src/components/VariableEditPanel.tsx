@@ -47,8 +47,6 @@ interface SortableCodeRowProps {
   code: VariableCode;
   varKey: string;
   varName: string;
-  code_syntax?: string[];
-  codeIndex: number;
   isSelected: boolean;
   onToggleSelect: (code: string) => void;
   onUpdateLabel: (varName: string, code: string, label: string) => void;
@@ -167,7 +165,7 @@ const SyntaxBuilderModal: React.FC<SyntaxBuilderModalProps> = ({ variables, init
                     </button>
                     {isExpanded && (
                       <div className="px-3 pb-2 flex flex-wrap gap-1">
-                        {vInfo.codes?.map((c: any) => (
+                        {vInfo.codes?.filter((c: any) => c.visibility !== 'removed').map((c: any) => (
                           <button key={c.code} onClick={() => insertCode(key, vInfo.name || key, c.code)} className={`text-[10px] px-2 py-1 border rounded transition-colors ${notMode ? 'bg-red-50 dark:bg-red-900/30 border-red-200 dark:border-red-800 text-red-600 dark:text-red-400' : 'bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-800 text-blue-600 dark:text-blue-400'}`} title={`${c.code} — ${c.label}`}>
                             {notMode ? <span className="flex items-center gap-1"><span>{c.label}</span><span className="text-[8px] font-bold">NOT</span></span> : c.label}
                           </button>
@@ -181,27 +179,50 @@ const SyntaxBuilderModal: React.FC<SyntaxBuilderModalProps> = ({ variables, init
             </div>
           </div>
           <div className="flex-1 flex flex-col overflow-hidden">
-            <div className="p-4 border-b border-zinc-200 dark:border-zinc-700 min-h-[120px] max-h-[180px] overflow-auto">
+             <div className="p-4 border-b border-zinc-200 dark:border-zinc-700 min-h-[120px] max-h-[180px] overflow-auto">
               <div className="text-xs font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wide mb-2">preview</div>
               {atoms.length === 0 ? (
                 <div className="text-xs text-zinc-400 dark:text-zinc-500 italic">click codes to add them here</div>
               ) : (
-                <div className="text-xs space-y-2">
+                <div className="text-xs">
                   {(() => {
-                    const rows: React.ReactNode[][] = []; let currentRow: React.ReactNode[] = []; let lastEnd = 0;
+                    const elements: React.ReactNode[] = [];
+                    let lastEnd = 0;
                     atoms.forEach((atom, idx) => {
                       const before = rawSyntax.slice(lastEnd, atom.start);
-                      if (before) { const tokens = before.match(/[+.]|\(|\)/g) || []; tokens.forEach((tok, ti) => { if (tok === '+') currentRow.push(<span key={`op-${idx}-${ti}`} className="mx-1 text-emerald-600 dark:text-emerald-400 font-medium">OR</span>); else if (tok === '.') currentRow.push(<span key={`op-${idx}-${ti}`} className="mx-1 text-blue-500 font-medium">AND</span>); else if (tok === '(') currentRow.push(<span key={`op-${idx}-${ti}`} className="text-zinc-400">(</span>); else if (tok === ')') currentRow.push(<span key={`op-${idx}-${ti}`} className="text-zinc-400">)</span>); }); }
+                      if (before) {
+                        const tokens = before.match(/[+.]|\(|\)/g) || [];
+                        tokens.forEach((tok, ti) => {
+                          if (tok === '+') elements.push(<span key={`op-${idx}-${ti}`} className="mx-1 text-emerald-600 dark:text-emerald-400 font-medium">OR</span>);
+                          else if (tok === '.') elements.push(<span key={`op-${idx}-${ti}`} className="mx-1 text-blue-500 font-medium">AND</span>);
+                          else if (tok === '(') elements.push(<span key={`op-${idx}-${ti}`} className="text-zinc-400">(</span>);
+                          else if (tok === ')') elements.push(<span key={`op-${idx}-${ti}`} className="text-zinc-400">)</span>);
+                        });
+                      }
                       const cleanCode = atom.isNot ? atom.codePart.slice(1) : atom.codePart;
-                      const { varLabel, codeLabel } = getLabelForAtom(atom.varName, atom.codePart, atom.isNot);
+                      const { codeLabel } = getLabelForAtom(atom.varName, atom.codePart, atom.isNot);
                       const displayCode = atom.isNot ? `n${cleanCode}` : cleanCode;
-                      currentRow.push(<span key={`atom-${idx}`} className="inline-flex items-center gap-1 bg-zinc-50 dark:bg-zinc-800 px-2 py-1 rounded">{atom.isNot && <span className="text-[9px] font-bold text-red-500 dark:text-red-400">NOT</span>}<span className="font-mono text-purple-600 dark:text-purple-400">{atom.varName}/{displayCode}</span><span className="text-zinc-300 dark:text-zinc-600">=</span><span className="text-zinc-600 dark:text-zinc-300">{varLabel}/{codeLabel}</span></span>);
+                      elements.push(
+                        <span key={`atom-${idx}`} className="inline-flex items-center">
+                          {atom.isNot && <span className="text-[9px] font-bold text-red-500 dark:text-red-400 mr-1">NOT</span>}
+                          <span className="font-mono text-purple-600 dark:text-purple-400">{atom.varName}/{displayCode}</span>
+                          <span className="text-zinc-400 mx-1">=</span>
+                          <span className="text-zinc-600 dark:text-zinc-300">{codeLabel}</span>
+                        </span>
+                      );
                       lastEnd = atom.end;
                     });
                     const after = rawSyntax.slice(lastEnd);
-                    if (after) { const tokens = after.match(/[+.]|\(|\)/g) || []; tokens.forEach((tok, ti) => { if (tok === '+') currentRow.push(<span key={`op-after-${ti}`} className="mx-1 text-emerald-600 dark:text-emerald-400 font-medium">OR</span>); else if (tok === '.') currentRow.push(<span key={`op-after-${ti}`} className="mx-1 text-blue-500 font-medium">AND</span>); else if (tok === '(') currentRow.push(<span key={`op-after-${ti}`} className="text-zinc-400">(</span>); else if (tok === ')') currentRow.push(<span key={`op-after-${ti}`} className="text-zinc-400">)</span>); }); }
-                    if (currentRow.length > 0) rows.push(currentRow);
-                    return rows.map((row, ri) => <div key={`row-${ri}`} className="flex items-center gap-1 flex-wrap">{row}</div>);
+                    if (after) {
+                      const tokens = after.match(/[+.]|\(|\)/g) || [];
+                      tokens.forEach((tok, ti) => {
+                        if (tok === '+') elements.push(<span key={`op-after-${ti}`} className="mx-1 text-emerald-600 dark:text-emerald-400 font-medium">OR</span>);
+                        else if (tok === '.') elements.push(<span key={`op-after-${ti}`} className="mx-1 text-blue-500 font-medium">AND</span>);
+                        else if (tok === '(') elements.push(<span key={`op-after-${ti}`} className="text-zinc-400">(</span>);
+                        else if (tok === ')') elements.push(<span key={`op-after-${ti}`} className="text-zinc-400">)</span>);
+                      });
+                    }
+                    return <div className="flex items-center gap-1 flex-wrap">{elements}</div>;
                   })()}
                 </div>
               )}
@@ -235,8 +256,6 @@ const SortableCodeRow: React.FC<SortableCodeRowProps> = ({
   code,
   varKey,
   varName,
-  code_syntax,
-  codeIndex,
   isSelected,
   onToggleSelect,
   onUpdateLabel,
@@ -263,11 +282,12 @@ const SortableCodeRow: React.FC<SortableCodeRowProps> = ({
   const isRemoved = visibility === 'removed';
   const isHidden = visibility === 'hidden';
 
-  // Get syntax for display
+  // Get syntax for display - use code.syntax directly, not from code_syntax array
+  // to avoid index misalignment when codes are filtered/removed
   const netSyntax = code.isNet && code.netOf
     ? code.netOf.map((nc) => `${varName}/${nc}`).join('+')
     : null;
-  const displaySyntax = netSyntax || code.syntax || code_syntax?.[codeIndex] || `${varName}/${code.code}`;
+  const displaySyntax = netSyntax || code.syntax || `${varName}/${code.code}`;
 
   return (
     <tr
@@ -451,7 +471,6 @@ export const VariableEditPanel: React.FC<VariableEditPanelProps> = ({
 
   const visibleCodes = variable.codes.filter((c) => c.visibility !== 'removed');
   const hiddenCount = variable.codes.filter((c) => c.visibility === 'hidden').length;
-  const removedCount = variable.codes.filter((c) => c.visibility === 'removed').length;
   const canNet = selectedCodes.length >= 2;
   const varName = variable.name || variableKey;
 
@@ -518,11 +537,9 @@ export const VariableEditPanel: React.FC<VariableEditPanelProps> = ({
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">
                 Codes
-                {(hiddenCount > 0 || removedCount > 0) && (
+                {hiddenCount > 0 && (
                   <span className="ml-2 text-xs font-normal text-orange-500">
-                    {hiddenCount > 0 && `${hiddenCount} hidden`}
-                    {hiddenCount > 0 && removedCount > 0 && ', '}
-                    {removedCount > 0 && `${removedCount} removed`}
+                    {hiddenCount} hidden
                   </span>
                 )}
               </h3>
@@ -662,14 +679,12 @@ export const VariableEditPanel: React.FC<VariableEditPanelProps> = ({
                     </tr>
                   </thead>
                   <tbody>
-                    {visibleCodes.map((code, idx) => (
+                    {visibleCodes.map((code) => (
                       <SortableCodeRow
                         key={code.code}
                         code={code}
                         varKey={variableKey}
                         varName={varName}
-                        code_syntax={variable.code_syntax}
-                        codeIndex={idx}
                         isSelected={selectedCodes.includes(code.code)}
                         onToggleSelect={toggleCodeSelection}
                         onUpdateLabel={onUpdateCodeLabel}
