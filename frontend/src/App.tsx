@@ -1846,48 +1846,29 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
             </div>
             <div className="p-4 overflow-y-auto flex-1">
               <p className="text-xs text-zinc-500 mb-3">Select variables with the same code structure (e.g., Q11A-D)</p>
-              <div className="space-y-2">
+              <div className="space-y-1">
                 {Object.entries(variables).map(([key, info]) => {
                   const isSelected = selectedGridVars.includes(key);
-                  // Get first 3 codes as preview
-                  const codePreview = info.codes.slice(0, 3).map(c => `${c.code}=${c.label || c.code}`).join(', ');
-                  const hasMoreCodes = info.codes.length > 3;
                   return (
-                    <label key={key} className={`flex flex-col p-2 rounded cursor-pointer ${isSelected ? 'bg-indigo-50 dark:bg-indigo-900/20' : 'hover:bg-zinc-50 dark:hover:bg-zinc-800'}`}>
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="checkbox"
-                          checked={isSelected}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setSelectedGridVars([...selectedGridVars, key]);
-                            } else {
-                              setSelectedGridVars(selectedGridVars.filter((v) => v !== key));
-                            }
-                          }}
-                          className="rounded border-zinc-300 shrink-0"
-                        />
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-xs font-medium text-zinc-700 dark:text-zinc-300">{key}</span>
-                            {info.label && (
-                              <span className="text-xs text-zinc-500 truncate">- {info.label}</span>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-2 mt-0.5">
-                            <span className="text-[10px] px-1.5 py-0.5 bg-zinc-100 dark:bg-zinc-800 text-zinc-500 rounded">
-                              {info.type}
-                            </span>
-                            <span className="text-[10px] px-1.5 py-0.5 bg-zinc-100 dark:bg-zinc-800 text-zinc-500 rounded">
-                              {info.answerType === 'multiple_answer' ? 'Multiple' : 'Single'}
-                            </span>
-                            <span className="text-[10px] text-zinc-400">
-                              {info.codes.length} codes
-                            </span>
-                          </div>
-                          <div className="text-[10px] text-zinc-400 mt-1 truncate" title={info.codes.map(c => `${c.code}=${c.label || c.code}`).join(', ')}>
-                            {codePreview}{hasMoreCodes && ', ...'}
-                          </div>
+                    <label key={key} className={`flex items-center gap-3 p-2 rounded cursor-pointer ${isSelected ? 'bg-indigo-50 dark:bg-indigo-900/20' : 'hover:bg-zinc-50 dark:hover:bg-zinc-800'}`}>
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedGridVars([...selectedGridVars, key]);
+                          } else {
+                            setSelectedGridVars(selectedGridVars.filter((v) => v !== key));
+                          }
+                        }}
+                        className="rounded border-zinc-300 shrink-0"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-baseline gap-2">
+                          <span className="text-xs font-medium text-zinc-700 dark:text-zinc-300">{key}</span>
+                          {info.label && (
+                            <span className="text-xs text-zinc-500 truncate">- {info.label}</span>
+                          )}
                         </div>
                       </div>
                     </label>
