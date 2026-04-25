@@ -2485,6 +2485,7 @@ const EditVariablesPage: React.FC = () => {
     updateCodeLabel,
     updateCodeVisibility,
     updateCodeFactor,
+    updateCodeSyntax,
     reorderCodes,
     addNetCode,
     addCode,
@@ -2730,12 +2731,14 @@ const EditVariablesPage: React.FC = () => {
         <VariableEditPanel
           variableKey={selectedVariableKey}
           variable={selectedVariable}
+          variables={variables}
           onClose={() => setSelectedVariableKey(null)}
           onUpdateLabel={updateVariableLabel}
           onUpdateDisplayName={updateVariableDisplayName}
           onUpdateCodeLabel={updateCodeLabel}
           onUpdateCodeVisibility={updateCodeVisibility}
           onUpdateCodeFactor={updateCodeFactor}
+          onUpdateCodeSyntax={updateCodeSyntax}
           onReorderCodes={reorderCodes}
           onAddNetCode={addNetCode}
           onAddCode={addCode}
