@@ -1426,8 +1426,30 @@ const App: React.FC = () => {
   const handleDragEnd = (event: any) => {
     setActiveDragId(null);
     const { active, over } = event;
-    if (!over || !activeTableId || !dataLoaded) return;
+    if (!over) return;
     const activeId = String(active.id);
+
+    // Handle EZ Tables header drop (check DOM for modal visibility)
+    const ezModalOpen = document.getElementById('ez-tables-modal') !== null;
+    if (ezModalOpen && over.id === 'ez-header-zone') {
+      const varInfo = variables[activeId];
+      if (varInfo?.codes?.length) {
+        const visibleCodes = varInfo.codes
+          .filter((c: any) => c.visibility !== 'removed' && c.visibility !== 'hidden')
+          .map((c: any) => c.code);
+        const newItem: DropItem = {
+          id: uuidv4(),
+          variable: activeId,
+          codeDef: `${activeId}/*`,
+          codes: visibleCodes
+        };
+        // Dispatch event to notify BuildPage
+        window.dispatchEvent(new CustomEvent('ez-header-item-added', { detail: newItem }));
+      }
+      return;
+    }
+
+    if (!activeTableId || !dataLoaded) return;
 
     if (activeId.startsWith('zone-item:')) {
       const [, sourceZone, itemId] = activeId.split(':');
@@ -1578,6 +1600,16 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
     decimalPlaces: 2,
     statDecimalPlaces: 2
   });
+
+  // Listen for EZ header item added from App component (DnD)
+  useEffect(() => {
+    const handler = (e: CustomEvent) => {
+      const newItem = e.detail as DropItem;
+      setEzHeaderItems(prev => [...prev, newItem]);
+    };
+    window.addEventListener('ez-header-item-added', handler as EventListener);
+    return () => window.removeEventListener('ez-header-item-added', handler as EventListener);
+  }, []);
 
   const activeTable = tables.find((t) => t.id === activeTableId);
 
@@ -2210,7 +2242,7 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
 
       {/* EZ Tables Modal */}
       {showEzTablesModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+        <div id="ez-tables-modal" className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
           <div className="bg-white dark:bg-zinc-900 rounded-lg shadow-xl w-[700px] max-h-[90vh] flex flex-col">
             <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-200 dark:border-zinc-700">
               <h3 className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">EZ Tables Constructor</h3>
@@ -2222,14 +2254,20 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
               </button>
             </div>
             <div className="p-4 overflow-y-auto flex-1 space-y-4">
-              {/* Header Constructor */}
+              {/* Header Constructor - Droppable Zone */}
               <div>
                 <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-2 block">
                   Header Structure (drag variables here)
                 </label>
-                <div className="border border-zinc-200 dark:border-zinc-700 rounded p-3 min-h-[100px] bg-zinc-50 dark:bg-zinc-800/50">
+                <div 
+                  id="ez-header-zone"
+                  className="border-2 border-dashed border-zinc-300 dark:border-zinc-600 hover:border-blue-400 dark:hover:border-blue-500 rounded p-3 min-h-[100px] bg-zinc-50 dark:bg-zinc-800/50 transition-colors"
+                >
                   {ezHeaderItems.length === 0 ? (
-                    <p className="text-xs text-zinc-400 text-center py-4">Drag variables here to build header</p>
+                    <div className="text-center py-4">
+                      <p className="text-xs text-zinc-400 mb-1">Drag variables here to build header</p>
+                      <p className="text-[10px] text-zinc-300">or click + below</p>
+                    </div>
                   ) : (
                     <div className="flex flex-wrap gap-2">
                       {ezHeaderItems.map((item) => (
