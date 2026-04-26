@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="frontend/public/logo_white.svg" alt="opentab_" width="360" />
+  <img src="opentab_logo.svg" alt="opentab_" width="360" />
 </p>
 
 ## About
