@@ -1851,6 +1851,22 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
   const [localTab, setLocalTab] = useState<'build' | 'filter' | 'result'>('build');
   const [isComputing, setIsComputing] = useState(false);
   const [isRunningAll, setIsRunningAll] = useState(false);
+  const [runAllMessage, setRunAllMessage] = useState('');
+
+  useEffect(() => {
+    if (!isRunningAll) { setRunAllMessage(''); return; }
+    const msgs = [
+      'wkwking...', 'papapooting...', 'stomachacheing...', 'whaaa-ing...',
+      'number-crunching...', 'table-flipping...', 'brain-melting...',
+      'cross-tabbing...', 'math-ing...', 'vibing...', 'shenanigan-ing...',
+      'pontificating...', 'yolo-ing...', 'sweating-ing...',
+    ];
+    let i = 0;
+    setRunAllMessage(msgs[0]);
+    const interval = setInterval(() => { i = (i + 1) % msgs.length; setRunAllMessage(msgs[i]); }, 1500);
+    return () => clearInterval(interval);
+  }, [isRunningAll]);
+
   const [showGridModal, setShowGridModal] = useState(false);
   const [selectedGridVars, setSelectedGridVars] = useState<string[]>([]);
   const [gridStatToggles, setGridStatToggles] = useState({ showMean: false, showStdError: false, showStdDev: false, showVariance: false });
@@ -2115,6 +2131,9 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
               >
                 {isRunningAll ? '...' : '>> run all'}
               </button>
+            )}
+            {isRunningAll && runAllMessage && (
+              <span className="text-xs text-zinc-400 dark:text-zinc-500 animate-pulse font-mono">{runAllMessage}</span>
             )}
           </div>
         )}
@@ -2435,7 +2454,7 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
                 {/* Header Constructor - Droppable Zone (Fixed height, no scroll) */}
                 <div>
                   <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-2 block">
-                    Header Structure (drop variables here)
+                    Header Structure (optional)
                   </label>
                   <EzHeaderDropZone 
                     items={ezHeaderItems}
@@ -2513,10 +2532,6 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
                   </button>
                   <button
                     onClick={() => {
-                      if (ezHeaderItems.length === 0) {
-                        alert('Add at least one variable to header structure');
-                        return;
-                      }
                       if (ezSelectedRowVars.length === 0) {
                         alert('Select at least one row variable');
                         return;
@@ -2549,7 +2564,7 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
                       setEzWeightCol(null);
                       alert(`Created ${ezSelectedRowVars.length} tables!`);
                     }}
-                    disabled={ezSelectedRowVars.length === 0 || ezHeaderItems.length === 0}
+                    disabled={ezSelectedRowVars.length === 0}
                     className="px-3 py-1.5 text-xs bg-emerald-500 hover:bg-emerald-600 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded"
                   >
                     Create {ezSelectedRowVars.length} Tables
