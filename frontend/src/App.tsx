@@ -5,7 +5,7 @@ import { DndContext, useSensor, useSensors, PointerSensor, useDraggable, useDrop
 import type { DragStartEvent, DragEndEvent as DndDragEndEvent } from '@dnd-kit/core';
 
 import { computeApi, dataApi } from './lib/api';
-import type { FilterItem, CrosstabResult, VariableInfo, DropItem } from './lib/api';
+import type { FilterItem, CrosstabResult, VariableInfo, DropItem, Table } from './lib/api';
 import FilterTab from './components/FilterTab';
 import { VariableEditPanel } from './components/VariableEditPanel';
 import { v4 as uuidv4 } from 'uuid';
@@ -1847,11 +1847,13 @@ const App: React.FC = () => {
 
 // ─── Build Page ───────────────────────────────────────────────────────────────
 const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ onLoadSample, loading }) => {
-  const { dataLoaded, activeTableId, tables, variables, removeRowItem, removeColItem, removeGridItem, setTableResult, updateTable, addGridItem, setGridMode } = useStore();
+  const { dataLoaded, activeTableId, tables, variables, removeRowItem, removeColItem, removeGridItem, setTableResult, updateTable, setGridMode, toggleVariableStat } = useStore();
   const [localTab, setLocalTab] = useState<'build' | 'filter' | 'result'>('build');
   const [isComputing, setIsComputing] = useState(false);
+  const [isRunningAll, setIsRunningAll] = useState(false);
   const [showGridModal, setShowGridModal] = useState(false);
   const [selectedGridVars, setSelectedGridVars] = useState<string[]>([]);
+  const [gridStatToggles, setGridStatToggles] = useState({ showMean: false, showStdError: false, showStdDev: false, showVariance: false });
 
   // EZ Tables state
   const [showEzTablesModal, setShowEzTablesModal] = useState(false);
@@ -1963,27 +1965,26 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
     return registry;
   };
 
-  const handleGenerate = async () => {
-    if (!activeTable) return;
-    const canRun = (activeTable.row_items.length || 0) > 0 || (activeTable.grid_items?.length || 0) > 0;
-    if (!canRun) { alert('Add items to Sidebreak or create a Grid first'); return; }
-    if (activeTable.filter_items.length > 1) {
-      const hasUnsetOperator = activeTable.filter_items.slice(1).some(item => !item.operatorToNext);
-      if (hasUnsetOperator) { alert('Set the operator between filter variables before running'); return; }
+  const handleGenerate = async (tableId?: string) => {
+    const targetId = tableId ?? activeTableId;
+    const targetTable = tables.find(t => t.id === targetId);
+    if (!targetTable) return;
+    const canRun = (targetTable.row_items.length || 0) > 0 || (targetTable.grid_items?.length || 0) > 0;
+    if (!canRun) { if (!tableId) alert('Add items to Sidebreak or create a Grid first'); return; }
+    if (targetTable.filter_items.length > 1) {
+      const hasUnsetOperator = targetTable.filter_items.slice(1).some(item => !item.operatorToNext);
+      if (hasUnsetOperator) { if (!tableId) alert('Set the operator between filter variables before running'); return; }
     }
-    setIsComputing(true);
+    const isActiveTable = !tableId || tableId === activeTableId;
+    if (isActiveTable) setIsComputing(true);
     try {
-      // Generate effective items for grid table mode
-      let effectiveRowItems = activeTable.row_items;
-      let effectiveColItems = activeTable.col_items;
-      const isGridMode = activeTable.row_items.length === 0 && activeTable.grid_items && activeTable.grid_items.length > 0;
+      let effectiveRowItems = targetTable.row_items;
+      let effectiveColItems = targetTable.col_items;
+      const isGridMode = targetTable.row_items.length === 0 && targetTable.grid_items && targetTable.grid_items.length > 0;
 
       if (isGridMode) {
-        // Grid table mode: rows = codes from first grid variable
-        const firstGridVar = activeTable.grid_items[0].variable;
+        const firstGridVar = targetTable.grid_items[0].variable;
         const visibleCodes = getVisibleCodesList(firstGridVar);
-
-        // Create row_items from codes - use codeDef format
         effectiveRowItems = visibleCodes.map(code => ({
           id: `grid-row-${code}`,
           variable: firstGridVar,
@@ -1991,9 +1992,7 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
           codes: [code],
           children: []
         }));
-
-        // Col items = grid items (variables in grid)
-        effectiveColItems = activeTable.grid_items;
+        effectiveColItems = targetTable.grid_items;
       }
 
       const allVarNames = [...new Set([
@@ -2012,21 +2011,31 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
         }
       }
 
+      if (isGridMode && targetTable.grid_items) {
+        const gridVarNames = targetTable.grid_items.map((g: any) => g.variable);
+        const refMapping = meanMappings.find(m => gridVarNames.includes(m.variable));
+        if (refMapping) {
+          for (const varName of gridVarNames) {
+            if (!meanMappings.find(m => m.variable === varName)) {
+              meanMappings.push({ variable: varName, codeScores: refMapping.codeScores });
+            }
+          }
+        }
+      }
+
       const removedParts: string[] = [];
       Object.entries(variables).forEach(([varKey, info]) => {
         const removed = info.codes.filter((c: any) => c.visibility === 'removed' && !c.isNet).map((c: any) => c.code);
         if (removed.length > 0) removedParts.push(`!${varKey}/${removed.join(',')}`);
       });
-      const baseFilter = buildFilterDef(activeTable.filter_items);
+      const baseFilter = buildFilterDef(targetTable.filter_items);
       const effectiveFilter = [...(baseFilter ? [baseFilter] : []), ...removedParts].join('.') || undefined;
 
-      // Prepare column items for backend
       let colItemsForBackend;
       if (isGridMode) {
-        // For grid mode: each grid variable is a single column (any code)
-        colItemsForBackend = activeTable.grid_items!.map(item => ({
+        colItemsForBackend = targetTable.grid_items!.map(item => ({
           variable: item.variable,
-          codeDef: `${item.variable}/*`  // Any code in this variable
+          codeDef: `${item.variable}/*`
         }));
       } else {
         colItemsForBackend = flattenItemsForBackend(effectiveColItems, getVisibleCodesList, '', resolveCode);
@@ -2035,20 +2044,35 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
       const result = await computeApi.crosstab({
         row_items: flattenItemsForBackend(effectiveRowItems, getVisibleCodesList, '', resolveCode),
         col_items: colItemsForBackend,
+        is_grid_mode: isGridMode,
         filter_def: effectiveFilter,
-        weight_col: activeTable.weight_col || undefined,
+        weight_col: targetTable.weight_col || undefined,
         mean_score_mappings: meanMappings.length > 0 ? meanMappings : undefined,
         name_to_key: buildNameToKeyMap(variables),
         net_registry: buildNetRegistry(variables),
         code_registry: buildCodeRegistry(variables),
       });
-      if (activeTableId) setTableResult(activeTableId, result);
-      setLocalTab('result');
+      setTableResult(targetId!, result);
+      if (isActiveTable) setLocalTab('result');
     } catch (e: any) {
-      alert(`Error: ${e.message}`);
+      if (!tableId) alert(`Error: ${e.message}`);
+      else throw e;
     } finally {
-      setIsComputing(false);
+      if (isActiveTable) setIsComputing(false);
     }
+  };
+
+  const handleRunAll = async () => {
+    if (isRunningAll) return;
+    const runnable = tables.filter(t => (t.row_items.length || 0) > 0 || (t.grid_items?.length || 0) > 0);
+    if (runnable.length === 0) return;
+    setIsRunningAll(true);
+    const errors: string[] = [];
+    for (const table of runnable) {
+      try { await handleGenerate(table.id); } catch (e: any) { errors.push(`${table.name}: ${e.message}`); }
+    }
+    setIsRunningAll(false);
+    if (errors.length) alert('Some tables failed:\n' + errors.join('\n'));
   };
 
   if (!dataLoaded) {
@@ -2078,11 +2102,20 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
           <div className="flex items-center gap-2">
             <button
               onClick={handleGenerate}
-              disabled={isComputing}
+              disabled={isComputing || isRunningAll}
               className="px-4 py-1.5 bg-zinc-900 hover:bg-zinc-700 text-zinc-50 dark:bg-zinc-100 dark:hover:bg-white dark:text-zinc-950 text-xs font-bold disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             >
               {isComputing ? '...' : '> run'}
             </button>
+            {tables.length > 1 && (
+              <button
+                onClick={handleRunAll}
+                disabled={isRunningAll || isComputing}
+                className="px-4 py-1.5 bg-zinc-900 hover:bg-zinc-700 text-zinc-50 dark:bg-zinc-100 dark:hover:bg-white dark:text-zinc-950 text-xs font-bold disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                {isRunningAll ? '...' : '>> run all'}
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -2266,7 +2299,7 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
           <div className="bg-white dark:bg-zinc-900 rounded-lg shadow-xl w-[500px] max-h-[80vh] flex flex-col">
             <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-200 dark:border-zinc-700">
               <h3 className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">Create Variable Grid</h3>
-              <button onClick={() => { setShowGridModal(false); setSelectedGridVars([]); }} className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300">×</button>
+              <button onClick={() => { setShowGridModal(false); setSelectedGridVars([]); setGridStatToggles({ showMean: false, showStdError: false, showStdDev: false, showVariance: false }); }} className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300">×</button>
             </div>
             <div className="p-4 overflow-y-auto flex-1">
               <p className="text-xs text-zinc-500 mb-3">Select variables with the same code structure (e.g., Q11A-D)</p>
@@ -2300,8 +2333,22 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
                 })}
               </div>
             </div>
+            <div className="px-4 py-2.5 border-t border-zinc-200 dark:border-zinc-700 flex items-center gap-3">
+              <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400 whitespace-nowrap">Stats:</span>
+              <div className="flex gap-1.5">
+                {([['showMean', 'Mean'], ['showStdError', 'Std Error'], ['showStdDev', 'Std Dev'], ['showVariance', 'Variance']] as const).map(([stat, label]) => (
+                  <button
+                    key={stat}
+                    onClick={() => setGridStatToggles(prev => ({ ...prev, [stat]: !prev[stat] }))}
+                    className={`px-2 py-1 text-xs rounded transition-colors ${gridStatToggles[stat] ? 'bg-blue-500 text-white' : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700'}`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
             <div className="flex justify-end gap-2 px-4 py-3 border-t border-zinc-200 dark:border-zinc-700">
-              <button onClick={() => { setShowGridModal(false); setSelectedGridVars([]); }} className="px-3 py-1.5 text-xs text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300">Cancel</button>
+              <button onClick={() => { setShowGridModal(false); setSelectedGridVars([]); setGridStatToggles({ showMean: false, showStdError: false, showStdDev: false, showVariance: false }); }} className="px-3 py-1.5 text-xs text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300">Cancel</button>
               <button
                 onClick={() => {
                   if (selectedGridVars.length < 2) {
@@ -2319,14 +2366,27 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
                     alert('Selected variables must have the same code structure');
                     return;
                   }
-                  // Add grid items
-                  selectedGridVars.forEach((varKey) => {
-                    const allCodes = variables[varKey].codes.map((c) => c.code).join(',');
-                    addGridItem(activeTable!.id, { id: crypto.randomUUID(), variable: varKey, codeDef: allCodes });
-                  });
+                  // Replace grid items entirely (prevents accumulation from re-opening modal)
+                  const newGridItems = selectedGridVars.map(varKey => ({
+                    id: crypto.randomUUID(),
+                    variable: varKey,
+                    codeDef: variables[varKey].codes.map((c) => c.code).join(','),
+                    codes: variables[varKey].codes.map((c) => c.code),
+                    children: [],
+                  }));
+                  updateTable(activeTable!.id, { grid_items: newGridItems, row_items: [], col_items: [] });
                   setGridMode(activeTable!.id, true);
+                  // Apply stat toggles to all selected variables
+                  (['showMean', 'showStdError', 'showStdDev', 'showVariance'] as const).forEach((stat) => {
+                    if (gridStatToggles[stat]) {
+                      selectedGridVars.forEach((varKey) => {
+                        if (!variables[varKey][stat]) toggleVariableStat(varKey, stat);
+                      });
+                    }
+                  });
                   setShowGridModal(false);
                   setSelectedGridVars([]);
+                  setGridStatToggles({ showMean: false, showStdError: false, showStdDev: false, showVariance: false });
                 }}
                 disabled={selectedGridVars.length < 2}
                 className="px-3 py-1.5 bg-indigo-500 hover:bg-indigo-600 disabled:opacity-40 text-white text-xs rounded"
@@ -2505,6 +2565,82 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
   );
 }
 
+// ─── Pure HTML builder (used by single-table export and Export All) ───────────
+function buildTableHtmlPure(p: {
+  result: CrosstabResult;
+  rowNames: string[];
+  colPaths: string[];
+  colHeaderRows: ColHeaderCell[][];
+  numHeaderRows: number;
+  displayOptions: { counts: boolean; colPct: boolean; showPctSign: boolean; decimalPlaces: number; statDecimalPlaces: number };
+  statRows: { key: string; label: string }[];
+  getCodeLabel: (key: string) => string;
+  formatPct: (val: number) => string;
+  statValue: (statKey: string, col: string) => string;
+}): string {
+  const { result, rowNames, colPaths, colHeaderRows, numHeaderRows, displayOptions, statRows, getCodeLabel, formatPct, statValue } = p;
+  const th = (label: string, colspan: number, rowspan: number, bg: string, bold: boolean, align = 'center') =>
+    `<th${colspan > 1 ? ` colspan="${colspan}"` : ''}${rowspan > 1 ? ` rowspan="${rowspan}"` : ''} style="background:${bg};color:${bold ? '#333' : '#666'};font-weight:${bold ? 'bold' : 'normal'};text-align:${align};border:1px solid #ccc;padding:4px 8px;font-size:10pt;">${label}</th>`;
+  const td = (value: string, bg: string, bold: boolean, align = 'center', color = '#666') =>
+    `<td style="background:${bg};color:${color};font-weight:${bold ? 'bold' : 'normal'};text-align:${align};border:1px solid #ddd;padding:3px 8px;font-size:10pt;">${value}</td>`;
+
+  let html = `<table style="border-collapse:collapse;font-size:10pt;font-family:Arial,sans-serif;">`;
+
+  if (numHeaderRows > 0) {
+    html += '<thead>';
+    for (let h = 0; h < numHeaderRows; h++) {
+      html += '<tr>';
+      if (h === 0) {
+        html += th('', 1, numHeaderRows, '#F5F5F5', false);
+        html += th('Total', 1, numHeaderRows, '#E8E8E8', true);
+      }
+      const levelCols = colHeaderRows[h] || [];
+      const totalDataCols = colPaths.length;
+      let colOffset = 0;
+      for (const cell of levelCols) {
+        const remaining = totalDataCols - colOffset;
+        const effectiveSpan = Math.min(cell.colSpan, Math.max(remaining, 1));
+        html += th(cell.label, effectiveSpan, cell.rowSpan, h === 0 ? '#E8E8E8' : '#F5F5F5', h === 0);
+        colOffset += effectiveSpan;
+      }
+      html += '</tr>';
+    }
+    html += '</thead>';
+  } else {
+    html += '<thead><tr>';
+    html += th('', 1, 1, '#F5F5F5', false);
+    html += th('Total', 1, 1, '#E8E8E8', true);
+    for (let ci = 0; ci < colPaths.length; ci++) {
+      html += th(colPaths[ci], 1, 1, '#F5F5F5', false);
+    }
+    html += '</tr></thead>';
+  }
+
+  html += '<tbody>';
+  html += `<tr>${td('Base', '#F5F5F5', true, 'left', '#333')}${td(String(result.base), '#F3F4F6', false, 'center', '#333')}${colPaths.map(c => td(String(result.counts['Total']?.[c] ?? 0), '#F3F4F6', false)).join('')}</tr>`;
+
+  rowNames.forEach((rname) => {
+    const rowLabel = getCodeLabel(rname);
+    const rowTotal = result.counts[rname]?.['Total'] ?? 0;
+    if (displayOptions.counts && displayOptions.colPct) {
+      html += `<tr>${td(rowLabel, '#F5F5F5', true, 'left', '#333')}${td(String(rowTotal), '#F3F4F6', false)}${colPaths.map(c => td(String(result.counts[rname]?.[c] ?? 0), '#FFF', false)).join('')}</tr>`;
+      html += `<tr>${td('', '#F5F5F5', false)}${td(formatPct(result.col_pct[rname]?.['Total'] ?? 0), '#EFF6FF', false, 'center', '#2563EB')}${colPaths.map(c => td(formatPct(result.col_pct[rname]?.[c] ?? 0), '#EFF6FF', false, 'center', '#2563EB')).join('')}</tr>`;
+    } else if (displayOptions.counts) {
+      html += `<tr>${td(rowLabel, '#F5F5F5', true, 'left', '#333')}${td(String(rowTotal), '#F3F4F6', false)}${colPaths.map(c => td(String(result.counts[rname]?.[c] ?? 0), '#FFF', false)).join('')}</tr>`;
+    } else if (displayOptions.colPct) {
+      html += `<tr>${td(rowLabel, '#F5F5F5', true, 'left', '#333')}${td(formatPct(result.col_pct[rname]?.['Total'] ?? 0), '#EFF6FF', false, 'center', '#2563EB')}${colPaths.map(c => td(formatPct(result.col_pct[rname]?.[c] ?? 0), '#EFF6FF', false, 'center', '#2563EB')).join('')}</tr>`;
+    }
+  });
+
+  if (statRows.length > 0) {
+    statRows.forEach(sr => {
+      html += `<tr>${td(sr.label, '#FFFBEB', true, 'left', '#666')}${td(String(statValue(sr.key, 'Total')), '#FFFBEB', false, 'center', '#92400E')}${colPaths.map(c => td(String(statValue(sr.key, c)), '#FFFBEB', false, 'center', '#92400E')).join('')}</tr>`;
+    });
+  }
+  html += '</tbody></table>';
+  return html;
+}
+
 // ─── Result Tab ───────────────────────────────────────────────────────────────
 const ResultTab: React.FC = () => {
   const { activeTableId, tables, displayOptions, setDisplayOptions, variables } = useStore();
@@ -2601,67 +2737,52 @@ const ResultTab: React.FC = () => {
     return typeof val === 'number' ? val.toFixed(displayOptions.statDecimalPlaces) : val;
   };
 
-  const buildTableHtml = (): string => {
-    const th = (label: string, colspan: number, rowspan: number, bg: string, bold: boolean, align: string = 'center') =>
-      `<th${colspan > 1 ? ` colspan="${colspan}"` : ''}${rowspan > 1 ? ` rowspan="${rowspan}"` : ''} style="background:${bg};color:${bold ? '#333' : '#666'};font-weight:${bold ? 'bold' : 'normal'};text-align:${align};border:1px solid #ccc;padding:4px 8px;">${label}</th>`;
-    const td = (value: string, bg: string, bold: boolean, align: string = 'center', color: string = '#666') =>
-      `<td style="background:${bg};color:${color};font-weight:${bold ? 'bold' : 'normal'};text-align:${align};border:1px solid #ddd;padding:3px 8px;">${value}</td>`;
+  const buildTableHtml = () => buildTableHtmlPure({ result, rowNames, colPaths, colHeaderRows, numHeaderRows, displayOptions, statRows, getCodeLabel, formatPct, statValue });
 
-    let html = `<table style="border-collapse:collapse;font-size:10px;font-family:Arial,sans-serif;">`;
-
-    if (numHeaderRows > 0) {
-      html += '<thead>';
-      for (let h = 0; h < numHeaderRows; h++) {
-        html += '<tr>';
-        if (h === 0) {
-          html += th('', 1, numHeaderRows, '#F5F5F5', false);
-          html += th('Total', 1, numHeaderRows, '#E8E8E8', true);
-        }
-        const levelCols = colHeaderRows[h] || [];
-        const totalDataCols = colPaths.length;
-        let colOffset = 0;
-        for (const cell of levelCols) {
-          const remaining = totalDataCols - colOffset;
-          const effectiveSpan = Math.min(cell.colSpan, Math.max(remaining, 1));
-          html += th(cell.label, effectiveSpan, cell.rowSpan, h === 0 ? '#E8E8E8' : '#F5F5F5', h === 0);
-          colOffset += effectiveSpan;
-        }
-        html += '</tr>';
-      }
-      html += '</thead>';
+  const buildTableHtmlForTable = (table: Table): string | null => {
+    if (!table.result) return null;
+    const tResult = table.result;
+    const tRowNames = Object.keys(tResult.counts).filter(k => k !== 'Total');
+    const tIsGridMode = (table.grid_items?.length ?? 0) > 0 && table.col_items.length === 0;
+    let tColHeaderRows: ColHeaderCell[][], tColPaths: string[];
+    if (tIsGridMode) {
+      tColPaths = table.grid_items!.map(item => `${item.variable}/*`);
+      tColHeaderRows = [[...table.grid_items!.map(item => ({
+        label: variables[item.variable]?.label || item.variable,
+        colSpan: 1,
+        rowSpan: 1,
+      }))]];
+    } else if (table.col_items.length) {
+      const colResult = buildAxisStructure(table.col_items, getVisibleCodesList, getCodeLabel, resolveCode);
+      tColHeaderRows = colResult.headerRows;
+      tColPaths = colResult.axisPaths;
     } else {
-      html += '<thead><tr>';
-      html += th('', 1, 1, '#F5F5F5', false);
-      html += th('Total', 1, 1, '#E8E8E8', true);
-      for (let ci = 0; ci < colPaths.length; ci++) {
-        html += th(colPaths[ci], 1, 1, '#F5F5F5', false);
-      }
-      html += '</tr></thead>';
+      tColPaths = Object.keys(tResult.counts[tRowNames[0] || 'Total'] || {}).filter(k => k !== 'Total');
+      tColHeaderRows = [[]];
     }
-
-    html += '<tbody>';
-    html += `<tr>${td('Base', '#F5F5F5', true, 'left', '#333')}${td(String(result.base), '#F3F4F6', false, 'center', '#333')}${colPaths.map(c => td(String(result.counts['Total']?.[c] ?? 0), '#F3F4F6', false)).join('')}</tr>`;
-
-    rowNames.forEach((rname) => {
-      const rowLabel = getCodeLabel(rname);
-      const rowTotal = result.counts[rname]?.['Total'] ?? 0;
-      if (displayOptions.counts && displayOptions.colPct) {
-        html += `<tr>${td(rowLabel, '#F5F5F5', true, 'left', '#333')}${td(String(rowTotal), '#F3F4F6', false)}${colPaths.map(c => td(String(result.counts[rname]?.[c] ?? 0), '#FFF', false)).join('')}</tr>`;
-        html += `<tr>${td('', '#F5F5F5', false)}${td(formatPct(result.col_pct[rname]?.['Total'] ?? 0), '#EFF6FF', false, 'center', '#2563EB')}${colPaths.map(c => td(formatPct(result.col_pct[rname]?.[c] ?? 0), '#EFF6FF', false, 'center', '#2563EB')).join('')}</tr>`;
-      } else if (displayOptions.counts) {
-        html += `<tr>${td(rowLabel, '#F5F5F5', true, 'left', '#333')}${td(String(rowTotal), '#F3F4F6', false)}${colPaths.map(c => td(String(result.counts[rname]?.[c] ?? 0), '#FFF', false)).join('')}</tr>`;
-      } else if (displayOptions.colPct) {
-        html += `<tr>${td(rowLabel, '#F5F5F5', true, 'left', '#333')}${td(formatPct(result.col_pct[rname]?.['Total'] ?? 0), '#EFF6FF', false, 'center', '#2563EB')}${colPaths.map(c => td(formatPct(result.col_pct[rname]?.[c] ?? 0), '#EFF6FF', false, 'center', '#2563EB')).join('')}</tr>`;
-      }
-    });
-
-    if (statRows.length > 0) {
-      statRows.forEach(sr => {
-        html += `<tr>${td(sr.label, '#FFFBEB', true, 'left', '#666')}${td(String(statValue(sr.key, 'Total')), '#FFFBEB', false, 'center', '#92400E')}${colPaths.map(c => td(String(statValue(sr.key, c)), '#FFFBEB', false, 'center', '#92400E')).join('')}</tr>`;
-      });
+    const tNumHeaderRows = Math.max(tColHeaderRows.length, 1);
+    const tFirstRow = tRowNames[0] || '';
+    const tRowVarName = tFirstRow.split('/')[0].split('.')[0];
+    const tHasStats = tResult.mean && Object.keys(tResult.mean).length > 0;
+    const tStatRows: { key: string; label: string }[] = [];
+    if (tHasStats) {
+      const v = variables[tRowVarName];
+      if (v?.showMean) tStatRows.push({ key: 'mean', label: 'mean' });
+      if (v?.showStdError) tStatRows.push({ key: 'std_error', label: 'std error' });
+      if (v?.showStdDev) tStatRows.push({ key: 'std_dev', label: 'std dev' });
+      if (v?.showVariance) tStatRows.push({ key: 'variance', label: 'variance' });
     }
-    html += '</tbody></table>';
-    return html;
+    const tFormatPct = (val: number) => {
+      const pct = val.toFixed(displayOptions.decimalPlaces);
+      return displayOptions.showPctSign ? `${pct}%` : pct;
+    };
+    const tStatValue = (statKey: string, col: string) => {
+      const statData = tResult[statKey as keyof CrosstabResult] as Record<string, number> | null | undefined;
+      const val = statData?.[col];
+      if (val == null) return '—';
+      return typeof val === 'number' ? val.toFixed(displayOptions.statDecimalPlaces) : val;
+    };
+    return buildTableHtmlPure({ result: tResult, rowNames: tRowNames, colPaths: tColPaths, colHeaderRows: tColHeaderRows, numHeaderRows: tNumHeaderRows, displayOptions, statRows: tStatRows, getCodeLabel, formatPct: tFormatPct, statValue: tStatValue });
   };
 
   const handleCopy = () => {
@@ -2746,6 +2867,90 @@ const ResultTab: React.FC = () => {
     URL.revokeObjectURL(url);
   };
 
+  const tablesWithResults = tables.filter(t => !!t.result);
+
+  const handleExportAll = () => {
+    if (tablesWithResults.length === 0) return;
+    const parts = tablesWithResults.map(table => {
+      const html = buildTableHtmlForTable(table);
+      if (!html) return '';
+      return `<p style="font-family:Arial,sans-serif;font-size:10pt;font-weight:bold;color:#333;margin:12px 0 4px 0;">${table.name}</p>${html}`;
+    }).filter(Boolean);
+    const fullHtml = [
+      '<html xmlns:o="urn:schemas-microsoft-com:office:office"',
+      ' xmlns:x="urn:schemas-microsoft-com:office:excel"',
+      ' xmlns="http://www.w3.org/TR/REC-html40">',
+      '<head><meta charset="UTF-8">',
+      '<!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets>',
+      '<x:ExcelWorksheet><x:Name>All Tables</x:Name>',
+      '<x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions>',
+      '</x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]-->',
+      '</head><body>',
+      parts.join('<br/><br/>'),
+      '</body></html>',
+    ].join('');
+    const blob = new Blob([fullHtml], { type: 'application/vnd.ms-excel;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `crosstabs_all_${Date.now()}.xls`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleCopyAll = () => {
+    if (tablesWithResults.length === 0) return;
+    const htmlParts: string[] = [];
+    const textParts: string[] = [];
+    for (const table of tablesWithResults) {
+      const tableHtml = buildTableHtmlForTable(table);
+      if (!tableHtml) continue;
+      htmlParts.push(`<p><strong>${table.name}</strong></p>${tableHtml}`);
+      const tResult = table.result!;
+      const tRowNames = Object.keys(tResult.counts).filter(k => k !== 'Total');
+      const tIsGridMode = (table.grid_items?.length ?? 0) > 0 && table.col_items.length === 0;
+      let tColPaths: string[];
+      if (tIsGridMode) {
+        tColPaths = table.grid_items!.map(item => `${item.variable}/*`);
+      } else if (table.col_items.length) {
+        const colResult = buildAxisStructure(table.col_items, getVisibleCodesList, getCodeLabel, resolveCode);
+        tColPaths = colResult.axisPaths;
+      } else {
+        tColPaths = Object.keys(tResult.counts[tRowNames[0] || 'Total'] || {}).filter(k => k !== 'Total');
+      }
+      const tFormatPct = (val: number) => {
+        const pct = val.toFixed(displayOptions.decimalPlaces);
+        return displayOptions.showPctSign ? `${pct}%` : pct;
+      };
+      const lines: string[] = [];
+      lines.push(['', 'Total', ...tColPaths.map(c => getCodeLabel(c))].join('\t'));
+      lines.push(['Base', String(tResult.base), ...tColPaths.map(c => String(tResult.counts['Total']?.[c] ?? 0))].join('\t'));
+      tRowNames.forEach(row => {
+        const parts: string[] = [getCodeLabel(row)];
+        if (displayOptions.counts) {
+          parts.push(String(tResult.counts[row]?.['Total'] ?? 0));
+          tColPaths.forEach(c => parts.push(String(tResult.counts[row]?.[c] ?? 0)));
+          lines.push(parts.join('\t'));
+        } else if (displayOptions.colPct) {
+          parts.push(tFormatPct(tResult.col_pct[row]?.['Total'] ?? 0));
+          tColPaths.forEach(c => parts.push(tFormatPct(tResult.col_pct[row]?.[c] ?? 0)));
+          lines.push(parts.join('\t'));
+        }
+      });
+      textParts.push(`=== ${table.name} ===\n` + lines.join('\n'));
+    }
+    const htmlBlob = new Blob([htmlParts.join('<br/><br/>')], { type: 'text/html' });
+    const textBlob = new Blob([textParts.join('\n\n')], { type: 'text/plain' });
+    if (navigator.clipboard && window.ClipboardItem) {
+      navigator.clipboard.write([new window.ClipboardItem({ 'text/html': htmlBlob, 'text/plain': textBlob })]).then(() => alert('copied!')).catch(() => { navigator.clipboard.writeText(textParts.join('\n\n')); alert('copied!'); });
+    } else {
+      navigator.clipboard.writeText(textParts.join('\n\n'));
+      alert('copied!');
+    }
+  };
+
   return (
     <div className="h-full flex flex-col gap-4">
       {/* Display Options */}
@@ -2805,12 +3010,28 @@ const ResultTab: React.FC = () => {
         >
           copy
         </button>
+        {tablesWithResults.length > 1 && (
+          <button
+            onClick={handleCopyAll}
+            className="px-3 py-1 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 text-xs hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
+          >
+            copy all
+          </button>
+        )}
         <button
           onClick={handleExport}
           className="px-3 py-1 bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-400 text-xs hover:bg-emerald-100 dark:hover:bg-emerald-900/50 transition-colors"
         >
-          export xlsx
+          export
         </button>
+        {tablesWithResults.length > 1 && (
+          <button
+            onClick={handleExportAll}
+            className="px-3 py-1 bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-400 text-xs hover:bg-emerald-100 dark:hover:bg-emerald-900/50 transition-colors"
+          >
+            export all
+          </button>
+        )}
       </div>
 
       {/* Info */}

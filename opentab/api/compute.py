@@ -23,6 +23,7 @@ class MeanScoreMapping(BaseModel):
 class CrosstabRequest(BaseModel):
     row_items: list[CrosstabItem]
     col_items: list[CrosstabItem] = []
+    is_grid_mode: bool = False
     filter_def: Optional[str] = None
     weight_col: Optional[str] = None
     mean_score_mappings: Optional[list[MeanScoreMapping]] = None
@@ -76,6 +77,50 @@ def _compute_stats_for_column(df, col_mask, weight_col=None):
     }
 
 
+def _compute_grid_crosstab(df, row_defs, col_defs, filter_def, weight_col):
+    if filter_def:
+        from ..core.code_parser import parse_code_def
+        filter_mask = parse_code_def(filter_def, df)
+        df = df[filter_mask]
+
+    codes = [rd['code_def'].split('/', 1)[1] for rd in row_defs]
+    row_names = [rd['label'] for rd in row_defs]
+    grid_vars = [cd['name'] for cd in col_defs]
+    col_names = [cd['label'] for cd in col_defs]
+
+    data = []
+    for code in codes:
+        row = []
+        for var in grid_vars:
+            if var not in df.columns:
+                row.append(0)
+                continue
+            mask = df[var].astype(str).str.strip() == str(code)
+            if weight_col and weight_col in df.columns:
+                row.append(df.loc[mask, weight_col].astype(float).sum())
+            else:
+                row.append(int(mask.sum()))
+        row.append(sum(row))
+        data.append(row)
+
+    total_row = []
+    for var in grid_vars:
+        if var not in df.columns:
+            total_row.append(0)
+            continue
+        col_str = df[var].astype(str).str.strip()
+        valid = col_str.notna() & (col_str != '') & (col_str != 'nan')
+        if weight_col and weight_col in df.columns:
+            total_row.append(df.loc[valid, weight_col].astype(float).sum())
+        else:
+            total_row.append(int(valid.sum()))
+    grand_total = df[weight_col].astype(float).sum() if (weight_col and weight_col in df.columns) else len(df)
+    total_row.append(grand_total)
+    data.append(total_row)
+
+    return pd.DataFrame(data, index=row_names + ['Total'], columns=col_names + ['Total'])
+
+
 @router.post("/crosstab", response_model=CrosstabResponse)
 async def compute_crosstab(request: CrosstabRequest):
     df = data_store.get('df')
@@ -114,7 +159,10 @@ async def compute_crosstab(request: CrosstabRequest):
                 code_def = f"{var_part}/{code_clean}"
                 col_defs.append({'name': item.variable, 'label': code_def, 'code_def': code_def})
 
-        crosstab = create_crosstab(df, row_defs, col_defs, request.weight_col, request.filter_def)
+        if request.is_grid_mode and col_defs:
+            crosstab = _compute_grid_crosstab(df, row_defs, col_defs, request.filter_def, request.weight_col)
+        else:
+            crosstab = create_crosstab(df, row_defs, col_defs, request.weight_col, request.filter_def)
         stats = calculate_frequencies(crosstab)
         base = calculate_base(df, request.filter_def)
 
@@ -134,42 +182,61 @@ async def compute_crosstab(request: CrosstabRequest):
                 filter_mask = parse_code_def(request.filter_def, working_df)
                 working_df = working_df[filter_mask]
 
-            working_df['_computed_score'] = None
-            has_scores = False
-            for var_name, codes in score_map.items():
-                if var_name in working_df.columns:
-                    for code, score in codes.items():
+            # Build column masks with their associated variable names
+            col_masks = []
+            for cd in col_defs:
+                from ..core.code_parser import evaluate_code_def
+                col_masks.append((cd['name'], cd['label'], evaluate_code_def(cd['code_def'], working_df)))
+
+            all_mask = pd.Series([True] * len(working_df), index=working_df.index)
+
+            mean_data = {}
+            std_error_data = {}
+            std_dev_data = {}
+            variance_data = {}
+
+            # For each column, compute mean using ONLY the variable associated with that column
+            for var_name, col_name, col_mask in col_masks:
+                if var_name in score_map:
+                    # Compute score for this specific variable only
+                    working_df['_computed_score'] = None
+                    for code, score in score_map[var_name].items():
                         mask = working_df[var_name].astype(str) == str(code)
                         working_df.loc[mask, '_computed_score'] = score
-                        has_scores = True
 
-            if has_scores:
-                col_names = [cd['label'] for cd in col_defs] + ['Total']
-
-                col_masks = []
-                for cd in col_defs:
-                    from ..core.code_parser import evaluate_code_def
-                    col_masks.append((cd['label'], evaluate_code_def(cd['code_def'], working_df)))
-
-                all_mask = pd.Series([True] * len(working_df), index=working_df.index)
-
-                mean_data = {}
-                std_error_data = {}
-                std_dev_data = {}
-                variance_data = {}
-
-                for col_name, col_mask in col_masks:
                     col_stats = _compute_stats_for_column(working_df, col_mask, request.weight_col)
                     mean_data[col_name] = col_stats['mean']
                     std_error_data[col_name] = col_stats['std_error']
                     std_dev_data[col_name] = col_stats['std_dev']
                     variance_data[col_name] = col_stats['variance']
+                else:
+                    # No score mapping for this variable
+                    mean_data[col_name] = 0
+                    std_error_data[col_name] = 0
+                    std_dev_data[col_name] = 0
+                    variance_data[col_name] = 0
 
+            # For Total column: compute mean using all variables (original behavior)
+            working_df['_computed_score'] = None
+            total_has_scores = False
+            for var_name, codes in score_map.items():
+                if var_name in working_df.columns:
+                    for code, score in codes.items():
+                        mask = working_df[var_name].astype(str) == str(code)
+                        working_df.loc[mask, '_computed_score'] = score
+                        total_has_scores = True
+
+            if total_has_scores:
                 total_stats = _compute_stats_for_column(working_df, all_mask, request.weight_col)
                 mean_data['Total'] = total_stats['mean']
                 std_error_data['Total'] = total_stats['std_error']
                 std_dev_data['Total'] = total_stats['std_dev']
                 variance_data['Total'] = total_stats['variance']
+            else:
+                mean_data['Total'] = 0
+                std_error_data['Total'] = 0
+                std_dev_data['Total'] = 0
+                variance_data['Total'] = 0
 
         return CrosstabResponse(
             counts=stats['counts'].to_dict(orient='index'),
