@@ -36,6 +36,8 @@ interface AppState {
   copiedVariableInfo: {
     codes: { code: string; label: string; factor: number | null }[];
     netCodes: { code: string; label: string; netOf: string[] }[];
+    customCodes: { code: string; label: string; syntax: string }[];
+    sourceVarDisplayName: string;
     stats: {
       showMean: boolean;
       showStdError: boolean;
@@ -43,7 +45,7 @@ interface AppState {
       showVariance: boolean;
     };
   } | null;
-  setCopiedVariableInfo: (info: { codes: { code: string; label: string; factor: number | null }[]; netCodes: { code: string; label: string; netOf: string[] }[]; stats: { showMean: boolean; showStdError: boolean; showStdDev: boolean; showVariance: boolean; } } | null) => void;
+  setCopiedVariableInfo: (info: { codes: { code: string; label: string; factor: number | null }[]; netCodes: { code: string; label: string; netOf: string[] }[]; customCodes: { code: string; label: string; syntax: string }[]; sourceVarDisplayName: string; stats: { showMean: boolean; showStdError: boolean; showStdDev: boolean; showVariance: boolean; } } | null) => void;
 
   // Undo paste
   lastPastedVariable: {

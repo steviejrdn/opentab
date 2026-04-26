@@ -416,26 +416,32 @@ export const VariableEditPanel: React.FC<VariableEditPanelProps> = ({
   // Copy/Paste variable info using global store
   const handleCopyVarInfo = useCallback(() => {
     const codesToCopy = variable.codes
-      .filter((c) => c.visibility !== 'removed' && !c.isNet)
+      .filter((c) => c.visibility !== 'removed' && !c.isNet && !c.isCustom)
       .map((c) => ({ code: c.code, label: c.label || '', factor: c.factor ?? null }));
-    
+
     const netCodesToCopy = variable.codes
       .filter((c) => c.visibility !== 'removed' && c.isNet)
       .map((c) => ({ code: c.code, label: c.label || '', netOf: c.netOf || [] }));
-    
+
+    const customCodesToCopy = variable.codes
+      .filter((c) => c.visibility !== 'removed' && c.isCustom)
+      .map((c) => ({ code: c.code, label: c.label || '', syntax: c.syntax || '' }));
+
     const statsToCopy = {
       showMean: variable.showMean || false,
       showStdError: variable.showStdError || false,
       showStdDev: variable.showStdDev || false,
       showVariance: variable.showVariance || false,
     };
-    
+
     setCopiedVariableInfo({
       codes: codesToCopy,
       netCodes: netCodesToCopy,
+      customCodes: customCodesToCopy,
+      sourceVarDisplayName: variable.name || variableKey,
       stats: statsToCopy,
     });
-  }, [variable, setCopiedVariableInfo]);
+  }, [variable, variableKey, setCopiedVariableInfo]);
 
   const handlePasteVarInfo = useCallback(() => {
     if (!copiedVariableInfo || (copiedVariableInfo.codes.length === 0 && copiedVariableInfo.netCodes.length === 0)) return;
@@ -478,12 +484,24 @@ export const VariableEditPanel: React.FC<VariableEditPanelProps> = ({
       onAddNetCode?.(variableKey, copiedNetCode.netOf, copiedNetCode.label);
     });
 
+    // Paste custom codes with syntax conversion
+    if (copiedVariableInfo.customCodes?.length && onAddCode) {
+      const destName = variable.name || variableKey;
+      const srcName = copiedVariableInfo.sourceVarDisplayName;
+      const escapedSrc = srcName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      copiedVariableInfo.customCodes.forEach((cc) => {
+        if (variable.codes.some((c) => c.code === cc.code && c.isCustom)) return;
+        const convertedSyntax = cc.syntax.replace(new RegExp(`\\b${escapedSrc}/`, 'g'), `${destName}/`);
+        onAddCode(variableKey, cc.label, convertedSyntax);
+      });
+    }
+
     // Apply statistics settings
     if (copiedVariableInfo.stats.showMean) onToggleVariableStat?.(variableKey, 'showMean');
     if (copiedVariableInfo.stats.showStdError) onToggleVariableStat?.(variableKey, 'showStdError');
     if (copiedVariableInfo.stats.showStdDev) onToggleVariableStat?.(variableKey, 'showStdDev');
     if (copiedVariableInfo.stats.showVariance) onToggleVariableStat?.(variableKey, 'showVariance');
-  }, [copiedVariableInfo, variable.codes, variableKey, onUpdateCodeLabel, onUpdateCodeFactor, onToggleVariableStat, onAddNetCode, setLastPastedVariable]);
+  }, [copiedVariableInfo, variable.codes, variable.name, variableKey, onUpdateCodeLabel, onUpdateCodeFactor, onToggleVariableStat, onAddNetCode, onAddCode, setLastPastedVariable]);
 
   const handleUndoPaste = useCallback(() => {
     if (lastPastedVariable?.varName === variableKey) {
