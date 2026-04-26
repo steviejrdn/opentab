@@ -2201,7 +2201,7 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
         {activeTable && (
           <div className="flex items-center gap-2">
             <button
-              onClick={handleGenerate}
+              onClick={() => handleGenerate()}
               disabled={isComputing || isRunningAll}
               className="px-4 py-1.5 bg-zinc-900 hover:bg-zinc-700 text-zinc-50 dark:bg-zinc-100 dark:hover:bg-white dark:text-zinc-950 text-xs font-bold disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             >
@@ -2378,16 +2378,16 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
                             <tr>
                               <td className="border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-zinc-500 bg-zinc-50 dark:bg-zinc-800/50">Base</td>
                               <td className="border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-center text-zinc-400 dark:text-zinc-600 bg-zinc-100 dark:bg-zinc-800">—</td>
-                              {previewColPaths.map((col) => (
-                                <td key={`base-${col}`} className="border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-center text-zinc-300 dark:text-zinc-700">—</td>
+                              {previewColPaths.map((col, ci) => (
+                                <td key={`base-${ci}`} className="border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-center text-zinc-300 dark:text-zinc-700">—</td>
                               ))}
                             </tr>
-                            {previewRowPaths.map((row) => (
-                              <tr key={row} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/40">
+                            {previewRowPaths.map((row, ri) => (
+                              <tr key={ri} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/40">
                                 <td className="border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-zinc-600 dark:text-zinc-400">{getCodeLabel(row)}</td>
                                 <td className="border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-center text-zinc-300 dark:text-zinc-700 bg-zinc-50 dark:bg-zinc-800/30">—</td>
-                                {previewColPaths.map((col) => (
-                                  <td key={`${row}-${col}`} className="border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-center text-zinc-300 dark:text-zinc-700">—</td>
+                                {previewColPaths.map((col, ci) => (
+                                  <td key={ci} className="border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-center text-zinc-300 dark:text-zinc-700">—</td>
                                 ))}
                               </tr>
                             ))}
@@ -3253,32 +3253,32 @@ const ResultTab: React.FC = () => {
             <tr className="bg-zinc-50 dark:bg-zinc-800/50">
               <td className="border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-zinc-600 dark:text-zinc-400">Base</td>
               <td className="border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-center text-zinc-800 dark:text-zinc-300 bg-zinc-100 dark:bg-zinc-800">{result.base}</td>
-              {colPaths.map((col) => (
-                <td key={col} className="border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-center text-zinc-600 dark:text-zinc-400">
+              {colPaths.map((col, ci) => (
+                <td key={ci} className="border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-center text-zinc-600 dark:text-zinc-400">
                   {result.counts['Total']?.[col] ?? 0}
                 </td>
               ))}
             </tr>
-            {rowNames.map((row) => {
+            {rowNames.map((row, ri) => {
               const rowLabel = getCodeLabel(row);
               const rowTotal = result.counts[row]?.['Total'] ?? 0;
 
               if (displayOptions.counts && displayOptions.colPct) {
                 return (
-                  <React.Fragment key={row}>
+                  <React.Fragment key={ri}>
                     <tr className="hover:bg-zinc-50 dark:hover:bg-zinc-800/30">
                       <td rowSpan={2} className="border border-zinc-200 dark:border-zinc-800 px-3 py-1 text-zinc-700 dark:text-zinc-300 align-middle">{rowLabel}</td>
                       <td className="border border-zinc-200 dark:border-zinc-800 px-3 py-1 text-center text-zinc-800 dark:text-zinc-300 bg-zinc-50 dark:bg-zinc-800/40">{rowTotal}</td>
-                      {colPaths.map((col) => (
-                        <td key={col} className="border border-zinc-200 dark:border-zinc-800 px-3 py-1 text-center text-zinc-600 dark:text-zinc-400">
+                      {colPaths.map((col, ci) => (
+                        <td key={ci} className="border border-zinc-200 dark:border-zinc-800 px-3 py-1 text-center text-zinc-600 dark:text-zinc-400">
                           {result.counts[row]?.[col] ?? 0}
                         </td>
                       ))}
                     </tr>
                     <tr className="hover:bg-zinc-50 dark:hover:bg-zinc-800/30">
                       <td className="border border-zinc-200 dark:border-zinc-800 px-3 py-1 text-center text-blue-600 dark:text-blue-400/70 bg-zinc-50 dark:bg-zinc-800/20">{formatPct(result.col_pct[row]?.['Total'] ?? 0)}</td>
-                      {colPaths.map((col) => (
-                        <td key={col} className="border border-zinc-200 dark:border-zinc-800 px-3 py-1 text-center text-blue-600 dark:text-blue-400/70">
+                      {colPaths.map((col, ci) => (
+                        <td key={ci} className="border border-zinc-200 dark:border-zinc-800 px-3 py-1 text-center text-blue-600 dark:text-blue-400/70">
                           {formatPct(result.col_pct[row]?.[col] ?? 0)}
                         </td>
                       ))}
@@ -3287,11 +3287,11 @@ const ResultTab: React.FC = () => {
                 );
               } else if (displayOptions.counts) {
                 return (
-                  <tr key={row} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/30">
+                  <tr key={ri} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/30">
                     <td className="border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-zinc-700 dark:text-zinc-300">{rowLabel}</td>
                     <td className="border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-center text-zinc-800 dark:text-zinc-300 bg-zinc-50 dark:bg-zinc-800/40">{rowTotal}</td>
-                    {colPaths.map((col) => (
-                      <td key={col} className="border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-center text-zinc-600 dark:text-zinc-400">
+                    {colPaths.map((col, ci) => (
+                      <td key={ci} className="border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-center text-zinc-600 dark:text-zinc-400">
                         {result.counts[row]?.[col] ?? 0}
                       </td>
                     ))}
@@ -3299,11 +3299,11 @@ const ResultTab: React.FC = () => {
                 );
               } else if (displayOptions.colPct) {
                 return (
-                  <tr key={row} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/30">
+                  <tr key={ri} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/30">
                     <td className="border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-zinc-700 dark:text-zinc-300">{rowLabel}</td>
                     <td className="border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-center text-blue-600 dark:text-blue-400/70 bg-zinc-50 dark:bg-zinc-800/40">{formatPct(result.col_pct[row]?.['Total'] ?? 0)}</td>
-                    {colPaths.map((col) => (
-                      <td key={col} className="border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-center text-blue-600 dark:text-blue-400/70">
+                    {colPaths.map((col, ci) => (
+                      <td key={ci} className="border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-center text-blue-600 dark:text-blue-400/70">
                         {formatPct(result.col_pct[row]?.[col] ?? 0)}
                       </td>
                     ))}
@@ -3319,8 +3319,8 @@ const ResultTab: React.FC = () => {
                 <td className="border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-center text-amber-700 dark:text-amber-400/80 bg-zinc-100 dark:bg-zinc-800/40 font-medium">
                   {statValue(sr.key, 'Total')}
                 </td>
-                {colPaths.map((col) => (
-                  <td key={`${sr.key}-${col}`} className="border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-center text-amber-700 dark:text-amber-400/80">
+                {colPaths.map((col, ci) => (
+                  <td key={`${sr.key}-${ci}`} className="border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-center text-amber-700 dark:text-amber-400/80">
                     {statValue(sr.key, col)}
                   </td>
                 ))}

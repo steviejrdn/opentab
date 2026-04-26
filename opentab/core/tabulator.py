@@ -2,6 +2,16 @@ import pandas as pd
 from .code_parser import parse_code_def, evaluate_code_def
 
 
+def _make_unique(labels):
+    seen = {}
+    result = []
+    for label in labels:
+        n = seen.get(label, 0)
+        result.append(label if n == 0 else f"{label} ({n + 1})")
+        seen[label] = n + 1
+    return result
+
+
 def create_crosstab(df, row_defs, col_defs, weight_col=None, filter_def=None):
     if filter_def:
         filter_mask = parse_code_def(filter_def, df)
@@ -45,9 +55,10 @@ def create_crosstab(df, row_defs, col_defs, weight_col=None, filter_def=None):
         data.append(row_data)
         row_names.append(row_name)
     
-    # Column names (include Total)
-    col_names = [name for name, _ in col_masks] + ['Total']
-    
+    # Column names (include Total) — deduplicate to allow safe dict serialization
+    col_names = _make_unique([name for name, _ in col_masks]) + ['Total']
+    row_names = _make_unique(row_names)
+
     # Create DataFrame
     crosstab_df = pd.DataFrame(data, index=row_names, columns=col_names)
     
