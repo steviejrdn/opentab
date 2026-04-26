@@ -722,7 +722,22 @@ export const VariableEditPanel: React.FC<VariableEditPanelProps> = ({
               Code
             </button>
           )}
-          
+          <button
+            onClick={() => {
+              const sorted = [...variable.codes].sort((a, b) => {
+                const na = parseInt(a.code, 10);
+                const nb = parseInt(b.code, 10);
+                if (!isNaN(na) && !isNaN(nb)) return na - nb;
+                return a.code.localeCompare(b.code);
+              });
+              onReorderCodes(variableKey, sorted.map((c) => c.code));
+            }}
+            className="px-2.5 py-1.5 bg-zinc-500 hover:bg-zinc-600 text-white text-xs rounded transition-colors"
+            title="Sort codes by numeric value"
+          >
+            ↑↓ Sort
+          </button>
+
           <div className="flex-1" />
           
           {/* Copy/Paste Var Info buttons */}
