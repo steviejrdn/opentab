@@ -1,16 +1,24 @@
-# ⧆pentab_
+<p align="center">
+  <img src="frontend/public/logo_white.svg" alt="opentab_" width="360" />
+</p>
 
-A modern, interactive survey data cross-tabulation tool. Upload CSV data, define variables, and build custom crosstabs with drag-and-drop interface and statistical summaries.
+opentab_ is an interactive reporting tool for survey data. It has a clean, command-line-inspired interface that's straightforward to operate — no formulas, no pivot tables, just drag and drop.
 
 ## Features
 
-- 📊 **Drag-and-drop UI** — Build crosstabs without code
-- 📁 **Variable Management** — Define codes, labels, statistics (mean, std dev, variance)
-- 🎯 **Filtering** — Apply complex filters to crosstabs
-- 📈 **Weighted Counts** — Support for survey weights
-- 🎨 **Dark Mode** — Built-in light/dark theme toggle
-- 📦 **Resizable Sidebar** — Customize your workspace
-- 💾 **Session Save/Load** — Export/import `.opentab` files
+- **Drag-and-drop table builder** — Drop variables into Header and Sidebreak zones; supports nested structures up to 3 levels deep
+- **EZ Tables Constructor** — Batch-create tables from a shared header template and a list of row variables in one step
+- **Saved Headers** — Save a header configuration as a named variable and reuse it across tables with a single drag
+- **Run All** — Compute all configured tables in one click with live progress feedback
+- **Variable Editor** — Manage codes, labels, visibility, net codes, custom syntax, and factor scores per variable
+- **Statistical Summaries** — Per-variable mean, standard error, standard deviation, and variance alongside frequency counts
+- **Filters** — Apply complex AND/OR filter expressions directly to any table
+- **Survey Weights** — Weight counts and statistics by any numeric column
+- **Grid Mode** — Display a set of variables as a compact variable-grid table
+- **Export** — Copy or download results as `.xls` (single table or all tables at once)
+- **Session Save / Load** — Export and restore the full workspace as an `.opentab` file
+- **Multiple Tables** — Manage many tables with folder organisation in the sidebar
+- **Dark Mode** — Built-in light/dark theme toggle
 
 ## End User Install
 
@@ -277,6 +285,10 @@ MIT License — see LICENSE file
 - 📖 [Project Docs](./CLAUDE.md) — Architecture & development guide
 - 🐛 [Issues](https://github.com/steviejrdn/opentab/issues) — Report bugs or request features
 - 💬 Discussions — Ask questions
+
+## Built With
+
+This app is vibe coded using [Claude Code](https://claude.ai/code) and [OpenCode](https://opencode.ai).
 
 ---
 
