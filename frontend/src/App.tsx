@@ -916,9 +916,38 @@ const DraggableVariable: React.FC<{ name: string; displayName: string; label: st
   );
 };
 
+// ─── Saved Header Card ────────────────────────────────────────────────────────
+const SavedHeaderCard: React.FC<{ varKey: string; name: string; onRemove: () => void; compact?: boolean }> = ({ varKey, name, onRemove, compact = false }) => {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: `saved-header:${varKey}` });
+  return (
+    <div
+      ref={setNodeRef}
+      {...listeners}
+      {...attributes}
+      className={`${compact ? 'px-2 py-1.5 rounded' : 'px-3 py-2'} border cursor-grab select-none transition-colors ${
+        isDragging
+          ? 'opacity-40 bg-indigo-200 dark:bg-indigo-800 border-indigo-300 dark:border-indigo-600'
+          : 'bg-indigo-50 dark:bg-indigo-900/40 border-indigo-200 dark:border-indigo-700 hover:bg-indigo-100 dark:hover:bg-indigo-900/60'
+      }`}
+    >
+      <div className={`flex justify-between items-center ${compact ? 'gap-1' : 'gap-2'}`}>
+        <div className={`min-w-0 ${compact ? 'flex-1' : ''}`}>
+          <span className={`${compact ? 'text-[10px]' : 'text-xs'} font-medium text-indigo-700 dark:text-indigo-400 block truncate`}>{name}</span>
+          <span className={`${compact ? 'text-[9px]' : 'text-xs'} text-zinc-500 block truncate`}>Header</span>
+        </div>
+        <button
+          onPointerDown={e => e.stopPropagation()}
+          onClick={e => { e.stopPropagation(); onRemove(); }}
+          className="text-zinc-400 hover:text-red-500 text-xs shrink-0"
+        >×</button>
+      </div>
+    </div>
+  );
+};
+
 // ─── Variable List ────────────────────────────────────────────────────────────
 const VariableList: React.FC = () => {
-  const { variables, dataLoaded } = useStore();
+  const { variables, dataLoaded, savedHeaders, removeSavedHeader } = useStore();
   const [search, setSearch] = useState('');
   if (!dataLoaded) return (
     <div className="flex flex-col h-full px-3 py-3">
@@ -949,6 +978,16 @@ const VariableList: React.FC = () => {
         ))}
         {filtered.length === 0 && (
           <div className="text-xs text-zinc-400 dark:text-zinc-600 italic px-1">no match</div>
+        )}
+        {Object.keys(savedHeaders).length > 0 && (
+          <div className="mt-2 pt-2 border-t border-zinc-200 dark:border-zinc-700">
+            <span className="text-[10px] text-zinc-400 uppercase tracking-wider">saved headers</span>
+            <div className="mt-1 space-y-1">
+              {Object.entries(savedHeaders).map(([key, hdr]) => (
+                <SavedHeaderCard key={key} varKey={key} name={hdr.name} onRemove={() => removeSavedHeader(key)} />
+              ))}
+            </div>
+          </div>
         )}
       </div>
     </div>
@@ -1598,7 +1637,8 @@ const DropZone: React.FC<{
   items: any[];
   onRemove: (id: string) => void;
   orientation: 'horizontal' | 'vertical';
-}> = ({ id, label, items, onRemove, orientation }) => {
+  footer?: React.ReactNode;
+}> = ({ id, label, items, onRemove, orientation, footer }) => {
   const { isOver, setNodeRef } = useDroppable({ id });
   const zoneType = id === 'row-zone' ? 'row' : 'col';
   return (
@@ -1620,6 +1660,7 @@ const DropZone: React.FC<{
           ))
         )}
       </div>
+      {footer}
     </div>
   );
 };
@@ -1662,8 +1703,8 @@ function buildFilterDef(filterItems: FilterItem[]): string | undefined {
 const App: React.FC = () => {
   const {
     dataLoaded, setDataLoaded, mergeAndSetVariables, setDataInfo,
-    activeTableId, variables, tables,
-    addRowItem, addColItem, removeRowItem, removeColItem, addFilterItem, nestItem,
+    activeTableId, variables, tables, savedHeaders,
+    addRowItem, addColItem, removeRowItem, removeColItem, addFilterItem, nestItem, updateTable,
   } = useStore();
   const [loading, setLoading] = useState(false);
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
@@ -1680,6 +1721,22 @@ const App: React.FC = () => {
     const { active, over } = event;
     if (!over) return;
     const activeId = String(active.id);
+
+    if (activeId.startsWith('saved-header:')) {
+      const headerKey = activeId.slice('saved-header:'.length);
+      const saved = savedHeaders[headerKey];
+      if (!saved) return;
+      if (over.id === 'ez-header-zone') {
+        window.dispatchEvent(new CustomEvent('ez-header-load', {
+          detail: JSON.parse(JSON.stringify(saved.items))
+        }));
+      } else if (over.id === 'col-zone' && activeTableId) {
+        updateTable(activeTableId, { col_items: JSON.parse(JSON.stringify(saved.items)) });
+      } else if (over.id === 'row-zone' || over.id === 'filter-zone') {
+        alert('Header variables can only be dropped into the Header zone.');
+      }
+      return;
+    }
 
     // Handle EZ Tables header drop (check DOM for modal visibility)
     const ezModalOpen = document.getElementById('ez-tables-modal') !== null;
@@ -1836,6 +1893,23 @@ const App: React.FC = () => {
               }
             }
 
+            if (activeDragId.startsWith('saved-header:')) {
+              const headerKey = activeDragId.slice('saved-header:'.length);
+              const saved = savedHeaders[headerKey];
+              if (saved) {
+                return (
+                  <div className="px-3 py-2 border-2 border-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 shadow-2xl cursor-grabbing w-48 rotate-1 opacity-95">
+                    <div className="flex justify-between items-center gap-2">
+                      <div className="min-w-0">
+                        <span className="text-xs font-medium text-indigo-700 dark:text-indigo-400 block">{saved.name}</span>
+                        <span className="text-xs text-zinc-500 block truncate">Header</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
+            }
+
             return null;
           })()}
         </DragOverlay>
@@ -1847,8 +1921,12 @@ const App: React.FC = () => {
 
 // ─── Build Page ───────────────────────────────────────────────────────────────
 const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ onLoadSample, loading }) => {
-  const { dataLoaded, activeTableId, tables, variables, removeRowItem, removeColItem, removeGridItem, setTableResult, updateTable, setGridMode, toggleVariableStat } = useStore();
+  const { dataLoaded, activeTableId, tables, variables, savedHeaders, addSavedHeader, removeSavedHeader, removeRowItem, removeColItem, removeGridItem, setTableResult, updateTable, setGridMode, toggleVariableStat } = useStore();
   const [localTab, setLocalTab] = useState<'build' | 'filter' | 'result'>('build');
+  const [saveHeaderName, setSaveHeaderName] = useState('');
+  const [showSaveHeaderForm, setShowSaveHeaderForm] = useState(false);
+  const [ezVarSearch, setEzVarSearch] = useState('');
+  const [ezRowVarSearch, setEzRowVarSearch] = useState('');
   const [isComputing, setIsComputing] = useState(false);
   const [isRunningAll, setIsRunningAll] = useState(false);
   const [runAllMessage, setRunAllMessage] = useState('');
@@ -1905,12 +1983,18 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
       });
     };
     
+    const loadHandler = (e: CustomEvent) => {
+      setEzHeaderItems(e.detail as DropItem[]);
+    };
+
     window.addEventListener('ez-header-item-added', addHandler as EventListener);
     window.addEventListener('ez-header-item-nested', nestHandler as EventListener);
-    
+    window.addEventListener('ez-header-load', loadHandler as EventListener);
+
     return () => {
       window.removeEventListener('ez-header-item-added', addHandler as EventListener);
       window.removeEventListener('ez-header-item-nested', nestHandler as EventListener);
+      window.removeEventListener('ez-header-load', loadHandler as EventListener);
     };
   }, []);
 
@@ -2152,6 +2236,51 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
                   items={activeTable.col_items}
                   onRemove={(id) => removeColItem(activeTable.id, id)}
                   orientation="horizontal"
+                  footer={activeTable.col_items.length > 0 ? (
+                    <div className="relative mt-2 flex justify-end">
+                      <button
+                        onClick={() => setShowSaveHeaderForm(v => !v)}
+                        className="text-[10px] px-2 py-0.5 bg-indigo-600 text-white hover:bg-indigo-700 transition-colors"
+                      >
+                        + header
+                      </button>
+                      {showSaveHeaderForm && (
+                        <div className="absolute bottom-full right-0 mb-1 z-10 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 shadow-lg p-2 flex gap-1 min-w-[200px]">
+                          <input
+                            autoFocus
+                            type="text"
+                            value={saveHeaderName}
+                            onChange={e => setSaveHeaderName(e.target.value)}
+                            onKeyDown={e => {
+                              if (e.key === 'Enter') {
+                                const name = saveHeaderName.trim();
+                                if (!name) return;
+                                addSavedHeader(crypto.randomUUID(), name, JSON.parse(JSON.stringify(activeTable.col_items)));
+                                setSaveHeaderName('');
+                                setShowSaveHeaderForm(false);
+                              }
+                              if (e.key === 'Escape') setShowSaveHeaderForm(false);
+                            }}
+                            placeholder="header name..."
+                            className="flex-1 text-xs px-2 py-1 border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 outline-none"
+                          />
+                          <button
+                            onClick={() => {
+                              const name = saveHeaderName.trim();
+                              if (!name) return;
+                              addSavedHeader(crypto.randomUUID(), name, JSON.parse(JSON.stringify(activeTable.col_items)));
+                              setSaveHeaderName('');
+                              setShowSaveHeaderForm(false);
+                            }}
+                            disabled={!saveHeaderName.trim()}
+                            className="text-xs px-2 py-1 bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                          >
+                            save
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ) : undefined}
                 />
                 {activeTable.grid_items && activeTable.grid_items.length > 0 && (
                   <DropZone
@@ -2433,11 +2562,23 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
             <div className="flex flex-1 overflow-hidden">
               {/* Left Side - Variables List (Draggable) */}
               <div className="w-64 border-r border-zinc-200 dark:border-zinc-700 flex flex-col">
-                <div className="px-3 py-2 border-b border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/50">
+                <div className="px-3 py-2 border-b border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/50 flex flex-col gap-1.5">
                   <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400">Variables (drag to right →)</span>
+                  <input
+                    type="text"
+                    value={ezVarSearch}
+                    onChange={e => setEzVarSearch(e.target.value)}
+                    placeholder="search..."
+                    className="px-2 py-0.5 text-xs bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 placeholder-zinc-400 outline-none focus:border-zinc-400 dark:focus:border-zinc-500 w-full"
+                  />
                 </div>
                 <div className="flex-1 overflow-y-auto p-2 space-y-1">
-                  {Object.entries(variables).map(([key, info]) => (
+                  {Object.entries(variables)
+                    .filter(([key, info]) => {
+                      const q = ezVarSearch.toLowerCase();
+                      return !q || key.toLowerCase().includes(q) || (info.name || '').toLowerCase().includes(q) || (info.label || '').toLowerCase().includes(q);
+                    })
+                    .map(([key, info]) => (
                     <EzDraggableVariable
                       key={key}
                       name={key}
@@ -2446,11 +2587,20 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
                       codeCount={info.codes.length}
                     />
                   ))}
+                  {Object.keys(savedHeaders).length > 0 && (
+                    <div className="mt-2 pt-2 border-t border-zinc-200 dark:border-zinc-700">
+                      <div className="text-[9px] text-zinc-400 uppercase tracking-wider px-1 mb-1">saved headers</div>
+                      {Object.entries(savedHeaders).map(([key, hdr]) => (
+                        <SavedHeaderCard key={key} varKey={key} name={hdr.name} onRemove={() => removeSavedHeader(key)} compact={true} />
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
               
               {/* Right Side - Form */}
-              <div className="flex-1 p-4 space-y-4 overflow-hidden">
+              <div className="flex-1 flex flex-col overflow-hidden">
+              <div className="flex-1 overflow-y-auto p-4 space-y-4">
                 {/* Header Constructor - Droppable Zone (Fixed height, no scroll) */}
                 <div>
                   <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-2 block">
@@ -2493,9 +2643,21 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
                 <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-2 block">
                   Select Row Variables
                 </label>
+                <input
+                  type="text"
+                  value={ezRowVarSearch}
+                  onChange={e => setEzRowVarSearch(e.target.value)}
+                  placeholder="search..."
+                  className="mb-1.5 px-2 py-1 text-xs bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 placeholder-zinc-400 outline-none focus:border-zinc-400 dark:focus:border-zinc-500 w-full"
+                />
                 <div className="border border-zinc-200 dark:border-zinc-700 rounded p-3 max-h-[200px] overflow-y-auto bg-zinc-50 dark:bg-zinc-800/50">
                   <div className="space-y-1">
-                    {Object.entries(variables).map(([key, info]) => (
+                    {Object.entries(variables)
+                      .filter(([key, info]) => {
+                        const q = ezRowVarSearch.toLowerCase();
+                        return !q || key.toLowerCase().includes(q) || (info.name || '').toLowerCase().includes(q) || (info.label || '').toLowerCase().includes(q);
+                      })
+                      .map(([key, info]) => (
                       <label key={key} className="flex items-center gap-2 text-xs cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-800 p-1 rounded">
                         <input
                           type="checkbox"
@@ -2518,8 +2680,9 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
                 </div>
               </div>
 
-              {/* Summary and Buttons */}
-              <div className="flex items-center justify-between pt-2 border-t border-zinc-200 dark:border-zinc-700">
+              </div>
+              {/* Summary and Buttons — pinned footer */}
+              <div className="px-4 py-3 border-t border-zinc-200 dark:border-zinc-700 flex items-center justify-between shrink-0">
                 <span className="text-xs text-zinc-500">
                   Will create <strong>{ezSelectedRowVars.length}</strong> tables
                 </span>
