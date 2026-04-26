@@ -18,6 +18,8 @@ interface AppState {
   activeTableId: string | null;
   folders: Folder[];
 
+  savedHeaders: Record<string, { name: string; items: DropItem[] }>;
+
   activeTab: 'build' | 'filter' | 'result' | 'edit-variables';
   displayOptions: {
     counts: boolean;
@@ -100,6 +102,8 @@ interface AppState {
   duplicateVariable: (sourceKey: string, targetKey: string) => void;
   toggleVariableStat: (varName: string, stat: 'showMean' | 'showStdError' | 'showStdDev' | 'showVariance') => void;
   deleteVariable: (varName: string) => void;
+  addSavedHeader: (key: string, name: string, items: DropItem[]) => void;
+  removeSavedHeader: (key: string) => void;
   importState: (state: Partial<Pick<AppState, 'variables' | 'tables' | 'displayOptions' | 'activeTableId' | 'fileName' | 'rowCount' | 'folders'>>) => void;
   mergeAndSetVariables: (incoming: Record<string, VariableInfo>) => void;
   resetSession: () => void;
@@ -127,6 +131,7 @@ export const useStore = create<AppState>()((set, get) => ({
   sidebarVisible: false,
 
   copiedVariableInfo: null,
+  savedHeaders: {},
   lastPastedVariable: null,
 
   setDataLoaded: (loaded) => set({ dataLoaded: loaded, sidebarVisible: loaded }),
@@ -593,6 +598,15 @@ export const useStore = create<AppState>()((set, get) => ({
     set((state) => {
       const entries = Object.entries(state.variables).filter(([k]) => k !== varName);
       return { variables: Object.fromEntries(entries) };
+    }),
+
+  addSavedHeader: (key, name, items) =>
+    set(state => ({ savedHeaders: { ...state.savedHeaders, [key]: { name, items } } })),
+
+  removeSavedHeader: (key) =>
+    set(state => {
+      const { [key]: _, ...rest } = state.savedHeaders;
+      return { savedHeaders: rest };
     }),
 
   resetSession: () => set({

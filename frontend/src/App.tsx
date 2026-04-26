@@ -5,11 +5,10 @@ import { DndContext, useSensor, useSensors, PointerSensor, useDraggable, useDrop
 import type { DragStartEvent, DragEndEvent as DndDragEndEvent } from '@dnd-kit/core';
 
 import { computeApi, dataApi } from './lib/api';
-import type { FilterItem, CrosstabResult, VariableInfo, DropItem } from './lib/api';
+import type { FilterItem, CrosstabResult, VariableInfo, DropItem, Table } from './lib/api';
 import FilterTab from './components/FilterTab';
 import { VariableEditPanel } from './components/VariableEditPanel';
 import { v4 as uuidv4 } from 'uuid';
-
 // ─── Drag State Context ───────────────────────────────────────────────────────
 const DragStateContext = React.createContext<{ activeDragId: string | null }>({ activeDragId: null });
 
@@ -102,6 +101,260 @@ function getAllNestedVars(items: DropItem[]): string[] {
     ...(item.children?.length ? getAllNestedVars(item.children) : []),
   ]);
 }
+
+// ─── EZ Draggable Variable (for EZ Tables Modal) ───────────────────────────────
+const EzDraggableVariable: React.FC<{ 
+  name: string; 
+  displayName: string; 
+  label: string; 
+  codeCount: number;
+  onAddNested?: (varName: string) => void;
+  isNesting?: boolean;
+}> = ({ name, displayName, label, codeCount, onAddNested, isNesting }) => {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: `ez-var-${name}` });
+  
+  return (
+    <div className="relative group">
+      <div
+        ref={setNodeRef}
+        {...listeners}
+        {...attributes}
+        className={`px-2 py-1.5 border cursor-grab select-none transition-colors rounded ${
+          isDragging
+            ? 'opacity-40 bg-zinc-200 dark:bg-zinc-700 border-zinc-300 dark:border-zinc-600'
+            : 'bg-zinc-100 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 hover:bg-zinc-200 dark:hover:bg-zinc-700 hover:border-zinc-300 dark:hover:border-zinc-600'
+        }`}
+      >
+        <div className="flex justify-between items-center gap-1">
+          <div className="min-w-0 flex-1">
+            <span className="text-[10px] font-medium text-emerald-700 dark:text-emerald-400 block truncate">{displayName}</span>
+            <span className="text-[9px] text-zinc-500 block truncate">{label}</span>
+          </div>
+          <span className="text-[9px] text-zinc-400 dark:text-zinc-600 shrink-0">{codeCount}</span>
+        </div>
+      </div>
+      
+      {/* Nesting button - appears on hover */}
+      {isNesting && onAddNested && (
+        <button
+          onClick={() => onAddNested(name)}
+          className="absolute -right-1 -top-1 w-4 h-4 bg-blue-500 hover:bg-blue-600 text-white rounded-full text-[10px] flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-sm"
+          title={`Nest ${displayName} under selected`}
+        >
+          +
+        </button>
+      )}
+    </div>
+  );
+};
+
+// ─── EZ Header Drop Zone (for EZ Tables Modal) ─────────────────────────────────
+const EzHeaderDropZone: React.FC<{
+  items: DropItem[];
+  onRemove: (id: string) => void;
+  variables: Record<string, VariableInfo>;
+}> = ({ items, onRemove, variables }) => {
+  const { isOver, setNodeRef } = useDroppable({ id: 'ez-header-zone' });
+  const [showPicker, setShowPicker] = useState(false);
+  const [selectedParentId, setSelectedParentId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const pickerRef = useRef<HTMLDivElement>(null);
+  const pickerButtonRef = useRef<HTMLButtonElement>(null);
+
+  // Close picker when clicking outside
+  useEffect(() => {
+    if (!showPicker) return;
+    const handler = (e: MouseEvent) => {
+      if (pickerRef.current && !pickerRef.current.contains(e.target as Node) &&
+          pickerButtonRef.current && !pickerButtonRef.current.contains(e.target as Node)) {
+        setShowPicker(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showPicker]);
+
+  const handleShowPicker = (parentId: string, buttonRef: HTMLButtonElement | null) => {
+    setSelectedParentId(parentId);
+    setShowPicker(true);
+    setSearchQuery('');
+    if (buttonRef) {
+      pickerButtonRef.current = buttonRef;
+    }
+  };
+
+  const handleSelectVar = (varName: string) => {
+    if (!selectedParentId) return;
+    const varInfo = variables[varName];
+    if (varInfo?.codes?.length) {
+      const visibleCodes = varInfo.codes
+        .filter((c: any) => c.visibility !== 'removed' && c.visibility !== 'hidden')
+        .map((c: any) => c.code);
+      const newItem: DropItem = {
+        id: uuidv4(),
+        variable: varName,
+        codeDef: `${varName}/*`,
+        codes: visibleCodes
+      };
+      window.dispatchEvent(new CustomEvent('ez-header-item-nested', {
+        detail: { parentId: selectedParentId, newItem }
+      }));
+    }
+    setShowPicker(false);
+    setSelectedParentId(null);
+  };
+
+  const filteredVars = Object.entries(variables).filter(([key, info]) => {
+    const query = searchQuery.toLowerCase();
+    return key.toLowerCase().includes(query) ||
+           (info.name || '').toLowerCase().includes(query) ||
+           (info.label || '').toLowerCase().includes(query);
+  });
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={`border-2 border-dashed rounded p-2 min-h-[100px] max-h-[160px] overflow-y-auto ${
+        isOver
+          ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30'
+          : 'border-zinc-300 dark:border-zinc-600 hover:border-blue-400 dark:hover:border-blue-500 bg-white dark:bg-zinc-900'
+      }`}
+    >
+      {items.length === 0 ? (
+        <div className="text-center py-4">
+          <div className="text-2xl mb-1">📥</div>
+          <p className="text-[10px] text-zinc-500 dark:text-zinc-400">Drop variables here</p>
+          <p className="text-[9px] text-zinc-400 dark:text-zinc-500 mt-0.5">Click + to nest</p>
+        </div>
+      ) : (
+        <div className="space-y-0.5">
+          {items.map((item) => (
+            <EzHeaderItem
+              key={item.id}
+              item={item}
+              onRemove={onRemove}
+              onShowPicker={handleShowPicker}
+              isPickerOpen={showPicker && selectedParentId === item.id}
+              variables={variables}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* Variable Picker - rendered at dropzone level to avoid clipping */}
+      {showPicker && selectedParentId && (
+        <div
+          ref={pickerRef}
+          className="fixed z-[60] w-64 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg shadow-xl"
+          style={{
+            top: pickerButtonRef.current ? pickerButtonRef.current.getBoundingClientRect().bottom + 4 : '50%',
+            left: pickerButtonRef.current ? pickerButtonRef.current.getBoundingClientRect().left : '50%',
+          }}
+        >
+          <div className="p-2 border-b border-zinc-200 dark:border-zinc-700">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search variables..."
+              className="w-full px-2 py-1 text-xs bg-zinc-100 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-600 rounded text-zinc-700 dark:text-zinc-200 placeholder-zinc-400"
+              autoFocus
+            />
+          </div>
+          <div className="max-h-[200px] overflow-y-auto p-1">
+            {filteredVars.length === 0 ? (
+              <div className="px-2 py-3 text-xs text-zinc-400 text-center">No variables found</div>
+            ) : (
+              filteredVars.map(([key, info]) => (
+                <button
+                  key={key}
+                  onClick={() => handleSelectVar(key)}
+                  className="w-full text-left px-2 py-1.5 text-xs hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded flex items-center gap-2"
+                >
+                  <span className="font-medium text-emerald-700 dark:text-emerald-400 truncate">{info.name || key}</span>
+                  <span className="text-zinc-400 truncate flex-1">{info.label}</span>
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ─── EZ Header Item (with nesting support - same as Build tab) ──────────────────
+const EzHeaderItem: React.FC<{
+  item: DropItem;
+  onRemove: (id: string) => void;
+  onShowPicker: (parentId: string, buttonRef: HTMLButtonElement | null) => void;
+  isPickerOpen: boolean;
+  variables: Record<string, VariableInfo>;
+  depth?: number;
+}> = ({ item, onRemove, onShowPicker, isPickerOpen, variables, depth = 0 }) => {
+  const displayName = variables[item.variable]?.label || item.variable;
+  const hasChildren = item.children && item.children.length > 0;
+  const maxDepth = 3;
+  const canNest = depth < maxDepth;
+  const addButtonRef = useRef<HTMLButtonElement>(null);
+
+  const handleAddClick = () => {
+    onShowPicker(item.id, addButtonRef.current);
+  };
+
+  return (
+    <div className="flex flex-col">
+      <div className={`flex items-center gap-1 px-2 py-1 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 ${depth === 0 ? 'rounded-t-md' : 'border-t-0'} ${hasChildren ? 'rounded-b-md' : 'rounded-md'}`}>
+        <div className="flex-1 min-w-0">
+          <div className={`text-[10px] font-medium truncate ${depth === 0 ? 'text-emerald-700 dark:text-emerald-400' : 'text-blue-600 dark:text-blue-400'}`}>
+            {displayName}
+          </div>
+        </div>
+
+        {/* Add child button - same as Build tab */}
+        {canNest && (
+          <button
+            ref={addButtonRef}
+            onClick={handleAddClick}
+            className={`w-5 h-5 flex items-center justify-center rounded transition-colors text-xs ${
+              isPickerOpen
+                ? 'text-blue-500 bg-blue-50 dark:text-blue-400 dark:bg-blue-900/30'
+                : 'text-zinc-400 dark:text-zinc-500 hover:text-blue-500 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30'
+            }`}
+            title="Add nested variable"
+          >
+            +
+          </button>
+        )}
+
+        {/* Remove button */}
+        <button
+          onClick={() => onRemove(item.id)}
+          className="w-5 h-5 flex items-center justify-center text-zinc-400 dark:text-zinc-600 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded transition-colors text-xs"
+        >
+          ×
+        </button>
+      </div>
+
+      {/* Children */}
+      {hasChildren && (
+        <div className="ml-3 pl-2 border-l border-blue-200 dark:border-blue-800 mt-0.5 space-y-0.5">
+          {item.children!.map((child) => (
+            <EzHeaderItem
+              key={child.id}
+              item={child}
+              onRemove={onRemove}
+              onShowPicker={onShowPicker}
+              isPickerOpen={isPickerOpen}
+              variables={variables}
+              depth={depth + 1}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
 
 // ─── Theme Toggle ────────────────────────────────────────────────────────────
 const ThemeToggle: React.FC = () => {
@@ -302,7 +555,7 @@ const Navigation: React.FC = () => {
           <img src="/logo_white.svg" alt="opentab" className="h-5 hidden dark:block" />
         </button>
         <span className="text-xs text-zinc-400 dark:text-zinc-600 border border-zinc-300 dark:border-zinc-700 px-1.5 py-0.5 leading-none">
-          alpha
+          beta
         </span>
       </div>
       <div className="flex items-center gap-4">
@@ -359,6 +612,16 @@ const Navigation: React.FC = () => {
             open
           </button>
           <input ref={openFileRef} type="file" accept=".opentab" className="hidden" onChange={handleOpenFallback} />
+        </div>
+        <div className="flex items-center gap-1 border-l border-zinc-200 dark:border-zinc-800 pl-3">
+          <a
+            href="https://github.com/steviejrdn/opentab/issues"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="px-2.5 py-1 text-xs text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+          >
+            feedback
+          </a>
         </div>
         <ThemeToggle />
       </div>
@@ -653,9 +916,38 @@ const DraggableVariable: React.FC<{ name: string; displayName: string; label: st
   );
 };
 
+// ─── Saved Header Card ────────────────────────────────────────────────────────
+const SavedHeaderCard: React.FC<{ varKey: string; name: string; onRemove: () => void; compact?: boolean }> = ({ varKey, name, onRemove, compact = false }) => {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: `saved-header:${varKey}` });
+  return (
+    <div
+      ref={setNodeRef}
+      {...listeners}
+      {...attributes}
+      className={`${compact ? 'px-2 py-1.5 rounded' : 'px-3 py-2'} border cursor-grab select-none transition-colors ${
+        isDragging
+          ? 'opacity-40 bg-indigo-200 dark:bg-indigo-800 border-indigo-300 dark:border-indigo-600'
+          : 'bg-indigo-50 dark:bg-indigo-900/40 border-indigo-200 dark:border-indigo-700 hover:bg-indigo-100 dark:hover:bg-indigo-900/60'
+      }`}
+    >
+      <div className={`flex justify-between items-center ${compact ? 'gap-1' : 'gap-2'}`}>
+        <div className={`min-w-0 ${compact ? 'flex-1' : ''}`}>
+          <span className={`${compact ? 'text-[10px]' : 'text-xs'} font-medium text-indigo-700 dark:text-indigo-400 block truncate`}>{name}</span>
+          <span className={`${compact ? 'text-[9px]' : 'text-xs'} text-zinc-500 block truncate`}>Header</span>
+        </div>
+        <button
+          onPointerDown={e => e.stopPropagation()}
+          onClick={e => { e.stopPropagation(); onRemove(); }}
+          className="text-zinc-400 hover:text-red-500 text-xs shrink-0"
+        >×</button>
+      </div>
+    </div>
+  );
+};
+
 // ─── Variable List ────────────────────────────────────────────────────────────
 const VariableList: React.FC = () => {
-  const { variables, dataLoaded } = useStore();
+  const { variables, dataLoaded, savedHeaders, removeSavedHeader } = useStore();
   const [search, setSearch] = useState('');
   if (!dataLoaded) return (
     <div className="flex flex-col h-full px-3 py-3">
@@ -686,6 +978,16 @@ const VariableList: React.FC = () => {
         ))}
         {filtered.length === 0 && (
           <div className="text-xs text-zinc-400 dark:text-zinc-600 italic px-1">no match</div>
+        )}
+        {Object.keys(savedHeaders).length > 0 && (
+          <div className="mt-2 pt-2 border-t border-zinc-200 dark:border-zinc-700">
+            <span className="text-[10px] text-zinc-400 uppercase tracking-wider">saved headers</span>
+            <div className="mt-1 space-y-1">
+              {Object.entries(savedHeaders).map(([key, hdr]) => (
+                <SavedHeaderCard key={key} varKey={key} name={hdr.name} onRemove={() => removeSavedHeader(key)} />
+              ))}
+            </div>
+          </div>
         )}
       </div>
     </div>
@@ -1335,7 +1637,8 @@ const DropZone: React.FC<{
   items: any[];
   onRemove: (id: string) => void;
   orientation: 'horizontal' | 'vertical';
-}> = ({ id, label, items, onRemove, orientation }) => {
+  footer?: React.ReactNode;
+}> = ({ id, label, items, onRemove, orientation, footer }) => {
   const { isOver, setNodeRef } = useDroppable({ id });
   const zoneType = id === 'row-zone' ? 'row' : 'col';
   return (
@@ -1357,6 +1660,7 @@ const DropZone: React.FC<{
           ))
         )}
       </div>
+      {footer}
     </div>
   );
 };
@@ -1399,21 +1703,63 @@ function buildFilterDef(filterItems: FilterItem[]): string | undefined {
 const App: React.FC = () => {
   const {
     dataLoaded, setDataLoaded, mergeAndSetVariables, setDataInfo,
-    activeTableId, variables, tables,
-    addRowItem, addColItem, removeRowItem, removeColItem, addFilterItem, nestItem,
+    activeTableId, variables, tables, savedHeaders,
+    addRowItem, addColItem, removeRowItem, removeColItem, addFilterItem, nestItem, updateTable,
   } = useStore();
   const [loading, setLoading] = useState(false);
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
-  const handleDragStart = (event: DragStartEvent) => setActiveDragId(String(event.active.id));
+  const handleDragStart = (event: DragStartEvent) => {
+    const id = String(event.active.id);
+    setActiveDragId(id);
+  };
   const handleDragCancel = () => setActiveDragId(null);
 
   const handleDragEnd = (event: any) => {
     setActiveDragId(null);
     const { active, over } = event;
-    if (!over || !activeTableId || !dataLoaded) return;
+    if (!over) return;
     const activeId = String(active.id);
+
+    if (activeId.startsWith('saved-header:')) {
+      const headerKey = activeId.slice('saved-header:'.length);
+      const saved = savedHeaders[headerKey];
+      if (!saved) return;
+      if (over.id === 'ez-header-zone') {
+        window.dispatchEvent(new CustomEvent('ez-header-load', {
+          detail: JSON.parse(JSON.stringify(saved.items))
+        }));
+      } else if (over.id === 'col-zone' && activeTableId) {
+        updateTable(activeTableId, { col_items: JSON.parse(JSON.stringify(saved.items)) });
+      } else if (over.id === 'row-zone' || over.id === 'filter-zone') {
+        alert('Header variables can only be dropped into the Header zone.');
+      }
+      return;
+    }
+
+    // Handle EZ Tables header drop (check DOM for modal visibility)
+    const ezModalOpen = document.getElementById('ez-tables-modal') !== null;
+    if (ezModalOpen && over.id === 'ez-header-zone') {
+      const varName = activeId.startsWith('ez-var-') ? activeId.slice(7) : activeId;
+      const varInfo = variables[varName];
+      if (varInfo?.codes?.length) {
+        const visibleCodes = varInfo.codes
+          .filter((c: any) => c.visibility !== 'removed' && c.visibility !== 'hidden')
+          .map((c: any) => c.code);
+        const newItem: DropItem = {
+          id: uuidv4(),
+          variable: varName,
+          codeDef: `${varName}/*`,
+          codes: visibleCodes
+        };
+        // Dispatch event to notify BuildPage
+        window.dispatchEvent(new CustomEvent('ez-header-item-added', { detail: newItem }));
+      }
+      return;
+    }
+
+    if (!activeTableId || !dataLoaded) return;
 
     if (activeId.startsWith('zone-item:')) {
       const [, sourceZone, itemId] = activeId.split(':');
@@ -1527,6 +1873,43 @@ const App: React.FC = () => {
                 </div>
               );
             }
+            
+            // EZ Tables variable drag (from modal sidebar)
+            if (activeDragId.startsWith('ez-var-')) {
+              const varName = activeDragId.slice(7);
+              const info = variables[varName];
+              if (info) {
+                return (
+                  <div className="px-3 py-2 border-2 border-blue-400 bg-blue-50 dark:bg-blue-900/30 shadow-2xl cursor-grabbing w-48 rotate-1">
+                    <div className="flex justify-between items-center gap-2">
+                      <div className="min-w-0">
+                        <span className="text-xs font-medium text-blue-700 dark:text-blue-400 block">{info.name || varName}</span>
+                        <span className="text-xs text-zinc-500 block truncate">{info.label}</span>
+                      </div>
+                      <span className="text-xs text-zinc-400 dark:text-zinc-600 shrink-0">{info.codes.length}</span>
+                    </div>
+                  </div>
+                );
+              }
+            }
+
+            if (activeDragId.startsWith('saved-header:')) {
+              const headerKey = activeDragId.slice('saved-header:'.length);
+              const saved = savedHeaders[headerKey];
+              if (saved) {
+                return (
+                  <div className="px-3 py-2 border-2 border-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 shadow-2xl cursor-grabbing w-48 rotate-1 opacity-95">
+                    <div className="flex justify-between items-center gap-2">
+                      <div className="min-w-0">
+                        <span className="text-xs font-medium text-indigo-700 dark:text-indigo-400 block">{saved.name}</span>
+                        <span className="text-xs text-zinc-500 block truncate">Header</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
+            }
+
             return null;
           })()}
         </DragOverlay>
@@ -1538,11 +1921,82 @@ const App: React.FC = () => {
 
 // ─── Build Page ───────────────────────────────────────────────────────────────
 const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ onLoadSample, loading }) => {
-  const { dataLoaded, activeTableId, tables, variables, removeRowItem, removeColItem, removeGridItem, setTableResult, updateTable, addGridItem, setGridMode } = useStore();
+  const { dataLoaded, activeTableId, tables, variables, savedHeaders, addSavedHeader, removeSavedHeader, removeRowItem, removeColItem, removeGridItem, setTableResult, updateTable, setGridMode, toggleVariableStat } = useStore();
   const [localTab, setLocalTab] = useState<'build' | 'filter' | 'result'>('build');
+  const [saveHeaderName, setSaveHeaderName] = useState('');
+  const [showSaveHeaderForm, setShowSaveHeaderForm] = useState(false);
+  const [ezVarSearch, setEzVarSearch] = useState('');
+  const [ezRowVarSearch, setEzRowVarSearch] = useState('');
   const [isComputing, setIsComputing] = useState(false);
+  const [isRunningAll, setIsRunningAll] = useState(false);
+  const [runAllMessage, setRunAllMessage] = useState('');
+
+  useEffect(() => {
+    if (!isRunningAll) { setRunAllMessage(''); return; }
+    const msgs = [
+      'wkwking...', 'papapooting...', 'stomachacheing...', 'whaaa-ing...',
+      'number-crunching...', 'table-flipping...', 'brain-melting...',
+      'cross-tabbing...', 'math-ing...', 'vibing...', 'shenanigan-ing...',
+      'pontificating...', 'yolo-ing...', 'sweating-ing...',
+    ];
+    let i = 0;
+    setRunAllMessage(msgs[0]);
+    const interval = setInterval(() => { i = (i + 1) % msgs.length; setRunAllMessage(msgs[i]); }, 1500);
+    return () => clearInterval(interval);
+  }, [isRunningAll]);
+
   const [showGridModal, setShowGridModal] = useState(false);
   const [selectedGridVars, setSelectedGridVars] = useState<string[]>([]);
+  const [gridStatToggles, setGridStatToggles] = useState({ showMean: false, showStdError: false, showStdDev: false, showVariance: false });
+
+  // EZ Tables state
+  const [showEzTablesModal, setShowEzTablesModal] = useState(false);
+  const [ezHeaderItems, setEzHeaderItems] = useState<DropItem[]>([]);
+  const [ezSelectedRowVars, setEzSelectedRowVars] = useState<string[]>([]);
+  const [ezWeightCol, setEzWeightCol] = useState<string | null>(null);
+
+  // Listen for EZ header item added from App component (DnD)
+  useEffect(() => {
+    const addHandler = (e: CustomEvent) => {
+      const newItem = e.detail as DropItem;
+      setEzHeaderItems(prev => [...prev, newItem]);
+    };
+    
+    const nestHandler = (e: CustomEvent) => {
+      const { parentId, newItem } = e.detail;
+      setEzHeaderItems(prev => {
+        const addToParent = (items: DropItem[]): DropItem[] => {
+          return items.map(item => {
+            if (item.id === parentId) {
+              return {
+                ...item,
+                children: [...(item.children || []), newItem]
+              };
+            }
+            if (item.children?.length) {
+              return { ...item, children: addToParent(item.children) };
+            }
+            return item;
+          });
+        };
+        return addToParent(prev);
+      });
+    };
+    
+    const loadHandler = (e: CustomEvent) => {
+      setEzHeaderItems(e.detail as DropItem[]);
+    };
+
+    window.addEventListener('ez-header-item-added', addHandler as EventListener);
+    window.addEventListener('ez-header-item-nested', nestHandler as EventListener);
+    window.addEventListener('ez-header-load', loadHandler as EventListener);
+
+    return () => {
+      window.removeEventListener('ez-header-item-added', addHandler as EventListener);
+      window.removeEventListener('ez-header-item-nested', nestHandler as EventListener);
+      window.removeEventListener('ez-header-load', loadHandler as EventListener);
+    };
+  }, []);
 
   const activeTable = tables.find((t) => t.id === activeTableId);
 
@@ -1611,27 +2065,26 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
     return registry;
   };
 
-  const handleGenerate = async () => {
-    if (!activeTable) return;
-    const canRun = (activeTable.row_items.length || 0) > 0 || (activeTable.grid_items?.length || 0) > 0;
-    if (!canRun) { alert('Add items to Sidebreak or create a Grid first'); return; }
-    if (activeTable.filter_items.length > 1) {
-      const hasUnsetOperator = activeTable.filter_items.slice(1).some(item => !item.operatorToNext);
-      if (hasUnsetOperator) { alert('Set the operator between filter variables before running'); return; }
+  const handleGenerate = async (tableId?: string) => {
+    const targetId = tableId ?? activeTableId;
+    const targetTable = tables.find(t => t.id === targetId);
+    if (!targetTable) return;
+    const canRun = (targetTable.row_items.length || 0) > 0 || (targetTable.grid_items?.length || 0) > 0;
+    if (!canRun) { if (!tableId) alert('Add items to Sidebreak or create a Grid first'); return; }
+    if (targetTable.filter_items.length > 1) {
+      const hasUnsetOperator = targetTable.filter_items.slice(1).some(item => !item.operatorToNext);
+      if (hasUnsetOperator) { if (!tableId) alert('Set the operator between filter variables before running'); return; }
     }
-    setIsComputing(true);
+    const isActiveTable = !tableId || tableId === activeTableId;
+    if (isActiveTable) setIsComputing(true);
     try {
-      // Generate effective items for grid table mode
-      let effectiveRowItems = activeTable.row_items;
-      let effectiveColItems = activeTable.col_items;
-      const isGridMode = activeTable.row_items.length === 0 && activeTable.grid_items && activeTable.grid_items.length > 0;
+      let effectiveRowItems = targetTable.row_items;
+      let effectiveColItems = targetTable.col_items;
+      const isGridMode = targetTable.row_items.length === 0 && targetTable.grid_items && targetTable.grid_items.length > 0;
 
       if (isGridMode) {
-        // Grid table mode: rows = codes from first grid variable
-        const firstGridVar = activeTable.grid_items[0].variable;
+        const firstGridVar = targetTable.grid_items[0].variable;
         const visibleCodes = getVisibleCodesList(firstGridVar);
-
-        // Create row_items from codes - use codeDef format
         effectiveRowItems = visibleCodes.map(code => ({
           id: `grid-row-${code}`,
           variable: firstGridVar,
@@ -1639,9 +2092,7 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
           codes: [code],
           children: []
         }));
-
-        // Col items = grid items (variables in grid)
-        effectiveColItems = activeTable.grid_items;
+        effectiveColItems = targetTable.grid_items;
       }
 
       const allVarNames = [...new Set([
@@ -1660,21 +2111,31 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
         }
       }
 
+      if (isGridMode && targetTable.grid_items) {
+        const gridVarNames = targetTable.grid_items.map((g: any) => g.variable);
+        const refMapping = meanMappings.find(m => gridVarNames.includes(m.variable));
+        if (refMapping) {
+          for (const varName of gridVarNames) {
+            if (!meanMappings.find(m => m.variable === varName)) {
+              meanMappings.push({ variable: varName, codeScores: refMapping.codeScores });
+            }
+          }
+        }
+      }
+
       const removedParts: string[] = [];
       Object.entries(variables).forEach(([varKey, info]) => {
         const removed = info.codes.filter((c: any) => c.visibility === 'removed' && !c.isNet).map((c: any) => c.code);
         if (removed.length > 0) removedParts.push(`!${varKey}/${removed.join(',')}`);
       });
-      const baseFilter = buildFilterDef(activeTable.filter_items);
+      const baseFilter = buildFilterDef(targetTable.filter_items);
       const effectiveFilter = [...(baseFilter ? [baseFilter] : []), ...removedParts].join('.') || undefined;
 
-      // Prepare column items for backend
       let colItemsForBackend;
       if (isGridMode) {
-        // For grid mode: each grid variable is a single column (any code)
-        colItemsForBackend = activeTable.grid_items!.map(item => ({
+        colItemsForBackend = targetTable.grid_items!.map(item => ({
           variable: item.variable,
-          codeDef: `${item.variable}/*`  // Any code in this variable
+          codeDef: `${item.variable}/*`
         }));
       } else {
         colItemsForBackend = flattenItemsForBackend(effectiveColItems, getVisibleCodesList, '', resolveCode);
@@ -1683,20 +2144,35 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
       const result = await computeApi.crosstab({
         row_items: flattenItemsForBackend(effectiveRowItems, getVisibleCodesList, '', resolveCode),
         col_items: colItemsForBackend,
+        is_grid_mode: isGridMode,
         filter_def: effectiveFilter,
-        weight_col: activeTable.weight_col || undefined,
+        weight_col: targetTable.weight_col || undefined,
         mean_score_mappings: meanMappings.length > 0 ? meanMappings : undefined,
         name_to_key: buildNameToKeyMap(variables),
         net_registry: buildNetRegistry(variables),
         code_registry: buildCodeRegistry(variables),
       });
-      if (activeTableId) setTableResult(activeTableId, result);
-      setLocalTab('result');
+      setTableResult(targetId!, result);
+      if (isActiveTable) setLocalTab('result');
     } catch (e: any) {
-      alert(`Error: ${e.message}`);
+      if (!tableId) alert(`Error: ${e.message}`);
+      else throw e;
     } finally {
-      setIsComputing(false);
+      if (isActiveTable) setIsComputing(false);
     }
+  };
+
+  const handleRunAll = async () => {
+    if (isRunningAll) return;
+    const runnable = tables.filter(t => (t.row_items.length || 0) > 0 || (t.grid_items?.length || 0) > 0);
+    if (runnable.length === 0) return;
+    setIsRunningAll(true);
+    const errors: string[] = [];
+    for (const table of runnable) {
+      try { await handleGenerate(table.id); } catch (e: any) { errors.push(`${table.name}: ${e.message}`); }
+    }
+    setIsRunningAll(false);
+    if (errors.length) alert('Some tables failed:\n' + errors.join('\n'));
   };
 
   if (!dataLoaded) {
@@ -1723,13 +2199,27 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
           ))}
         </div>
         {activeTable && (
-          <button
-            onClick={handleGenerate}
-            disabled={isComputing}
-            className="px-4 py-1.5 bg-zinc-900 hover:bg-zinc-700 text-zinc-50 dark:bg-zinc-100 dark:hover:bg-white dark:text-zinc-950 text-xs font-bold disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-          >
-            {isComputing ? '...' : '> run'}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleGenerate}
+              disabled={isComputing || isRunningAll}
+              className="px-4 py-1.5 bg-zinc-900 hover:bg-zinc-700 text-zinc-50 dark:bg-zinc-100 dark:hover:bg-white dark:text-zinc-950 text-xs font-bold disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            >
+              {isComputing ? '...' : '> run'}
+            </button>
+            {tables.length > 1 && (
+              <button
+                onClick={handleRunAll}
+                disabled={isRunningAll || isComputing}
+                className="px-4 py-1.5 bg-zinc-900 hover:bg-zinc-700 text-zinc-50 dark:bg-zinc-100 dark:hover:bg-white dark:text-zinc-950 text-xs font-bold disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                {isRunningAll ? '...' : '>> run all'}
+              </button>
+            )}
+            {isRunningAll && runAllMessage && (
+              <span className="text-xs text-zinc-400 dark:text-zinc-500 animate-pulse font-mono">{runAllMessage}</span>
+            )}
+          </div>
         )}
       </div>
 
@@ -1746,6 +2236,51 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
                   items={activeTable.col_items}
                   onRemove={(id) => removeColItem(activeTable.id, id)}
                   orientation="horizontal"
+                  footer={activeTable.col_items.length > 0 ? (
+                    <div className="relative mt-2 flex justify-end">
+                      <button
+                        onClick={() => setShowSaveHeaderForm(v => !v)}
+                        className="text-[10px] px-2 py-0.5 bg-indigo-600 text-white hover:bg-indigo-700 transition-colors"
+                      >
+                        + header
+                      </button>
+                      {showSaveHeaderForm && (
+                        <div className="absolute bottom-full right-0 mb-1 z-10 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 shadow-lg p-2 flex gap-1 min-w-[200px]">
+                          <input
+                            autoFocus
+                            type="text"
+                            value={saveHeaderName}
+                            onChange={e => setSaveHeaderName(e.target.value)}
+                            onKeyDown={e => {
+                              if (e.key === 'Enter') {
+                                const name = saveHeaderName.trim();
+                                if (!name) return;
+                                addSavedHeader(crypto.randomUUID(), name, JSON.parse(JSON.stringify(activeTable.col_items)));
+                                setSaveHeaderName('');
+                                setShowSaveHeaderForm(false);
+                              }
+                              if (e.key === 'Escape') setShowSaveHeaderForm(false);
+                            }}
+                            placeholder="header name..."
+                            className="flex-1 text-xs px-2 py-1 border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 outline-none"
+                          />
+                          <button
+                            onClick={() => {
+                              const name = saveHeaderName.trim();
+                              if (!name) return;
+                              addSavedHeader(crypto.randomUUID(), name, JSON.parse(JSON.stringify(activeTable.col_items)));
+                              setSaveHeaderName('');
+                              setShowSaveHeaderForm(false);
+                            }}
+                            disabled={!saveHeaderName.trim()}
+                            className="text-xs px-2 py-1 bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                          >
+                            save
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ) : undefined}
                 />
                 {activeTable.grid_items && activeTable.grid_items.length > 0 && (
                   <DropZone
@@ -1878,6 +2413,13 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
                     >
                       ⊞ Create Grid
                     </button>
+                    <button
+                      onClick={() => setShowEzTablesModal(true)}
+                      className="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white text-xs rounded transition-colors flex items-center gap-1"
+                      title="EZ Tables - Create multiple tables at once"
+                    >
+                      ⚡ EZ Tables
+                    </button>
                     <select
                       value={activeTable.weight_col || ''}
                       onChange={(e) => activeTable && updateTable(activeTable.id, { weight_col: e.target.value || null })}
@@ -1905,7 +2447,7 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
           <div className="bg-white dark:bg-zinc-900 rounded-lg shadow-xl w-[500px] max-h-[80vh] flex flex-col">
             <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-200 dark:border-zinc-700">
               <h3 className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">Create Variable Grid</h3>
-              <button onClick={() => { setShowGridModal(false); setSelectedGridVars([]); }} className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300">×</button>
+              <button onClick={() => { setShowGridModal(false); setSelectedGridVars([]); setGridStatToggles({ showMean: false, showStdError: false, showStdDev: false, showVariance: false }); }} className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300">×</button>
             </div>
             <div className="p-4 overflow-y-auto flex-1">
               <p className="text-xs text-zinc-500 mb-3">Select variables with the same code structure (e.g., Q11A-D)</p>
@@ -1939,8 +2481,22 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
                 })}
               </div>
             </div>
+            <div className="px-4 py-2.5 border-t border-zinc-200 dark:border-zinc-700 flex items-center gap-3">
+              <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400 whitespace-nowrap">Stats:</span>
+              <div className="flex gap-1.5">
+                {([['showMean', 'Mean'], ['showStdError', 'Std Error'], ['showStdDev', 'Std Dev'], ['showVariance', 'Variance']] as const).map(([stat, label]) => (
+                  <button
+                    key={stat}
+                    onClick={() => setGridStatToggles(prev => ({ ...prev, [stat]: !prev[stat] }))}
+                    className={`px-2 py-1 text-xs rounded transition-colors ${gridStatToggles[stat] ? 'bg-blue-500 text-white' : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700'}`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
             <div className="flex justify-end gap-2 px-4 py-3 border-t border-zinc-200 dark:border-zinc-700">
-              <button onClick={() => { setShowGridModal(false); setSelectedGridVars([]); }} className="px-3 py-1.5 text-xs text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300">Cancel</button>
+              <button onClick={() => { setShowGridModal(false); setSelectedGridVars([]); setGridStatToggles({ showMean: false, showStdError: false, showStdDev: false, showVariance: false }); }} className="px-3 py-1.5 text-xs text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300">Cancel</button>
               <button
                 onClick={() => {
                   if (selectedGridVars.length < 2) {
@@ -1958,14 +2514,27 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
                     alert('Selected variables must have the same code structure');
                     return;
                   }
-                  // Add grid items
-                  selectedGridVars.forEach((varKey) => {
-                    const allCodes = variables[varKey].codes.map((c) => c.code).join(',');
-                    addGridItem(activeTable!.id, { id: crypto.randomUUID(), variable: varKey, codeDef: allCodes });
-                  });
+                  // Replace grid items entirely (prevents accumulation from re-opening modal)
+                  const newGridItems = selectedGridVars.map(varKey => ({
+                    id: crypto.randomUUID(),
+                    variable: varKey,
+                    codeDef: variables[varKey].codes.map((c) => c.code).join(','),
+                    codes: variables[varKey].codes.map((c) => c.code),
+                    children: [],
+                  }));
+                  updateTable(activeTable!.id, { grid_items: newGridItems, row_items: [], col_items: [] });
                   setGridMode(activeTable!.id, true);
+                  // Apply stat toggles to all selected variables
+                  (['showMean', 'showStdError', 'showStdDev', 'showVariance'] as const).forEach((stat) => {
+                    if (gridStatToggles[stat]) {
+                      selectedGridVars.forEach((varKey) => {
+                        if (!variables[varKey][stat]) toggleVariableStat(varKey, stat);
+                      });
+                    }
+                  });
                   setShowGridModal(false);
                   setSelectedGridVars([]);
+                  setGridStatToggles({ showMean: false, showStdError: false, showStdDev: false, showVariance: false });
                 }}
                 disabled={selectedGridVars.length < 2}
                 className="px-3 py-1.5 bg-indigo-500 hover:bg-indigo-600 disabled:opacity-40 text-white text-xs rounded"
@@ -1976,9 +2545,279 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
           </div>
         </div>
       )}
+
+      {/* EZ Tables Modal */}
+      {showEzTablesModal && (
+        <div id="ez-tables-modal" className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white dark:bg-zinc-900 rounded-lg shadow-xl w-[900px] max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-200 dark:border-zinc-700">
+              <h3 className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">EZ Tables Constructor</h3>
+              <button 
+                onClick={() => { setShowEzTablesModal(false); setEzHeaderItems([]); setEzSelectedRowVars([]); setEzWeightCol(null); }} 
+                className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
+              >
+                ×
+              </button>
+            </div>
+            <div className="flex flex-1 overflow-hidden">
+              {/* Left Side - Variables List (Draggable) */}
+              <div className="w-64 border-r border-zinc-200 dark:border-zinc-700 flex flex-col">
+                <div className="px-3 py-2 border-b border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/50 flex flex-col gap-1.5">
+                  <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400">Variables (drag to right →)</span>
+                  <input
+                    type="text"
+                    value={ezVarSearch}
+                    onChange={e => setEzVarSearch(e.target.value)}
+                    placeholder="search..."
+                    className="px-2 py-0.5 text-xs bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 placeholder-zinc-400 outline-none focus:border-zinc-400 dark:focus:border-zinc-500 w-full"
+                  />
+                </div>
+                <div className="flex-1 overflow-y-auto p-2 space-y-1">
+                  {Object.entries(variables)
+                    .filter(([key, info]) => {
+                      const q = ezVarSearch.toLowerCase();
+                      return !q || key.toLowerCase().includes(q) || (info.name || '').toLowerCase().includes(q) || (info.label || '').toLowerCase().includes(q);
+                    })
+                    .map(([key, info]) => (
+                    <EzDraggableVariable
+                      key={key}
+                      name={key}
+                      displayName={info.name || key}
+                      label={info.label}
+                      codeCount={info.codes.length}
+                    />
+                  ))}
+                  {Object.keys(savedHeaders).length > 0 && (
+                    <div className="mt-2 pt-2 border-t border-zinc-200 dark:border-zinc-700">
+                      <div className="text-[9px] text-zinc-400 uppercase tracking-wider px-1 mb-1">saved headers</div>
+                      {Object.entries(savedHeaders).map(([key, hdr]) => (
+                        <SavedHeaderCard key={key} varKey={key} name={hdr.name} onRemove={() => removeSavedHeader(key)} compact={true} />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+              
+              {/* Right Side - Form */}
+              <div className="flex-1 flex flex-col overflow-hidden">
+              <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                {/* Header Constructor - Droppable Zone (Fixed height, no scroll) */}
+                <div>
+                  <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-2 block">
+                    Header Structure (optional)
+                  </label>
+                  <EzHeaderDropZone 
+                    items={ezHeaderItems}
+                    onRemove={(id) => {
+                      const removeFromItems = (items: DropItem[]): DropItem[] => {
+                        return items.filter(item => item.id !== id).map(item => ({
+                          ...item,
+                          children: item.children ? removeFromItems(item.children) : undefined
+                        }));
+                      };
+                      setEzHeaderItems(removeFromItems(ezHeaderItems));
+                    }}
+                    variables={variables}
+                  />
+                </div>
+
+              {/* Weight Column */}
+              <div>
+                <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-2 block">
+                  Weight Column
+                </label>
+                <select
+                  value={ezWeightCol || ''}
+                  onChange={(e) => setEzWeightCol(e.target.value || null)}
+                  className="w-full px-2 py-1.5 border border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 text-xs bg-white dark:bg-zinc-900 rounded"
+                >
+                  <option value="">No weight</option>
+                  {Object.keys(variables).map((varName) => (
+                    <option key={varName} value={varName}>{varName}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Row Variables Selector */}
+              <div>
+                <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-2 block">
+                  Select Row Variables
+                </label>
+                <input
+                  type="text"
+                  value={ezRowVarSearch}
+                  onChange={e => setEzRowVarSearch(e.target.value)}
+                  placeholder="search..."
+                  className="mb-1.5 px-2 py-1 text-xs bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 placeholder-zinc-400 outline-none focus:border-zinc-400 dark:focus:border-zinc-500 w-full"
+                />
+                <div className="border border-zinc-200 dark:border-zinc-700 rounded p-3 max-h-[200px] overflow-y-auto bg-zinc-50 dark:bg-zinc-800/50">
+                  <div className="space-y-1">
+                    {Object.entries(variables)
+                      .filter(([key, info]) => {
+                        const q = ezRowVarSearch.toLowerCase();
+                        return !q || key.toLowerCase().includes(q) || (info.name || '').toLowerCase().includes(q) || (info.label || '').toLowerCase().includes(q);
+                      })
+                      .map(([key, info]) => (
+                      <label key={key} className="flex items-center gap-2 text-xs cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-800 p-1 rounded">
+                        <input
+                          type="checkbox"
+                          checked={ezSelectedRowVars.includes(key)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setEzSelectedRowVars([...ezSelectedRowVars, key]);
+                            } else {
+                              setEzSelectedRowVars(ezSelectedRowVars.filter(v => v !== key));
+                            }
+                          }}
+                          className="rounded"
+                        />
+                        <span className="text-zinc-700 dark:text-zinc-300">
+                          {info.label || key} <span className="text-zinc-400">({key})</span>
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              </div>
+              {/* Summary and Buttons — pinned footer */}
+              <div className="px-4 py-3 border-t border-zinc-200 dark:border-zinc-700 flex items-center justify-between shrink-0">
+                <span className="text-xs text-zinc-500">
+                  Will create <strong>{ezSelectedRowVars.length}</strong> tables
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => { setShowEzTablesModal(false); setEzHeaderItems([]); setEzSelectedRowVars([]); setEzWeightCol(null); }}
+                    className="px-3 py-1.5 text-xs text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded border border-zinc-300 dark:border-zinc-600"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (ezSelectedRowVars.length === 0) {
+                        alert('Select at least one row variable');
+                        return;
+                      }
+                      
+                       // Create tables
+                      const { addTable } = useStore.getState();
+                      ezSelectedRowVars.forEach((rowVar) => {
+                        addTable({
+                          id: crypto.randomUUID(),
+                          name: variables[rowVar]?.label || rowVar,
+                          row_items: [{
+                            id: crypto.randomUUID(),
+                            variable: rowVar,
+                            codeDef: `${rowVar}/*`,
+                            codes: []
+                          }],
+                          col_items: JSON.parse(JSON.stringify(ezHeaderItems)),
+                          grid_items: [],
+                          filter_items: [],
+                          weight_col: ezWeightCol,
+                          filter_def: null,
+                          result: null
+                        });
+                      });
+                      
+                      setShowEzTablesModal(false);
+                      setEzHeaderItems([]);
+                      setEzSelectedRowVars([]);
+                      setEzWeightCol(null);
+                      alert(`Created ${ezSelectedRowVars.length} tables!`);
+                    }}
+                    disabled={ezSelectedRowVars.length === 0}
+                    className="px-3 py-1.5 text-xs bg-emerald-500 hover:bg-emerald-600 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded"
+                  >
+                    Create {ezSelectedRowVars.length} Tables
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      )}
     </div>
   );
-};
+}
+
+// ─── Pure HTML builder (used by single-table export and Export All) ───────────
+function buildTableHtmlPure(p: {
+  result: CrosstabResult;
+  rowNames: string[];
+  colPaths: string[];
+  colHeaderRows: ColHeaderCell[][];
+  numHeaderRows: number;
+  displayOptions: { counts: boolean; colPct: boolean; showPctSign: boolean; decimalPlaces: number; statDecimalPlaces: number };
+  statRows: { key: string; label: string }[];
+  getCodeLabel: (key: string) => string;
+  formatPct: (val: number) => string;
+  statValue: (statKey: string, col: string) => string;
+}): string {
+  const { result, rowNames, colPaths, colHeaderRows, numHeaderRows, displayOptions, statRows, getCodeLabel, formatPct, statValue } = p;
+  const th = (label: string, colspan: number, rowspan: number, bg: string, bold: boolean, align = 'center') =>
+    `<th${colspan > 1 ? ` colspan="${colspan}"` : ''}${rowspan > 1 ? ` rowspan="${rowspan}"` : ''} style="background:${bg};color:${bold ? '#333' : '#666'};font-weight:${bold ? 'bold' : 'normal'};text-align:${align};border:1px solid #ccc;padding:4px 8px;font-size:10pt;">${label}</th>`;
+  const td = (value: string, bg: string, bold: boolean, align = 'center', color = '#666') =>
+    `<td style="background:${bg};color:${color};font-weight:${bold ? 'bold' : 'normal'};text-align:${align};border:1px solid #ddd;padding:3px 8px;font-size:10pt;">${value}</td>`;
+
+  let html = `<table style="border-collapse:collapse;font-size:10pt;font-family:Arial,sans-serif;">`;
+
+  if (numHeaderRows > 0) {
+    html += '<thead>';
+    for (let h = 0; h < numHeaderRows; h++) {
+      html += '<tr>';
+      if (h === 0) {
+        html += th('', 1, numHeaderRows, '#F5F5F5', false);
+        html += th('Total', 1, numHeaderRows, '#E8E8E8', true);
+      }
+      const levelCols = colHeaderRows[h] || [];
+      const totalDataCols = colPaths.length;
+      let colOffset = 0;
+      for (const cell of levelCols) {
+        const remaining = totalDataCols - colOffset;
+        const effectiveSpan = Math.min(cell.colSpan, Math.max(remaining, 1));
+        html += th(cell.label, effectiveSpan, cell.rowSpan, h === 0 ? '#E8E8E8' : '#F5F5F5', h === 0);
+        colOffset += effectiveSpan;
+      }
+      html += '</tr>';
+    }
+    html += '</thead>';
+  } else {
+    html += '<thead><tr>';
+    html += th('', 1, 1, '#F5F5F5', false);
+    html += th('Total', 1, 1, '#E8E8E8', true);
+    for (let ci = 0; ci < colPaths.length; ci++) {
+      html += th(colPaths[ci], 1, 1, '#F5F5F5', false);
+    }
+    html += '</tr></thead>';
+  }
+
+  html += '<tbody>';
+  html += `<tr>${td('Base', '#F5F5F5', true, 'left', '#333')}${td(String(result.base), '#F3F4F6', false, 'center', '#333')}${colPaths.map(c => td(String(result.counts['Total']?.[c] ?? 0), '#F3F4F6', false)).join('')}</tr>`;
+
+  rowNames.forEach((rname) => {
+    const rowLabel = getCodeLabel(rname);
+    const rowTotal = result.counts[rname]?.['Total'] ?? 0;
+    if (displayOptions.counts && displayOptions.colPct) {
+      html += `<tr>${td(rowLabel, '#F5F5F5', true, 'left', '#333')}${td(String(rowTotal), '#F3F4F6', false)}${colPaths.map(c => td(String(result.counts[rname]?.[c] ?? 0), '#FFF', false)).join('')}</tr>`;
+      html += `<tr>${td('', '#F5F5F5', false)}${td(formatPct(result.col_pct[rname]?.['Total'] ?? 0), '#EFF6FF', false, 'center', '#2563EB')}${colPaths.map(c => td(formatPct(result.col_pct[rname]?.[c] ?? 0), '#EFF6FF', false, 'center', '#2563EB')).join('')}</tr>`;
+    } else if (displayOptions.counts) {
+      html += `<tr>${td(rowLabel, '#F5F5F5', true, 'left', '#333')}${td(String(rowTotal), '#F3F4F6', false)}${colPaths.map(c => td(String(result.counts[rname]?.[c] ?? 0), '#FFF', false)).join('')}</tr>`;
+    } else if (displayOptions.colPct) {
+      html += `<tr>${td(rowLabel, '#F5F5F5', true, 'left', '#333')}${td(formatPct(result.col_pct[rname]?.['Total'] ?? 0), '#EFF6FF', false, 'center', '#2563EB')}${colPaths.map(c => td(formatPct(result.col_pct[rname]?.[c] ?? 0), '#EFF6FF', false, 'center', '#2563EB')).join('')}</tr>`;
+    }
+  });
+
+  if (statRows.length > 0) {
+    statRows.forEach(sr => {
+      html += `<tr>${td(sr.label, '#FFFBEB', true, 'left', '#666')}${td(String(statValue(sr.key, 'Total')), '#FFFBEB', false, 'center', '#92400E')}${colPaths.map(c => td(String(statValue(sr.key, c)), '#FFFBEB', false, 'center', '#92400E')).join('')}</tr>`;
+    });
+  }
+  html += '</tbody></table>';
+  return html;
+}
 
 // ─── Result Tab ───────────────────────────────────────────────────────────────
 const ResultTab: React.FC = () => {
@@ -2076,67 +2915,52 @@ const ResultTab: React.FC = () => {
     return typeof val === 'number' ? val.toFixed(displayOptions.statDecimalPlaces) : val;
   };
 
-  const buildTableHtml = (): string => {
-    const th = (label: string, colspan: number, rowspan: number, bg: string, bold: boolean, align: string = 'center') =>
-      `<th${colspan > 1 ? ` colspan="${colspan}"` : ''}${rowspan > 1 ? ` rowspan="${rowspan}"` : ''} style="background:${bg};color:${bold ? '#333' : '#666'};font-weight:${bold ? 'bold' : 'normal'};text-align:${align};border:1px solid #ccc;padding:4px 8px;">${label}</th>`;
-    const td = (value: string, bg: string, bold: boolean, align: string = 'center', color: string = '#666') =>
-      `<td style="background:${bg};color:${color};font-weight:${bold ? 'bold' : 'normal'};text-align:${align};border:1px solid #ddd;padding:3px 8px;">${value}</td>`;
+  const buildTableHtml = () => buildTableHtmlPure({ result, rowNames, colPaths, colHeaderRows, numHeaderRows, displayOptions, statRows, getCodeLabel, formatPct, statValue });
 
-    let html = `<table style="border-collapse:collapse;font-size:12px;font-family:Arial,sans-serif;">`;
-
-    if (numHeaderRows > 0) {
-      html += '<thead>';
-      for (let h = 0; h < numHeaderRows; h++) {
-        html += '<tr>';
-        if (h === 0) {
-          html += th('', 1, numHeaderRows, '#F5F5F5', false);
-          html += th('Total', 1, numHeaderRows, '#E8E8E8', true);
-        }
-        const levelCols = colHeaderRows[h] || [];
-        const totalDataCols = colPaths.length;
-        let colOffset = 0;
-        for (const cell of levelCols) {
-          const remaining = totalDataCols - colOffset;
-          const effectiveSpan = Math.min(cell.colSpan, Math.max(remaining, 1));
-          html += th(cell.label, effectiveSpan, cell.rowSpan, h === 0 ? '#E8E8E8' : '#F5F5F5', h === 0);
-          colOffset += effectiveSpan;
-        }
-        html += '</tr>';
-      }
-      html += '</thead>';
+  const buildTableHtmlForTable = (table: Table): string | null => {
+    if (!table.result) return null;
+    const tResult = table.result;
+    const tRowNames = Object.keys(tResult.counts).filter(k => k !== 'Total');
+    const tIsGridMode = (table.grid_items?.length ?? 0) > 0 && table.col_items.length === 0;
+    let tColHeaderRows: ColHeaderCell[][], tColPaths: string[];
+    if (tIsGridMode) {
+      tColPaths = table.grid_items!.map(item => `${item.variable}/*`);
+      tColHeaderRows = [[...table.grid_items!.map(item => ({
+        label: variables[item.variable]?.label || item.variable,
+        colSpan: 1,
+        rowSpan: 1,
+      }))]];
+    } else if (table.col_items.length) {
+      const colResult = buildAxisStructure(table.col_items, getVisibleCodesList, getCodeLabel, resolveCode);
+      tColHeaderRows = colResult.headerRows;
+      tColPaths = colResult.axisPaths;
     } else {
-      html += '<thead><tr>';
-      html += th('', 1, 1, '#F5F5F5', false);
-      html += th('Total', 1, 1, '#E8E8E8', true);
-      for (let ci = 0; ci < colPaths.length; ci++) {
-        html += th(colPaths[ci], 1, 1, '#F5F5F5', false);
-      }
-      html += '</tr></thead>';
+      tColPaths = Object.keys(tResult.counts[tRowNames[0] || 'Total'] || {}).filter(k => k !== 'Total');
+      tColHeaderRows = [[]];
     }
-
-    html += '<tbody>';
-    html += `<tr>${td('Base', '#F5F5F5', true, 'left', '#333')}${td(String(result.base), '#F3F4F6', false, 'center', '#333')}${colPaths.map(c => td(String(result.counts['Total']?.[c] ?? 0), '#F3F4F6', false)).join('')}</tr>`;
-
-    rowNames.forEach((rname) => {
-      const rowLabel = getCodeLabel(rname);
-      const rowTotal = result.counts[rname]?.['Total'] ?? 0;
-      if (displayOptions.counts && displayOptions.colPct) {
-        html += `<tr>${td(rowLabel, '#F5F5F5', true, 'left', '#333')}${td(String(rowTotal), '#F3F4F6', false)}${colPaths.map(c => td(String(result.counts[rname]?.[c] ?? 0), '#FFF', false)).join('')}</tr>`;
-        html += `<tr>${td('', '#F5F5F5', false)}${td(formatPct(result.col_pct[rname]?.['Total'] ?? 0), '#EFF6FF', false, 'center', '#2563EB')}${colPaths.map(c => td(formatPct(result.col_pct[rname]?.[c] ?? 0), '#EFF6FF', false, 'center', '#2563EB')).join('')}</tr>`;
-      } else if (displayOptions.counts) {
-        html += `<tr>${td(rowLabel, '#F5F5F5', true, 'left', '#333')}${td(String(rowTotal), '#F3F4F6', false)}${colPaths.map(c => td(String(result.counts[rname]?.[c] ?? 0), '#FFF', false)).join('')}</tr>`;
-      } else if (displayOptions.colPct) {
-        html += `<tr>${td(rowLabel, '#F5F5F5', true, 'left', '#333')}${td(formatPct(result.col_pct[rname]?.['Total'] ?? 0), '#EFF6FF', false, 'center', '#2563EB')}${colPaths.map(c => td(formatPct(result.col_pct[rname]?.[c] ?? 0), '#EFF6FF', false, 'center', '#2563EB')).join('')}</tr>`;
-      }
-    });
-
-    if (statRows.length > 0) {
-      statRows.forEach(sr => {
-        html += `<tr>${td(sr.label, '#FFFBEB', true, 'left', '#666')}${td(String(statValue(sr.key, 'Total')), '#FFFBEB', false, 'center', '#92400E')}${colPaths.map(c => td(String(statValue(sr.key, c)), '#FFFBEB', false, 'center', '#92400E')).join('')}</tr>`;
-      });
+    const tNumHeaderRows = Math.max(tColHeaderRows.length, 1);
+    const tFirstRow = tRowNames[0] || '';
+    const tRowVarName = tFirstRow.split('/')[0].split('.')[0];
+    const tHasStats = tResult.mean && Object.keys(tResult.mean).length > 0;
+    const tStatRows: { key: string; label: string }[] = [];
+    if (tHasStats) {
+      const v = variables[tRowVarName];
+      if (v?.showMean) tStatRows.push({ key: 'mean', label: 'mean' });
+      if (v?.showStdError) tStatRows.push({ key: 'std_error', label: 'std error' });
+      if (v?.showStdDev) tStatRows.push({ key: 'std_dev', label: 'std dev' });
+      if (v?.showVariance) tStatRows.push({ key: 'variance', label: 'variance' });
     }
-    html += '</tbody></table>';
-    return html;
+    const tFormatPct = (val: number) => {
+      const pct = val.toFixed(displayOptions.decimalPlaces);
+      return displayOptions.showPctSign ? `${pct}%` : pct;
+    };
+    const tStatValue = (statKey: string, col: string) => {
+      const statData = tResult[statKey as keyof CrosstabResult] as Record<string, number> | null | undefined;
+      const val = statData?.[col];
+      if (val == null) return '—';
+      return typeof val === 'number' ? val.toFixed(displayOptions.statDecimalPlaces) : val;
+    };
+    return buildTableHtmlPure({ result: tResult, rowNames: tRowNames, colPaths: tColPaths, colHeaderRows: tColHeaderRows, numHeaderRows: tNumHeaderRows, displayOptions, statRows: tStatRows, getCodeLabel, formatPct: tFormatPct, statValue: tStatValue });
   };
 
   const handleCopy = () => {
@@ -2221,6 +3045,90 @@ const ResultTab: React.FC = () => {
     URL.revokeObjectURL(url);
   };
 
+  const tablesWithResults = tables.filter(t => !!t.result);
+
+  const handleExportAll = () => {
+    if (tablesWithResults.length === 0) return;
+    const parts = tablesWithResults.map(table => {
+      const html = buildTableHtmlForTable(table);
+      if (!html) return '';
+      return `<p style="font-family:Arial,sans-serif;font-size:10pt;font-weight:bold;color:#333;margin:12px 0 4px 0;">${table.name}</p>${html}`;
+    }).filter(Boolean);
+    const fullHtml = [
+      '<html xmlns:o="urn:schemas-microsoft-com:office:office"',
+      ' xmlns:x="urn:schemas-microsoft-com:office:excel"',
+      ' xmlns="http://www.w3.org/TR/REC-html40">',
+      '<head><meta charset="UTF-8">',
+      '<!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets>',
+      '<x:ExcelWorksheet><x:Name>All Tables</x:Name>',
+      '<x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions>',
+      '</x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]-->',
+      '</head><body>',
+      parts.join('<br/><br/>'),
+      '</body></html>',
+    ].join('');
+    const blob = new Blob([fullHtml], { type: 'application/vnd.ms-excel;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `crosstabs_all_${Date.now()}.xls`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleCopyAll = () => {
+    if (tablesWithResults.length === 0) return;
+    const htmlParts: string[] = [];
+    const textParts: string[] = [];
+    for (const table of tablesWithResults) {
+      const tableHtml = buildTableHtmlForTable(table);
+      if (!tableHtml) continue;
+      htmlParts.push(`<p><strong>${table.name}</strong></p>${tableHtml}`);
+      const tResult = table.result!;
+      const tRowNames = Object.keys(tResult.counts).filter(k => k !== 'Total');
+      const tIsGridMode = (table.grid_items?.length ?? 0) > 0 && table.col_items.length === 0;
+      let tColPaths: string[];
+      if (tIsGridMode) {
+        tColPaths = table.grid_items!.map(item => `${item.variable}/*`);
+      } else if (table.col_items.length) {
+        const colResult = buildAxisStructure(table.col_items, getVisibleCodesList, getCodeLabel, resolveCode);
+        tColPaths = colResult.axisPaths;
+      } else {
+        tColPaths = Object.keys(tResult.counts[tRowNames[0] || 'Total'] || {}).filter(k => k !== 'Total');
+      }
+      const tFormatPct = (val: number) => {
+        const pct = val.toFixed(displayOptions.decimalPlaces);
+        return displayOptions.showPctSign ? `${pct}%` : pct;
+      };
+      const lines: string[] = [];
+      lines.push(['', 'Total', ...tColPaths.map(c => getCodeLabel(c))].join('\t'));
+      lines.push(['Base', String(tResult.base), ...tColPaths.map(c => String(tResult.counts['Total']?.[c] ?? 0))].join('\t'));
+      tRowNames.forEach(row => {
+        const parts: string[] = [getCodeLabel(row)];
+        if (displayOptions.counts) {
+          parts.push(String(tResult.counts[row]?.['Total'] ?? 0));
+          tColPaths.forEach(c => parts.push(String(tResult.counts[row]?.[c] ?? 0)));
+          lines.push(parts.join('\t'));
+        } else if (displayOptions.colPct) {
+          parts.push(tFormatPct(tResult.col_pct[row]?.['Total'] ?? 0));
+          tColPaths.forEach(c => parts.push(tFormatPct(tResult.col_pct[row]?.[c] ?? 0)));
+          lines.push(parts.join('\t'));
+        }
+      });
+      textParts.push(`=== ${table.name} ===\n` + lines.join('\n'));
+    }
+    const htmlBlob = new Blob([htmlParts.join('<br/><br/>')], { type: 'text/html' });
+    const textBlob = new Blob([textParts.join('\n\n')], { type: 'text/plain' });
+    if (navigator.clipboard && window.ClipboardItem) {
+      navigator.clipboard.write([new window.ClipboardItem({ 'text/html': htmlBlob, 'text/plain': textBlob })]).then(() => alert('copied!')).catch(() => { navigator.clipboard.writeText(textParts.join('\n\n')); alert('copied!'); });
+    } else {
+      navigator.clipboard.writeText(textParts.join('\n\n'));
+      alert('copied!');
+    }
+  };
+
   return (
     <div className="h-full flex flex-col gap-4">
       {/* Display Options */}
@@ -2280,12 +3188,28 @@ const ResultTab: React.FC = () => {
         >
           copy
         </button>
+        {tablesWithResults.length > 1 && (
+          <button
+            onClick={handleCopyAll}
+            className="px-3 py-1 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 text-xs hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
+          >
+            copy all
+          </button>
+        )}
         <button
           onClick={handleExport}
           className="px-3 py-1 bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-400 text-xs hover:bg-emerald-100 dark:hover:bg-emerald-900/50 transition-colors"
         >
-          export xlsx
+          export
         </button>
+        {tablesWithResults.length > 1 && (
+          <button
+            onClick={handleExportAll}
+            className="px-3 py-1 bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-400 text-xs hover:bg-emerald-100 dark:hover:bg-emerald-900/50 transition-colors"
+          >
+            export all
+          </button>
+        )}
       </div>
 
       {/* Info */}
