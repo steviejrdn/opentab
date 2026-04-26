@@ -58,17 +58,29 @@ pip install git+https://github.com/steviejrdn/opentab.git
 opentab
 ```
 
+> **If `opentab` is not recognized**, run this instead:
+> ```bash
+> python -m opentab
+> ```
+
 **Mac (Terminal):**
 ```bash
 pip3 install git+https://github.com/steviejrdn/opentab.git
 opentab
 ```
 
+> **If `opentab` is not recognized**, run this instead:
+> ```bash
+> python3 -m opentab
+> ```
+
 Your browser will open automatically at http://localhost:8001.
 
 > **Tip:** Use a custom port if 8001 is taken:
 > ```bash
 > opentab --port 8080
+> # or if using the fallback:
+> python -m opentab --port 8080
 > ```
 
 ### Option 2: Using Virtual Environment (Safer)
@@ -126,6 +138,9 @@ Then open http://localhost:8001 in your browser.
 ---
 
 ### Common Issues & Troubleshooting
+
+**"'opentab' is not recognized" error (Windows)**
+- pip installed to a user folder that isn't in PATH. Use `python -m opentab` instead, or add `%APPDATA%\Python\Python3xx\Scripts` to your PATH environment variable
 
 **"'pip' is not recognized" error (Windows)**
 - Python wasn't added to PATH. Reinstall Python and check "Add Python to PATH"
