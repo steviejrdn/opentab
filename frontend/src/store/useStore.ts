@@ -475,7 +475,7 @@ export const useStore = create<AppState>()((set, get) => ({
         .filter((n) => !isNaN(n) && n > 0);
       const nextCode = numericCodes.length > 0 ? Math.max(...numericCodes) + 1 : 1;
       const code = String(nextCode);
-      const newCode = { code, label, syntax, factor, isNew: true, visibility: 'visible' as const };
+      const newCode = { code, label, syntax, factor, isNew: true, isCustom: true, visibility: 'visible' as const };
       const newCodeSyntax = [...(v.code_syntax || []), syntax];
       return { variables: { ...state.variables, [varName]: { ...v, isCustom: true, codes: [...v.codes, newCode], code_syntax: newCodeSyntax } } };
     }),
