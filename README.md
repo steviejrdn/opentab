@@ -295,7 +295,8 @@ Contributions welcome! Please:
 
 ## License
 
-MIT License — see LICENSE file
+Source code Licensed under MIT License — see LICENSE file
+opentab_ logo and all graphical assets Licensed under [CC BY-NC-ND 4.0](https://creativecommons.org/licenses/by-nc-nd/4.0/)
 
 ## Support
 
