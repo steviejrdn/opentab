@@ -2041,8 +2041,8 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
     }
     const parts = key.split('/');
     if (parts.length !== 2) return key;
-    const [varName, code] = parts;
-    const variable = variables[varName];
+    const [rawVarName, code] = parts;
+    const variable = variables[rawVarName.startsWith('$') ? rawVarName.slice(1) : rawVarName];
     if (!variable) return code;
     const codeObj = variable.codes.find((c: any) => c.code === code);
     return codeObj?.label || code;
@@ -2876,8 +2876,8 @@ const ResultTab: React.FC = () => {
     }
     const parts = key.split('/');
     if (parts.length !== 2) return key;
-    const [varName, code] = parts;
-    const variable = variables[varName];
+    const [rawVarName, code] = parts;
+    const variable = variables[rawVarName.startsWith('$') ? rawVarName.slice(1) : rawVarName];
     if (!variable) return code;
     const codeObj = variable.codes.find((c: any) => c.code === code);
     return codeObj?.label || code;
