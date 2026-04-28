@@ -210,47 +210,96 @@ async def compute_crosstab(request: CrosstabRequest):
             std_dev_data = {}
             variance_data = {}
 
-            # For each column, compute mean using all available score mappings
-            # (typically the row variable's factor scores filtered by the column mask)
-            working_df['_computed_score'] = None
-            has_any_scores = False
-            for sm_var, sm_codes in score_map.items():
-                if sm_var in working_df.columns:
-                    _assign_scores(working_df, sm_var, sm_codes)
-                    has_any_scores = True
-
-            for _, col_name, col_mask in col_masks:
-                if has_any_scores:
-                    col_stats = _compute_stats_for_column(working_df, col_mask, request.weight_col)
+            if request.is_grid_mode:
+                # Grid mode: each column is a different variable — score each independently
+                for col_var_name, col_name, col_mask in col_masks:
+                    working_df['_computed_score'] = None
+                    if col_var_name in score_map:
+                        _assign_scores(working_df, col_var_name, score_map[col_var_name])
+                        col_stats = _compute_stats_for_column(working_df, col_mask, request.weight_col)
+                    else:
+                        col_stats = {'mean': 0, 'std_error': 0, 'std_dev': 0, 'variance': 0}
                     mean_data[col_name] = col_stats['mean']
                     std_error_data[col_name] = col_stats['std_error']
                     std_dev_data[col_name] = col_stats['std_dev']
                     variance_data[col_name] = col_stats['variance']
+
+                # Grid Total: pool scores from all grid columns
+                combined_scores = []
+                combined_weights = []
+                for col_var_name, _, col_mask in col_masks:
+                    if col_var_name not in score_map:
+                        continue
+                    working_df['_computed_score'] = None
+                    _assign_scores(working_df, col_var_name, score_map[col_var_name])
+                    valid_mask = col_mask & working_df['_computed_score'].notna()
+                    combined_scores.append(working_df.loc[valid_mask, '_computed_score'].astype(float))
+                    if request.weight_col and request.weight_col in working_df.columns:
+                        combined_weights.append(working_df.loc[valid_mask, request.weight_col].astype(float))
+
+                if combined_scores:
+                    all_s = pd.concat(combined_scores)
+                    n = len(all_s)
+                    if n > 0:
+                        if request.weight_col and combined_weights:
+                            all_w = pd.concat(combined_weights)
+                            total_w = all_w.sum()
+                            mean_val = (all_s * all_w).sum() / total_w if total_w > 0 else 0
+                            variance_val = (all_w * (all_s - mean_val) ** 2).sum() / total_w if total_w > 0 else 0
+                        else:
+                            mean_val = all_s.mean()
+                            variance_val = all_s.var(ddof=1) if n > 1 else 0
+                        std_dev_val = np.sqrt(variance_val) if variance_val > 0 else 0
+                        std_error_val = std_dev_val / np.sqrt(n) if n > 1 else 0
+                        mean_data['Total'] = round(float(mean_val), 2)
+                        std_error_data['Total'] = round(std_error_val, 2)
+                        std_dev_data['Total'] = round(std_dev_val, 2)
+                        variance_data['Total'] = round(float(variance_val), 2)
+                    else:
+                        mean_data['Total'] = std_error_data['Total'] = std_dev_data['Total'] = variance_data['Total'] = 0
                 else:
-                    mean_data[col_name] = 0
-                    std_error_data[col_name] = 0
-                    std_dev_data[col_name] = 0
-                    variance_data[col_name] = 0
-
-            # For Total column: compute mean using all variables (original behavior)
-            working_df['_computed_score'] = None
-            total_has_scores = False
-            for var_name, codes in score_map.items():
-                if var_name in working_df.columns:
-                    _assign_scores(working_df, var_name, codes)
-                    total_has_scores = True
-
-            if total_has_scores:
-                total_stats = _compute_stats_for_column(working_df, all_mask, request.weight_col)
-                mean_data['Total'] = total_stats['mean']
-                std_error_data['Total'] = total_stats['std_error']
-                std_dev_data['Total'] = total_stats['std_dev']
-                variance_data['Total'] = total_stats['variance']
+                    mean_data['Total'] = std_error_data['Total'] = std_dev_data['Total'] = variance_data['Total'] = 0
             else:
-                mean_data['Total'] = 0
-                std_error_data['Total'] = 0
-                std_dev_data['Total'] = 0
-                variance_data['Total'] = 0
+                # Non-grid: apply row variable's factor scores, then filter per col_mask
+                working_df['_computed_score'] = None
+                has_any_scores = False
+                for sm_var, sm_codes in score_map.items():
+                    if sm_var in working_df.columns:
+                        _assign_scores(working_df, sm_var, sm_codes)
+                        has_any_scores = True
+
+                for _, col_name, col_mask in col_masks:
+                    if has_any_scores:
+                        col_stats = _compute_stats_for_column(working_df, col_mask, request.weight_col)
+                        mean_data[col_name] = col_stats['mean']
+                        std_error_data[col_name] = col_stats['std_error']
+                        std_dev_data[col_name] = col_stats['std_dev']
+                        variance_data[col_name] = col_stats['variance']
+                    else:
+                        mean_data[col_name] = 0
+                        std_error_data[col_name] = 0
+                        std_dev_data[col_name] = 0
+                        variance_data[col_name] = 0
+
+                # For Total column
+                working_df['_computed_score'] = None
+                total_has_scores = False
+                for var_name, codes in score_map.items():
+                    if var_name in working_df.columns:
+                        _assign_scores(working_df, var_name, codes)
+                        total_has_scores = True
+
+                if total_has_scores:
+                    total_stats = _compute_stats_for_column(working_df, all_mask, request.weight_col)
+                    mean_data['Total'] = total_stats['mean']
+                    std_error_data['Total'] = total_stats['std_error']
+                    std_dev_data['Total'] = total_stats['std_dev']
+                    variance_data['Total'] = total_stats['variance']
+                else:
+                    mean_data['Total'] = 0
+                    std_error_data['Total'] = 0
+                    std_dev_data['Total'] = 0
+                    variance_data['Total'] = 0
 
         return CrosstabResponse(
             counts=stats['counts'].to_dict(orient='index'),
