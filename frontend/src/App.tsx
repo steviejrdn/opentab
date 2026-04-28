@@ -2032,6 +2032,12 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
   };
 
   const getCodeLabel = (key: string): string => {
+    // Pass 1: custom/new codes take priority to resolve label conflicts (e.g. TB vs original code)
+    for (const [varKey, vInfo] of Object.entries(variables)) {
+      const m = (vInfo.codes as any[]).find((c) => c.syntax && (c.isNew || c.isCustom) && resolveCode(varKey, c.code) === key);
+      if (m) return m.label;
+    }
+    // Pass 2: regular codes with syntax
     for (const [varKey, vInfo] of Object.entries(variables)) {
       const m = (vInfo.codes as any[]).find((c) => c.syntax && resolveCode(varKey, c.code) === key);
       if (m) return m.label;
@@ -2867,6 +2873,12 @@ const ResultTab: React.FC = () => {
   };
 
   const getCodeLabel = (key: string): string => {
+    // Pass 1: custom/new codes take priority to resolve label conflicts (e.g. TB vs original code)
+    for (const [varKey, vInfo] of Object.entries(variables)) {
+      const m = (vInfo.codes as any[]).find((c) => c.syntax && (c.isNew || c.isCustom) && resolveCode(varKey, c.code) === key);
+      if (m) return m.label;
+    }
+    // Pass 2: regular codes with syntax
     for (const [varKey, vInfo] of Object.entries(variables)) {
       const m = (vInfo.codes as any[]).find((c) => c.syntax && resolveCode(varKey, c.code) === key);
       if (m) return m.label;
