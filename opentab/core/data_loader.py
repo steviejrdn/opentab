@@ -1,3 +1,5 @@
+import json
+import os
 import pandas as pd
 import chardet
 
@@ -14,6 +16,32 @@ def load_csv(path, encoding=None):
         encoding = detect_encoding(path)
     df = pd.read_csv(path, encoding=encoding, dtype=str)
     metadata = detect_column_types(df)
+
+    labels_path = os.path.splitext(path)[0] + '_labels.json'
+    if os.path.exists(labels_path):
+        with open(labels_path, encoding='utf-8') as f:
+            labels = json.load(f)
+        for col, col_meta in labels.items():
+            if col not in metadata:
+                continue
+            if 'label' in col_meta:
+                metadata[col]['label'] = col_meta['label']
+            if 'codes' in col_meta:
+                code_labels = col_meta['codes']
+                new_codes = []
+                for c in metadata[col].get('codes', []):
+                    if isinstance(c, dict):
+                        code_val = str(c['code'])
+                        fallback = c.get('label', code_val)
+                    else:
+                        try:
+                            code_val = str(int(float(c)))
+                        except (ValueError, TypeError):
+                            code_val = str(c)
+                        fallback = code_val
+                    new_codes.append({'code': code_val, 'label': code_labels.get(code_val, fallback)})
+                metadata[col]['codes'] = new_codes
+
     return df, metadata
 
 

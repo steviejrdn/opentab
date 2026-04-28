@@ -62,7 +62,7 @@ def _parse_atomic_unit(unit, df):
     if negate:
         unit = unit[1:]
 
-    match = re.match(r'^([A-Za-z0-9_]+)\s*/\s*(.+)$', unit)
+    match = re.match(r'^\$?([A-Za-z0-9_]+)\s*/\s*(.+)$', unit)
     if not match:
         raise ValueError(f"Invalid atomic unit: '{unit}'. Expected format: variable/code")
 
@@ -118,7 +118,7 @@ def validate_code_def(code_def, df):
         if unit.startswith('!'):
             unit = unit[1:]
 
-        match = re.match(r'^([A-Za-z0-9_]+)\s*/\s*(.+)$', unit)
+        match = re.match(r'^\$?([A-Za-z0-9_]+)\s*/\s*(.+)$', unit)
         if not match:
             errors.append(f"Invalid format: '{unit}'. Expected: variable/code")
             continue

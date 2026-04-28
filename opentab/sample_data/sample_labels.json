@@ -1,0 +1,50 @@
+{
+  "Satisfaction": {
+    "label": "Overall satisfaction",
+    "codes": {
+      "1": "Very Dissatisfied",
+      "2": "Dissatisfied",
+      "3": "Neutral",
+      "4": "Satisfied",
+      "5": "Very Satisfied"
+    }
+  },
+  "Recommend": {
+    "label": "Likelihood to recommend",
+    "codes": {
+      "1": "Definitely Not",
+      "2": "Probably Not",
+      "3": "Maybe",
+      "4": "Probably",
+      "5": "Definitely"
+    }
+  },
+  "EaseOfUse": {
+    "label": "Ease of use",
+    "codes": {
+      "1": "Very Difficult",
+      "2": "Difficult",
+      "3": "Moderate",
+      "4": "Easy",
+      "5": "Very Easy"
+    }
+  },
+  "Gender": {
+    "label": "Gender",
+    "codes": {
+      "1": "Male",
+      "2": "Female",
+      "3": "Other / Prefer not to say"
+    }
+  },
+  "AgeGroup": {
+    "label": "Age group",
+    "codes": {
+      "1": "18-24",
+      "2": "25-34",
+      "3": "35-44",
+      "4": "45-54",
+      "5": "55+"
+    }
+  }
+}

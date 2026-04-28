@@ -33,6 +33,7 @@ export interface VariableInfo {
   syntax?: string;
   code_syntax?: string[];
   isCustom?: boolean;
+  sourceKey?: string;
   showMean: boolean;
   showStdError: boolean;
   showStdDev: boolean;

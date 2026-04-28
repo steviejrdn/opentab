@@ -33,7 +33,7 @@ function buildAxisStructure(
   items: DropItem[],
   getVisibleCodesList: (v: string) => string[],
   getLabel: (varCode: string) => string,
-  resolveCode: (v: string, c: string) => string = (v, c) => `${v}/${c}`
+  resolveCode: (v: string, c: string) => string = (v, c) => `$${v}/${c}`
 ): { headerRows: ColHeaderCell[][]; axisPaths: string[] } {
   if (items.length === 0) return { headerRows: [[]], axisPaths: [] };
   const maxDepth = Math.max(...items.map(getTreeMaxDepth));
@@ -71,7 +71,7 @@ function flattenItemsForBackend(
   items: DropItem[],
   getVisibleCodesList: (v: string) => string[],
   parentPath = '',
-  resolveCode: (v: string, c: string) => string = (v, c) => `${v}/${c}`
+  resolveCode: (v: string, c: string) => string = (v, c) => `$${v}/${c}`
 ): { variable: string; codeDef: string }[] {
   const result: { variable: string; codeDef: string }[] = [];
   for (const item of items) {
@@ -193,7 +193,7 @@ const EzHeaderDropZone: React.FC<{
       const newItem: DropItem = {
         id: uuidv4(),
         variable: varName,
-        codeDef: `${varName}/*`,
+        codeDef: `$${varName}/*`,
         codes: visibleCodes
       };
       window.dispatchEvent(new CustomEvent('ez-header-item-nested', {
@@ -863,7 +863,7 @@ const WelcomeScreen: React.FC<{ onLoadSample: () => void; loading: boolean }> = 
         <p className="text-xs text-zinc-400 dark:text-zinc-600">
           or{' '}
           <button
-            onClick={onLoadSample}
+            onClick={(e) => { e.stopPropagation(); onLoadSample(); }}
             disabled={loading || uploading}
             className="text-blue-600 dark:text-blue-400 underline underline-offset-2 hover:text-blue-700 dark:hover:text-blue-300 disabled:opacity-40 disabled:cursor-not-allowed"
           >
@@ -1670,24 +1670,24 @@ function buildFilterDef(filterItems: FilterItem[]): string | undefined {
   if (filterItems.length < 1) return undefined;
   if (filterItems.length === 1) {
     const item = filterItems[0];
-    if (item.condition === 'has_value') return `${item.variable}/*`;
-    if (item.condition === 'has_no_value') return `!${item.variable}/*`;
+    if (item.condition === 'has_value') return `$${item.variable}/*`;
+    if (item.condition === 'has_no_value') return `!$${item.variable}/*`;
     if (item.condition === 'includes_any' && item.selectedCodes.length > 0)
-      return `${item.variable}/${item.selectedCodes.join(',')}`;
+      return `$${item.variable}/${item.selectedCodes.join(',')}`;
     if (item.condition === 'includes_none' && item.selectedCodes.length > 0)
-      return `!${item.variable}/${item.selectedCodes.join(',')}`;
+      return `!$${item.variable}/${item.selectedCodes.join(',')}`;
     return undefined;
   }
   const parts: string[] = [];
   for (let i = 0; i < filterItems.length; i++) {
     const item = filterItems[i];
     let part = '';
-    if (item.condition === 'has_value') part = `${item.variable}/*`;
-    else if (item.condition === 'has_no_value') part = `!${item.variable}/*`;
+    if (item.condition === 'has_value') part = `$${item.variable}/*`;
+    else if (item.condition === 'has_no_value') part = `!$${item.variable}/*`;
     else if (item.condition === 'includes_any' && item.selectedCodes.length > 0)
-      part = `${item.variable}/${item.selectedCodes.join(',')}`;
+      part = `$${item.variable}/${item.selectedCodes.join(',')}`;
     else if (item.condition === 'includes_none' && item.selectedCodes.length > 0)
-      part = `!${item.variable}/${item.selectedCodes.join(',')}`;
+      part = `!$${item.variable}/${item.selectedCodes.join(',')}`;
     if (part) {
       if (parts.length > 0) {
         if (!item.operatorToNext) return undefined;
@@ -1750,7 +1750,7 @@ const App: React.FC = () => {
         const newItem: DropItem = {
           id: uuidv4(),
           variable: varName,
-          codeDef: `${varName}/*`,
+          codeDef: `$${varName}/*`,
           codes: visibleCodes
         };
         // Dispatch event to notify BuildPage
@@ -2002,13 +2002,17 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
 
   const resolveCode = (variable: string, code: string): string => {
     const codeObj = variables[variable]?.codes.find((c: any) => c.code === code);
-    if (codeObj?.syntax) return codeObj.syntax;
-    return `${variable}/${code}`;
+    const raw = codeObj?.syntax ?? `$${variable}/${code}`;
+    return raw.replace(/\$([A-Za-z_][A-Za-z0-9_]*)\//g, (_, vn) => {
+      let v = vn, depth = 0;
+      while (variables[v]?.sourceKey && depth++ < 10) v = variables[v].sourceKey!;
+      return `$${v}/`;
+    });
   };
 
   const getCodeLabel = (key: string): string => {
-    for (const [, vInfo] of Object.entries(variables)) {
-      const m = (vInfo.codes as any[]).find((c) => c.syntax && c.syntax === key);
+    for (const [varKey, vInfo] of Object.entries(variables)) {
+      const m = (vInfo.codes as any[]).find((c) => c.syntax && resolveCode(varKey, c.code) === key);
       if (m) return m.label;
     }
     if (key.includes('.')) {
@@ -2088,7 +2092,7 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
         effectiveRowItems = visibleCodes.map(code => ({
           id: `grid-row-${code}`,
           variable: firstGridVar,
-          codeDef: `${firstGridVar}/${code}`,
+          codeDef: `$${firstGridVar}/${code}`,
           codes: [code],
           children: []
         }));
@@ -2135,7 +2139,7 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
       if (isGridMode) {
         colItemsForBackend = targetTable.grid_items!.map(item => ({
           variable: item.variable,
-          codeDef: `${item.variable}/*`
+          codeDef: `$${item.variable}/*`
         }));
       } else {
         colItemsForBackend = flattenItemsForBackend(effectiveColItems, getVisibleCodesList, '', resolveCode);
@@ -2324,7 +2328,7 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
                         ]];
 
                         // Build row paths from codes of first grid variable
-                        previewRowPaths = visibleCodes.map(code => `${firstGridVar}/${code}`);
+                        previewRowPaths = visibleCodes.map(code => `$${firstGridVar}/${code}`);
                         numHeaderRows = 1;
                       } else {
                         // Normal crosstab mode
@@ -2709,7 +2713,7 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
                           row_items: [{
                             id: crypto.randomUUID(),
                             variable: rowVar,
-                            codeDef: `${rowVar}/*`,
+                            codeDef: `$${rowVar}/*`,
                             codes: []
                           }],
                           col_items: JSON.parse(JSON.stringify(ezHeaderItems)),
@@ -2833,13 +2837,17 @@ const ResultTab: React.FC = () => {
 
   const resolveCode = (variable: string, code: string): string => {
     const codeObj = variables[variable]?.codes.find((c: any) => c.code === code);
-    if (codeObj?.syntax) return codeObj.syntax;
-    return `${variable}/${code}`;
+    const raw = codeObj?.syntax ?? `$${variable}/${code}`;
+    return raw.replace(/\$([A-Za-z_][A-Za-z0-9_]*)\//g, (_, vn) => {
+      let v = vn, depth = 0;
+      while (variables[v]?.sourceKey && depth++ < 10) v = variables[v].sourceKey!;
+      return `$${v}/`;
+    });
   };
 
   const getCodeLabel = (key: string): string => {
-    for (const [, vInfo] of Object.entries(variables)) {
-      const m = (vInfo.codes as any[]).find((c) => c.syntax && c.syntax === key);
+    for (const [varKey, vInfo] of Object.entries(variables)) {
+      const m = (vInfo.codes as any[]).find((c) => c.syntax && resolveCode(varKey, c.code) === key);
       if (m) return m.label;
     }
     if (key.includes('.')) {
@@ -2869,7 +2877,7 @@ const ResultTab: React.FC = () => {
 
   if (isGridMode) {
     // Grid mode: columns from grid_items, show variable labels
-    colPaths = activeTable!.grid_items.map(item => `${item.variable}/*`);
+    colPaths = activeTable!.grid_items.map(item => `$${item.variable}/*`);
     colHeaderRows = [[
       ...activeTable!.grid_items.map(item => ({
         label: variables[item.variable]?.label || item.variable,
@@ -2924,7 +2932,7 @@ const ResultTab: React.FC = () => {
     const tIsGridMode = (table.grid_items?.length ?? 0) > 0 && table.col_items.length === 0;
     let tColHeaderRows: ColHeaderCell[][], tColPaths: string[];
     if (tIsGridMode) {
-      tColPaths = table.grid_items!.map(item => `${item.variable}/*`);
+      tColPaths = table.grid_items!.map(item => `$${item.variable}/*`);
       tColHeaderRows = [[...table.grid_items!.map(item => ({
         label: variables[item.variable]?.label || item.variable,
         colSpan: 1,
@@ -3091,7 +3099,7 @@ const ResultTab: React.FC = () => {
       const tIsGridMode = (table.grid_items?.length ?? 0) > 0 && table.col_items.length === 0;
       let tColPaths: string[];
       if (tIsGridMode) {
-        tColPaths = table.grid_items!.map(item => `${item.variable}/*`);
+        tColPaths = table.grid_items!.map(item => `$${item.variable}/*`);
       } else if (table.col_items.length) {
         const colResult = buildAxisStructure(table.col_items, getVisibleCodesList, getCodeLabel, resolveCode);
         tColPaths = colResult.axisPaths;
@@ -3577,6 +3585,7 @@ const EditVariablesPage: React.FC = () => {
     duplicateVariable,
     updateVariableLabel,
     updateVariableDisplayName,
+    renameVariableKey,
     updateCodeLabel,
     updateCodeVisibility,
     updateCodeFactor,
@@ -3830,7 +3839,12 @@ const EditVariablesPage: React.FC = () => {
           variables={variables}
           onClose={() => setSelectedVariableKey(null)}
           onUpdateLabel={updateVariableLabel}
-          onUpdateDisplayName={updateVariableDisplayName}
+          onUpdateDisplayName={(varName, newName) => {
+            if (newName.trim() && newName !== varName && !variables[newName]) {
+              renameVariableKey(varName, newName);
+              setSelectedVariableKey(newName);
+            }
+          }}
           onUpdateCodeLabel={updateCodeLabel}
           onUpdateCodeVisibility={updateCodeVisibility}
           onUpdateCodeFactor={updateCodeFactor}
@@ -3840,6 +3854,7 @@ const EditVariablesPage: React.FC = () => {
           onAddNetCode={addNetCode}
           onAddCode={addCode}
           onToggleVariableStat={toggleVariableStat}
+          onDuplicate={() => handleDuplicateVariable(selectedVariableKey)}
         />
       )}
     </div>

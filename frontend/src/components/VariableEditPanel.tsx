@@ -44,13 +44,17 @@ interface VariableEditPanelProps {
   onAddNetCode: (varName: string, netOf: string[], label: string) => void;
   onAddCode?: (varName: string, label: string, syntax: string) => void;
   onToggleVariableStat?: (varName: string, stat: 'showMean' | 'showStdError' | 'showStdDev' | 'showVariance') => void;
+  onDuplicate?: () => void;
 }
 
 interface SortableCodeRowProps {
   code: VariableCode;
   varKey: string;
   varName: string;
+  dataKey: string;
   isSelected: boolean;
+  sortableId: string;
+  dragDisabled?: boolean;
   onToggleSelect: (code: string) => void;
   onUpdateLabel: (varName: string, code: string, label: string) => void;
   onUpdateVisibility: (varName: string, code: string, visibility: 'visible' | 'hidden' | 'removed') => void;
@@ -85,7 +89,7 @@ const SyntaxBuilderModal: React.FC<SyntaxBuilderModalProps> = ({ variables, init
   const nameToKeyMap = buildNameToKeyMap(variables);
 
   const parseSyntaxAtoms = (syntax: string) => {
-    const atomRe = /([A-Za-z_][A-Za-z0-9_]*)\/([^+()\s!.]+)/g;
+    const atomRe = /\$([A-Za-z_][A-Za-z0-9_]*)\/([^+()\s!.]+)/g;
     const atoms: { varName: string; codePart: string; full: string; start: number; end: number; isNot: boolean }[] = [];
     let match;
     while ((match = atomRe.exec(syntax)) !== null) {
@@ -129,7 +133,7 @@ const SyntaxBuilderModal: React.FC<SyntaxBuilderModalProps> = ({ variables, init
 
   const insertCode = (_varKey: string, varName: string, code: string) => {
     const prefix = notMode ? 'n' : '';
-    insertAtCursor(`${varName}/${prefix}${code}`);
+    insertAtCursor(`$${varName}/${prefix}${code}`);
   };
 
   const toggleVar = (key: string) => {
@@ -259,7 +263,10 @@ const SortableCodeRow: React.FC<SortableCodeRowProps> = ({
   code,
   varKey,
   varName,
+  dataKey,
   isSelected,
+  sortableId,
+  dragDisabled,
   onToggleSelect,
   onUpdateLabel,
   onUpdateVisibility,
@@ -273,7 +280,7 @@ const SortableCodeRow: React.FC<SortableCodeRowProps> = ({
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: code.code });
+  } = useSortable({ id: sortableId, disabled: dragDisabled });
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -287,10 +294,9 @@ const SortableCodeRow: React.FC<SortableCodeRowProps> = ({
 
   // Get syntax for display - use code.syntax directly, not from code_syntax array
   // to avoid index misalignment when codes are filtered/removed
-  const netSyntax = code.isNet && code.netOf
-    ? code.netOf.map((nc) => `${varName}/${nc}`).join('+')
-    : null;
-  const displaySyntax = netSyntax || code.syntax || `${varName}/${code.code}`;
+  const displaySyntax = code.syntax
+    || (code.isNet && code.netOf ? code.netOf.map((nc) => `$${dataKey}/${nc}`).join('+') : null)
+    || `$${dataKey}/${code.code}`;
 
   return (
     <tr
@@ -311,8 +317,8 @@ const SortableCodeRow: React.FC<SortableCodeRowProps> = ({
       <td className="px-1 py-1 border-b border-zinc-200 dark:border-zinc-700">
         <button
           {...attributes}
-          {...listeners}
-          className="cursor-grab active:cursor-grabbing text-zinc-400 hover:text-zinc-600 text-xs"
+          {...(dragDisabled ? {} : listeners)}
+          className={`text-xs ${dragDisabled ? 'cursor-default text-zinc-200 dark:text-zinc-700' : 'cursor-grab active:cursor-grabbing text-zinc-400 hover:text-zinc-600'}`}
         >
           <GripIcon />
         </button>
@@ -335,7 +341,7 @@ const SortableCodeRow: React.FC<SortableCodeRowProps> = ({
       <td className="px-1 py-1 border-b border-zinc-200 dark:border-zinc-700 font-mono text-[10px] text-zinc-500">
         <div className="flex items-center gap-0.5">
           <span className="truncate max-w-[120px]">{displaySyntax}</span>
-          {(code.isNet || code.isCustom) && (
+          {!dragDisabled && (
             <button
               onClick={() => onEditSyntax(code, displaySyntax)}
               className="p-0.5 rounded text-zinc-400 hover:text-blue-600 shrink-0"
@@ -400,9 +406,13 @@ export const VariableEditPanel: React.FC<VariableEditPanelProps> = ({
   onAddNetCode,
   onAddCode,
   onToggleVariableStat,
+  onDuplicate,
 }) => {
   const { copiedVariableInfo, setCopiedVariableInfo, lastPastedVariable, setLastPastedVariable, restoreVariableCodes } = useStore();
-  
+
+  const [localDisplayName, setLocalDisplayName] = useState(variable.name || '');
+  useEffect(() => { setLocalDisplayName(variable.name || ''); }, [variableKey, variable.name]);
+
   const [selectedCodes, setSelectedCodes] = useState<string[]>([]);
   const [showNetInput, setShowNetInput] = useState(false);
   const [netLabel, setNetLabel] = useState('');
@@ -461,7 +471,8 @@ export const VariableEditPanel: React.FC<VariableEditPanelProps> = ({
       }
     });
 
-    // Paste net codes with transformation
+    // Paste net codes with transformation — only for custom variables
+    if (!variable.isCustom) return;
     copiedVariableInfo.netCodes.forEach((copiedNetCode) => {
       // Check if all codes in netOf exist in target variable
       const allCodesExist = copiedNetCode.netOf.every((code) => 
@@ -491,7 +502,7 @@ export const VariableEditPanel: React.FC<VariableEditPanelProps> = ({
       const escapedSrc = srcName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       copiedVariableInfo.customCodes.forEach((cc) => {
         if (variable.codes.some((c) => c.code === cc.code && c.isCustom)) return;
-        const convertedSyntax = cc.syntax.replace(new RegExp(`\\b${escapedSrc}/`, 'g'), `${destName}/`);
+        const convertedSyntax = cc.syntax.replace(new RegExp(`\\$${escapedSrc}/`, 'g'), `$${destName}/`);
         onAddCode(variableKey, cc.label, convertedSyntax);
       });
     }
@@ -520,6 +531,8 @@ export const VariableEditPanel: React.FC<VariableEditPanelProps> = ({
     };
   }, [lastPastedVariable, variableKey, setLastPastedVariable]);
 
+  const visibleCodes = variable.codes.filter((c) => c.visibility !== 'removed');
+
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, {
@@ -530,12 +543,12 @@ export const VariableEditPanel: React.FC<VariableEditPanelProps> = ({
   const handleDragEnd = useCallback((event: DragEndEvent) => {
     const { active, over } = event;
     if (active.id !== over?.id) {
-      const oldIndex = variable.codes.findIndex((c) => c.code === active.id);
-      const newIndex = variable.codes.findIndex((c) => c.code === over?.id);
-      const newCodes = arrayMove(variable.codes, oldIndex, newIndex);
+      const oldIndex = parseInt(active.id as string, 10);
+      const newIndex = parseInt(over!.id as string, 10);
+      const newCodes = arrayMove(visibleCodes, oldIndex, newIndex);
       onReorderCodes(variableKey, newCodes.map((c) => c.code));
     }
-  }, [variable.codes, variableKey, onReorderCodes]);
+  }, [visibleCodes, variableKey, onReorderCodes]);
 
   const toggleCodeSelection = useCallback((code: string) => {
     setSelectedCodes((prev) =>
@@ -589,7 +602,6 @@ export const VariableEditPanel: React.FC<VariableEditPanelProps> = ({
     setShowSyntaxBuilder(true);
   }, [newCodeSyntax]);
 
-  const visibleCodes = variable.codes.filter((c) => c.visibility !== 'removed');
   const canNet = selectedCodes.length >= 2;
   const varName = variable.name || variableKey;
 
@@ -632,9 +644,20 @@ export const VariableEditPanel: React.FC<VariableEditPanelProps> = ({
               </label>
               <input
                 type="text"
-                value={variable.name || ''}
-                onChange={(e) => onUpdateDisplayName(variableKey, e.target.value)}
-                className="w-full px-2 py-1.5 text-sm border border-zinc-300 dark:border-zinc-600 rounded bg-white dark:bg-zinc-800 dark:text-zinc-100"
+                value={variable.isCustom ? localDisplayName : (variable.name || '')}
+                onChange={(e) => variable.isCustom && setLocalDisplayName(e.target.value)}
+                onBlur={() => {
+                  if (variable.isCustom && localDisplayName.trim() && localDisplayName !== variable.name) {
+                    onUpdateDisplayName(variableKey, localDisplayName.trim());
+                  }
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && variable.isCustom && localDisplayName.trim() && localDisplayName !== variable.name) {
+                    onUpdateDisplayName(variableKey, localDisplayName.trim());
+                  }
+                }}
+                disabled={!variable.isCustom}
+                className="w-full px-2 py-1.5 text-sm border border-zinc-300 dark:border-zinc-600 rounded bg-white dark:bg-zinc-800 dark:text-zinc-100 disabled:opacity-50 disabled:cursor-not-allowed"
               />
             </div>
             <div>
@@ -702,8 +725,8 @@ export const VariableEditPanel: React.FC<VariableEditPanelProps> = ({
 
         {/* Fixed Toolbar */}
         <div className="px-4 py-2 border-b border-zinc-200 dark:border-zinc-700 shrink-0 flex items-center gap-2">
-          {/* Netting button - appears when 2+ codes selected */}
-          {canNet && !showNetInput && (
+          {/* Netting button - appears when 2+ codes selected, custom vars only */}
+          {variable.isCustom && canNet && !showNetInput && (
             <button
               onClick={() => setShowNetInput(true)}
               className="px-2.5 py-1.5 bg-purple-500 hover:bg-purple-600 text-white text-xs rounded transition-colors flex items-center gap-1"
@@ -712,8 +735,8 @@ export const VariableEditPanel: React.FC<VariableEditPanelProps> = ({
               Net ({selectedCodes.length})
             </button>
           )}
-          {/* Add new code button */}
-          {!showAddCode && (
+          {/* Add new code button - custom vars only */}
+          {variable.isCustom && !showAddCode && (
             <button
               onClick={() => setShowAddCode(true)}
               className="px-2.5 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white text-xs rounded transition-colors flex items-center gap-1"
@@ -722,23 +745,17 @@ export const VariableEditPanel: React.FC<VariableEditPanelProps> = ({
               Code
             </button>
           )}
-          <button
-            onClick={() => {
-              const sorted = [...variable.codes].sort((a, b) => {
-                const na = parseInt(a.code, 10);
-                const nb = parseInt(b.code, 10);
-                if (!isNaN(na) && !isNaN(nb)) return na - nb;
-                return a.code.localeCompare(b.code);
-              });
-              onReorderCodes(variableKey, sorted.map((c) => c.code));
-            }}
-            className="px-2.5 py-1.5 bg-zinc-500 hover:bg-zinc-600 text-white text-xs rounded transition-colors"
-            title="Sort codes by numeric value"
-          >
-            ↑↓ Sort
-          </button>
-
           <div className="flex-1" />
+          {/* Duplicate button for original variables */}
+          {!variable.isCustom && onDuplicate && (
+            <button
+              onClick={onDuplicate}
+              className="px-2.5 py-1.5 bg-blue-500 hover:bg-blue-600 text-white text-xs rounded transition-colors"
+              title="Duplicate to enable custom codes and netting"
+            >
+              ⧉ Duplicate
+            </button>
+          )}
           
           {/* Copy/Paste Var Info buttons */}
           {lastPastedVariable?.varName === variableKey && (
@@ -874,7 +891,7 @@ export const VariableEditPanel: React.FC<VariableEditPanelProps> = ({
             onDragEnd={handleDragEnd}
           >
             <SortableContext
-              items={visibleCodes.map((c) => c.code)}
+              items={visibleCodes.map((_, i) => String(i))}
               strategy={verticalListSortingStrategy}
             >
               <table className="w-full text-xs">
@@ -890,13 +907,16 @@ export const VariableEditPanel: React.FC<VariableEditPanelProps> = ({
                   </tr>
                 </thead>
                 <tbody>
-                  {visibleCodes.map((code) => (
+                  {visibleCodes.map((code, i) => (
                     <SortableCodeRow
-                      key={code.code}
+                      key={`${variableKey}-${code.code}-${i}`}
+                      sortableId={String(i)}
                       code={code}
                       varKey={variableKey}
                       varName={varName}
+                      dataKey={variable.sourceKey || variableKey}
                       isSelected={selectedCodes.includes(code.code)}
+                      dragDisabled={!variable.isCustom}
                       onToggleSelect={toggleCodeSelection}
                       onUpdateLabel={onUpdateCodeLabel}
                       onUpdateVisibility={onUpdateCodeVisibility}

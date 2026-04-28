@@ -91,6 +91,7 @@ interface AppState {
 
   updateVariableLabel: (varName: string, label: string) => void;
   updateVariableDisplayName: (varName: string, displayName: string) => void;
+  renameVariableKey: (oldKey: string, newKey: string) => void;
   updateCodeLabel: (varName: string, code: string, label: string) => void;
   updateCodeVisibility: (varName: string, code: string, visibility: 'visible' | 'hidden' | 'removed') => void;
   updateCodeFactor: (varName: string, code: string, factor: number | null) => void;
@@ -338,6 +339,57 @@ export const useStore = create<AppState>()((set, get) => ({
       },
     })),
 
+  renameVariableKey: (oldKey, newKey) =>
+    set((state) => {
+      if (newKey === oldKey || !newKey.trim() || state.variables[newKey]) return state;
+      const oldVar = state.variables[oldKey];
+      if (!oldVar) return state;
+
+      const updateCodeDef = (s: string) =>
+        s.replace(new RegExp(`\\$${oldKey}/`, 'g'), `$${newKey}/`);
+
+      const updateDropItem = (item: DropItem): DropItem => ({
+        ...item,
+        variable: item.variable === oldKey ? newKey : item.variable,
+        codeDef: updateCodeDef(item.codeDef),
+        children: item.children?.map(updateDropItem),
+      });
+
+      const { [oldKey]: _, ...rest } = state.variables;
+      const newVariables: Record<string, VariableInfo> = {
+        ...Object.fromEntries(
+          Object.entries(rest).map(([k, v]) => [k, {
+            ...v,
+            sourceKey: v.sourceKey === oldKey ? newKey : v.sourceKey,
+            codes: v.codes.map((c) => ({
+              ...c,
+              syntax: c.syntax ? updateCodeDef(c.syntax) : c.syntax,
+            })),
+          }])
+        ),
+        [newKey]: { ...oldVar, name: newKey },
+      };
+
+      const newTables = state.tables.map((t) => ({
+        ...t,
+        row_items: t.row_items.map(updateDropItem),
+        col_items: t.col_items.map(updateDropItem),
+        grid_items: t.grid_items.map(updateDropItem),
+        filter_items: t.filter_items.map((fi) => ({
+          ...fi,
+          variable: fi.variable === oldKey ? newKey : fi.variable,
+        })),
+      }));
+
+      const newSavedHeaders = Object.fromEntries(
+        Object.entries(state.savedHeaders).map(([k, v]) => [
+          k, { ...v, items: v.items.map(updateDropItem) }
+        ])
+      );
+
+      return { variables: newVariables, tables: newTables, savedHeaders: newSavedHeaders };
+    }),
+
   updateCodeLabel: (varName, code, label) =>
     set((state) => {
       const v = state.variables[varName];
@@ -453,15 +505,13 @@ export const useStore = create<AppState>()((set, get) => ({
     set((state) => {
       const v = state.variables[varName];
       if (!v) return state;
-      // Find next numeric code
-      const numericCodes = v.codes
+      // Next code = max(visible codes) + 1 — removed codes are excluded
+      const visibleNumericCodes = v.codes
+        .filter((c) => c.visibility !== 'removed')
         .map((c) => parseInt(c.code, 10))
         .filter((n) => !isNaN(n) && n > 0);
-      const nextCode = numericCodes.length > 0 ? Math.max(...numericCodes) + 1 : 1;
-      const code = String(nextCode);
-      // Use display name for variable in syntax
-      const varDisplayName = v.label || v.name || varName;
-      const syntax = netOf.map((nc) => `${varDisplayName}/${nc}`).join('+');
+      const code = String(visibleNumericCodes.length > 0 ? Math.max(...visibleNumericCodes) + 1 : 1);
+      const syntax = netOf.map((nc) => `$${varName}/${nc}`).join('+');
       const newCode = { code, label, isNet: true, isNew: true, netOf, syntax, factor: null, visibility: 'visible' as const };
       // Register with backend
       dataApi.registerNet(code, varName, label, netOf, syntax).catch(console.error);
@@ -472,11 +522,11 @@ export const useStore = create<AppState>()((set, get) => ({
     set((state) => {
       const v = state.variables[varName];
       if (!v) return state;
-      const numericCodes = v.codes
+      const visibleNumericCodes2 = v.codes
+        .filter((c) => c.visibility !== 'removed')
         .map((c) => parseInt(c.code, 10))
         .filter((n) => !isNaN(n) && n > 0);
-      const nextCode = numericCodes.length > 0 ? Math.max(...numericCodes) + 1 : 1;
-      const code = String(nextCode);
+      const code = String(visibleNumericCodes2.length > 0 ? Math.max(...visibleNumericCodes2) + 1 : 1);
       const newCode = { code, label, syntax, factor, isNew: true, isCustom: true, visibility: 'visible' as const };
       const newCodeSyntax = [...(v.code_syntax || []), syntax];
       return { variables: { ...state.variables, [varName]: { ...v, isCustom: true, codes: [...v.codes, newCode], code_syntax: newCodeSyntax } } };
@@ -488,9 +538,12 @@ export const useStore = create<AppState>()((set, get) => ({
       if (!v) return state;
       const codeMap = Object.fromEntries(v.codes.map((c) => [c.code, c]));
       const reordered = orderedCodes.map((code) => codeMap[code]).filter(Boolean);
+      // Preserve removed codes separately — they are not in orderedCodes
+      const removedCodes = v.codes.filter((c) => c.visibility === 'removed');
+      const finalCodes = [...reordered, ...removedCodes];
       const codeSyntaxMap = v.code_syntax ? Object.fromEntries(v.codes.map((c, i) => [c.code, v.code_syntax?.[i] || ''])) : {};
-      const reorderedCodeSyntax = v.code_syntax ? orderedCodes.map((code) => codeSyntaxMap[code] || '') : undefined;
-      return { variables: { ...state.variables, [varName]: { ...v, codes: reordered, code_syntax: reorderedCodeSyntax } } };
+      const finalCodeSyntax = v.code_syntax ? finalCodes.map((c) => codeSyntaxMap[c.code] || '') : undefined;
+      return { variables: { ...state.variables, [varName]: { ...v, codes: finalCodes, code_syntax: finalCodeSyntax } } };
     }),
 
   addVariable: (key, name, label, type, answerType: 'single_answer' | 'multiple_answer' = 'single_answer') =>
@@ -522,14 +575,25 @@ export const useStore = create<AppState>()((set, get) => ({
     set((state) => {
       const sourceVar = state.variables[sourceKey];
       if (!sourceVar || state.variables[targetKey]) return state;
+      const codes = sourceVar.codes.map((c) => {
+        // User-defined custom code syntax — keep as-is
+        if (c.isCustom && !c.isNet) return { ...c };
+        // Net code — rebuild syntax referencing direct parent's code positions
+        if (c.isNet && c.netOf) {
+          return { ...c, syntax: c.netOf.map((nc) => `$${sourceKey}/${nc}`).join('+') };
+        }
+        // Regular code — reference direct parent by code value
+        return { ...c, syntax: `$${sourceKey}/${c.code}` };
+      });
       return {
         variables: {
           ...state.variables,
           [targetKey]: {
             ...sourceVar,
             name: `${sourceVar.name || sourceKey} (copy)`,
-            codes: sourceVar.codes.map((c) => ({ ...c })),
+            codes,
             isCustom: true,
+            sourceKey: sourceKey,
           },
         },
       };

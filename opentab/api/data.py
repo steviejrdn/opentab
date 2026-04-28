@@ -1,8 +1,11 @@
 from fastapi import APIRouter, UploadFile, File, HTTPException, Response
+from pathlib import Path
 from pydantic import BaseModel
 from typing import Optional
 import os
 import io
+
+_SAMPLE_DIR = Path(__file__).parent.parent / "sample_data"
 
 from ..core.data_loader import load_csv, merge_multiple_response, merge_spread_columns, detect_column_types
 
@@ -190,7 +193,7 @@ async def merge_variables(request: MergeVariablesRequest):
         codes.append({'code': code_val, 'label': col})
 
     label = request.new_variable_name
-    code_syntax = [f"{col}/1" for col in request.columns]
+    code_syntax = [f"${col}/1" for col in request.columns]
 
     data_store['merged_variables'][request.new_variable_name] = {
         'label': label,
@@ -289,7 +292,7 @@ async def merge_codes(request: MergeCodesRequest):
     label = request.description or request.new_variable_name
     sep = "+" if request.merge_operator == "OR" else "."
     code_syntax = [
-        sep.join(f"{var}/{code_pos}" for var in request.variables)
+        sep.join(f"${var}/{code_pos}" for var in request.variables)
         for code_pos in range(1, n_codes + 1)
     ]
     syntax = ",".join(code_syntax)
@@ -319,7 +322,7 @@ async def merge_codes(request: MergeCodesRequest):
 # ─── Sample data ──────────────────────────────────────────────────────────────
 @router.post("/load-sample")
 async def load_sample():
-    sample_csv = os.path.join("sample_data", "sample.csv")
+    sample_csv = str(_SAMPLE_DIR / "sample.csv")
 
     if not os.path.exists(sample_csv):
         raise HTTPException(status_code=404, detail="Sample data not found.")
@@ -374,7 +377,7 @@ async def get_variables():
         # Sort codes if they are dicts with 'code' key
         if codes and isinstance(codes[0], dict) and 'code' in codes[0]:
             codes = sorted(codes, key=lambda x: (int(x['code']) if str(x['code']).isdigit() else float('inf'), str(x['code'])))
-        label = col
+        label = metadata.get(col, {}).get('label', col)
         var_type = metadata.get(col, {}).get('type', 'categorical')
         answer_type = metadata.get(col, {}).get('answer_type', 'single_answer')
         response_count = metadata.get(col, {}).get('response_count', len(df[col].dropna()))
