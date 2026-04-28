@@ -2918,7 +2918,7 @@ const ResultTab: React.FC = () => {
   const numHeaderRows = Math.max(colHeaderRows.length, 1);
 
   const firstRow = rowNames[0] || '';
-  const rowVarName = firstRow.split('/')[0].split('.')[0];
+  const rowVarName = firstRow.split('/')[0].split('.')[0].replace(/^\$/, '');
   const rowVarLabel = variables[rowVarName]?.label || rowVarName;
 
   const hasStats = result.mean && Object.keys(result.mean).length > 0;
