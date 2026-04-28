@@ -32,14 +32,15 @@ interface ColHeaderCell { label: string; colSpan: number; rowSpan: number; }
 function buildAxisStructure(
   items: DropItem[],
   getVisibleCodesList: (v: string) => string[],
-  getLabel: (varCode: string) => string,
+  getLabel: (varCode: string, variable?: string, code?: string) => string,
   resolveCode: (v: string, c: string) => string = (v, c) => `$${v}/${c}`
-): { headerRows: ColHeaderCell[][]; axisPaths: string[] } {
-  if (items.length === 0) return { headerRows: [[]], axisPaths: [] };
+): { headerRows: ColHeaderCell[][]; axisPaths: string[]; axisLabels: string[] } {
+  if (items.length === 0) return { headerRows: [[]], axisPaths: [], axisLabels: [] };
   const maxDepth = Math.max(...items.map(getTreeMaxDepth));
   const numRows = maxDepth + 1;
   const headerRows: ColHeaderCell[][] = Array.from({ length: numRows }, () => []);
   const axisPaths: string[] = [];
+  const axisLabels: string[] = [];
 
   function getLeafCount(item: DropItem): number {
     const codes = getVisibleCodesList(item.variable);
@@ -53,18 +54,20 @@ function buildAxisStructure(
     for (const code of codes) {
       const codeKey = resolveCode(item.variable, code);
       const fullPath = pathSoFar ? `${pathSoFar}.${codeKey}` : codeKey;
+      const label = getLabel(codeKey, item.variable, code);
       if (item.children?.length) {
-        headerRows[depth].push({ label: getLabel(codeKey), colSpan: childLeafCount, rowSpan: 1 });
+        headerRows[depth].push({ label, colSpan: childLeafCount, rowSpan: 1 });
         traverse(item.children[0], depth + 1, fullPath);
       } else {
-        headerRows[depth].push({ label: getLabel(codeKey), colSpan: 1, rowSpan: numRows - depth });
+        headerRows[depth].push({ label, colSpan: 1, rowSpan: numRows - depth });
         axisPaths.push(fullPath);
+        axisLabels.push(label);
       }
     }
   }
 
   items.forEach((item) => traverse(item, 0, ''));
-  return { headerRows, axisPaths };
+  return { headerRows, axisPaths, axisLabels };
 }
 
 function flattenItemsForBackend(
@@ -2031,7 +2034,11 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
     });
   };
 
-  const getCodeLabel = (key: string): string => {
+  const getCodeLabel = (key: string, variable?: string, code?: string): string => {
+    if (variable && code) {
+      const codeObj = variables[variable]?.codes.find((c: any) => c.code === code);
+      if (codeObj) return codeObj.label || code;
+    }
     // Pass 1: custom/new codes take priority to resolve label conflicts (e.g. TB vs original code)
     for (const [varKey, vInfo] of Object.entries(variables)) {
       const m = (vInfo.codes as any[]).find((c) => c.syntax && (c.isNew || c.isCustom) && resolveCode(varKey, c.code) === key);
@@ -2047,11 +2054,11 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
     }
     const parts = key.split('/');
     if (parts.length !== 2) return key;
-    const [rawVarName, code] = parts;
-    const variable = variables[rawVarName.startsWith('$') ? rawVarName.slice(1) : rawVarName];
-    if (!variable) return code;
-    const codeObj = variable.codes.find((c: any) => c.code === code);
-    return codeObj?.label || code;
+    const [rawVarName, code_] = parts;
+    const variable_ = variables[rawVarName.startsWith('$') ? rawVarName.slice(1) : rawVarName];
+    if (!variable_) return code_;
+    const codeObj = variable_.codes.find((c: any) => c.code === code_);
+    return codeObj?.label || code_;
   };
 
   const getVisibleCodesList = (variable: string): string[] => {
@@ -2337,7 +2344,7 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
                       // Check if we're in grid mode
                       const isGridMode = activeTable.grid_items && activeTable.grid_items.length > 0 && activeTable.row_items.length === 0;
 
-                      let colHeaderRows, previewColPaths, previewRowPaths, numHeaderRows;
+                      let colHeaderRows, previewColPaths, previewRowPaths, previewRowLabels: string[], numHeaderRows;
 
                       if (isGridMode) {
                         // Grid mode: columns = grid items (show variable labels), rows = codes from first grid var
@@ -2356,6 +2363,7 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
 
                         // Build row paths from codes of first grid variable
                         previewRowPaths = visibleCodes.map(code => `$${firstGridVar}/${code}`);
+                        previewRowLabels = visibleCodes.map(code => getCodeLabel(`$${firstGridVar}/${code}`, firstGridVar, code));
                         numHeaderRows = 1;
                       } else {
                         // Normal crosstab mode
@@ -2364,6 +2372,7 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
                         previewColPaths = colResult.axisPaths;
                         const rowResult = buildAxisStructure(activeTable.row_items, getVisibleCodesList, getCodeLabel, resolveCode);
                         previewRowPaths = rowResult.axisPaths;
+                        previewRowLabels = rowResult.axisLabels;
                         numHeaderRows = Math.max(colHeaderRows.length, 1);
                       }
 
@@ -2415,7 +2424,7 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
                             </tr>
                             {previewRowPaths.map((row, ri) => (
                               <tr key={ri} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/40">
-                                <td className="border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-zinc-600 dark:text-zinc-400">{getCodeLabel(row)}</td>
+                                <td className="border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-zinc-600 dark:text-zinc-400">{previewRowLabels[ri] ?? getCodeLabel(row)}</td>
                                 <td className="border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-center text-zinc-300 dark:text-zinc-700 bg-zinc-50 dark:bg-zinc-800/30">—</td>
                                 {previewColPaths.map((col, ci) => (
                                   <td key={ci} className="border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-center text-zinc-300 dark:text-zinc-700">—</td>
@@ -2783,7 +2792,8 @@ function buildTableHtmlPure(p: {
   numHeaderRows: number;
   displayOptions: { counts: boolean; colPct: boolean; showPctSign: boolean; decimalPlaces: number; statDecimalPlaces: number };
   statRows: { key: string; label: string }[];
-  getCodeLabel: (key: string) => string;
+  getCodeLabel: (key: string, variable?: string, code?: string) => string;
+  rowLabels?: string[];
   formatPct: (val: number) => string;
   statValue: (statKey: string, col: string) => string;
 }): string {
@@ -2828,8 +2838,8 @@ function buildTableHtmlPure(p: {
   html += '<tbody>';
   html += `<tr>${td('Base', '#F5F5F5', true, 'left', '#333')}${td(String(result.base), '#F3F4F6', false, 'center', '#333')}${colPaths.map(c => td(String(result.counts['Total']?.[c] ?? 0), '#F3F4F6', false)).join('')}</tr>`;
 
-  rowNames.forEach((rname) => {
-    const rowLabel = getCodeLabel(rname);
+  rowNames.forEach((rname, i) => {
+    const rowLabel = p.rowLabels?.[i] ?? getCodeLabel(rname);
     const rowTotal = result.counts[rname]?.['Total'] ?? 0;
     if (displayOptions.counts && displayOptions.colPct) {
       html += `<tr>${td(rowLabel, '#F5F5F5', true, 'left', '#333')}${td(String(rowTotal), '#F3F4F6', false)}${colPaths.map(c => td(String(result.counts[rname]?.[c] ?? 0), '#FFF', false)).join('')}</tr>`;
@@ -2872,7 +2882,11 @@ const ResultTab: React.FC = () => {
     });
   };
 
-  const getCodeLabel = (key: string): string => {
+  const getCodeLabel = (key: string, variable?: string, code?: string): string => {
+    if (variable && code) {
+      const codeObj = variables[variable]?.codes.find((c: any) => c.code === code);
+      if (codeObj) return codeObj.label || code;
+    }
     // Pass 1: custom/new codes take priority to resolve label conflicts (e.g. TB vs original code)
     for (const [varKey, vInfo] of Object.entries(variables)) {
       const m = (vInfo.codes as any[]).find((c) => c.syntax && (c.isNew || c.isCustom) && resolveCode(varKey, c.code) === key);
@@ -2888,11 +2902,11 @@ const ResultTab: React.FC = () => {
     }
     const parts = key.split('/');
     if (parts.length !== 2) return key;
-    const [rawVarName, code] = parts;
-    const variable = variables[rawVarName.startsWith('$') ? rawVarName.slice(1) : rawVarName];
-    if (!variable) return code;
-    const codeObj = variable.codes.find((c: any) => c.code === code);
-    return codeObj?.label || code;
+    const [rawVarName, code_] = parts;
+    const variable_ = variables[rawVarName.startsWith('$') ? rawVarName.slice(1) : rawVarName];
+    if (!variable_) return code_;
+    const codeObj = variable_.codes.find((c: any) => c.code === code_);
+    return codeObj?.label || code_;
   };
 
   const getVisibleCodesList = (variable: string): string[] => {
@@ -2956,7 +2970,11 @@ const ResultTab: React.FC = () => {
     return typeof val === 'number' ? val.toFixed(displayOptions.statDecimalPlaces) : val;
   };
 
-  const buildTableHtml = () => buildTableHtmlPure({ result, rowNames, colPaths, colHeaderRows, numHeaderRows, displayOptions, statRows, getCodeLabel, formatPct, statValue });
+  const rowLabels: string[] = activeTable?.row_items?.length
+    ? buildAxisStructure(activeTable.row_items, getVisibleCodesList, getCodeLabel, resolveCode).axisLabels
+    : [];
+
+  const buildTableHtml = () => buildTableHtmlPure({ result, rowNames, colPaths, colHeaderRows, numHeaderRows, displayOptions, statRows, getCodeLabel, rowLabels, formatPct, statValue });
 
   const buildTableHtmlForTable = (table: Table): string | null => {
     if (!table.result) return null;
@@ -3001,7 +3019,10 @@ const ResultTab: React.FC = () => {
       if (val == null) return '—';
       return typeof val === 'number' ? val.toFixed(displayOptions.statDecimalPlaces) : val;
     };
-    return buildTableHtmlPure({ result: tResult, rowNames: tRowNames, colPaths: tColPaths, colHeaderRows: tColHeaderRows, numHeaderRows: tNumHeaderRows, displayOptions, statRows: tStatRows, getCodeLabel, formatPct: tFormatPct, statValue: tStatValue });
+    const tRowLabels = table.row_items?.length
+      ? buildAxisStructure(table.row_items, getVisibleCodesList, getCodeLabel, resolveCode).axisLabels
+      : [];
+    return buildTableHtmlPure({ result: tResult, rowNames: tRowNames, colPaths: tColPaths, colHeaderRows: tColHeaderRows, numHeaderRows: tNumHeaderRows, displayOptions, statRows: tStatRows, getCodeLabel, rowLabels: tRowLabels, formatPct: tFormatPct, statValue: tStatValue });
   };
 
   const handleCopy = () => {
@@ -3019,8 +3040,8 @@ const ResultTab: React.FC = () => {
       }
       lines.push(colHeaderLine.join('\t'));
       lines.push(['Base', String(result.base), ...colPaths.map(c => String(result.counts['Total']?.[c] ?? 0))].join('\t'));
-      rowNames.forEach((row) => {
-        const rowLabel = getCodeLabel(row);
+      rowNames.forEach((row, i) => {
+        const rowLabel = rowLabels[i] ?? getCodeLabel(row);
         const parts: string[] = [rowLabel];
         if (displayOptions.counts && displayOptions.colPct) {
           parts.push(String(result.counts[row]?.['Total'] ?? 0));
@@ -3143,11 +3164,14 @@ const ResultTab: React.FC = () => {
         const pct = val.toFixed(displayOptions.decimalPlaces);
         return displayOptions.showPctSign ? `${pct}%` : pct;
       };
+      const tRowLabels2 = table.row_items?.length
+        ? buildAxisStructure(table.row_items, getVisibleCodesList, getCodeLabel, resolveCode).axisLabels
+        : [];
       const lines: string[] = [];
       lines.push(['', 'Total', ...tColPaths.map(c => getCodeLabel(c))].join('\t'));
       lines.push(['Base', String(tResult.base), ...tColPaths.map(c => String(tResult.counts['Total']?.[c] ?? 0))].join('\t'));
-      tRowNames.forEach(row => {
-        const parts: string[] = [getCodeLabel(row)];
+      tRowNames.forEach((row, i) => {
+        const parts: string[] = [tRowLabels2[i] ?? getCodeLabel(row)];
         if (displayOptions.counts) {
           parts.push(String(tResult.counts[row]?.['Total'] ?? 0));
           tColPaths.forEach(c => parts.push(String(tResult.counts[row]?.[c] ?? 0)));
@@ -3301,7 +3325,7 @@ const ResultTab: React.FC = () => {
               ))}
             </tr>
             {rowNames.map((row, ri) => {
-              const rowLabel = getCodeLabel(row);
+              const rowLabel = rowLabels[ri] ?? getCodeLabel(row);
               const rowTotal = result.counts[row]?.['Total'] ?? 0;
 
               if (displayOptions.counts && displayOptions.colPct) {
