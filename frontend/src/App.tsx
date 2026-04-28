@@ -397,6 +397,8 @@ const Navigation: React.FC = () => {
   const openFileRef = useRef<HTMLInputElement>(null);
   const opentabHandle = useRef<FileSystemFileHandle | null>(null);
   const [restoreStatus, setRestoreStatus] = useState<{ loading: boolean; message: string } | null>(null);
+  const [autoSavedAt, setAutoSavedAt] = useState<Date | null>(null);
+  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const buildPayload = async () => {
     const [rawCsv, mergedVars] = await Promise.all([
@@ -419,24 +421,31 @@ const Navigation: React.FC = () => {
 
   const fsaSupported = typeof window !== 'undefined' && 'showSaveFilePicker' in window;
 
+  const performSave = async (silent = false) => {
+    if (!opentabHandle.current) return;
+    const payload = await buildPayload();
+    await writeToHandle(opentabHandle.current, payload);
+    if (silent) {
+      setAutoSavedAt(new Date());
+    } else {
+      setRestoreStatus({ loading: false, message: 'Saved' });
+      setTimeout(() => setRestoreStatus(null), 2000);
+    }
+  };
+
   const handleSave = async () => {
     try {
-      const payload = await buildPayload();
-
       if (fsaSupported) {
         if (!opentabHandle.current) {
-          // First save — ask user where to save
           const showSaveFilePicker = (window as unknown as { showSaveFilePicker: (o: object) => Promise<FileSystemFileHandle> }).showSaveFilePicker;
           opentabHandle.current = await showSaveFilePicker({
             suggestedName: `${fileName?.replace(/\.[^.]+$/, '') || 'session'}.opentab`,
             types: [{ description: 'opentab session', accept: { 'application/json': ['.opentab'] } }],
           });
         }
-        await writeToHandle(opentabHandle.current, payload);
-        setRestoreStatus({ loading: false, message: 'Saved' });
-        setTimeout(() => setRestoreStatus(null), 2000);
+        await performSave(false);
       } else {
-        // Fallback for browsers without File System Access API
+        const payload = await buildPayload();
         const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -446,7 +455,6 @@ const Navigation: React.FC = () => {
         URL.revokeObjectURL(url);
       }
     } catch (err: unknown) {
-      // User cancelled the picker — not an error
       if (err instanceof Error && err.name === 'AbortError') return;
       alert('Save failed — ensure data is loaded.');
     }
@@ -455,21 +463,29 @@ const Navigation: React.FC = () => {
   const handleSaveAs = async () => {
     if (!fsaSupported) { handleSave(); return; }
     try {
-      const payload = await buildPayload();
       const showSaveFilePicker = (window as unknown as { showSaveFilePicker: (o: object) => Promise<FileSystemFileHandle> }).showSaveFilePicker;
       const handle = await showSaveFilePicker({
         suggestedName: `${fileName?.replace(/\.[^.]+$/, '') || 'session'}.opentab`,
         types: [{ description: 'opentab session', accept: { 'application/json': ['.opentab'] } }],
       });
       opentabHandle.current = handle;
-      await writeToHandle(handle, payload);
-      setRestoreStatus({ loading: false, message: 'Saved' });
-      setTimeout(() => setRestoreStatus(null), 2000);
+      await performSave(false);
     } catch (err: unknown) {
       if (err instanceof Error && err.name === 'AbortError') return;
       alert('Save failed — ensure data is loaded.');
     }
   };
+
+  useEffect(() => {
+    if (!dataLoaded || !opentabHandle.current) return;
+    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    autoSaveTimerRef.current = setTimeout(() => {
+      performSave(true).catch(() => {});
+    }, 2000);
+    return () => {
+      if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    };
+  }, [tables, variables, folders, displayOptions, activeTableId]);
 
   const restoreFromText = async (jsonText: string, fallbackName: string) => {
     const data = JSON.parse(jsonText);
@@ -601,6 +617,11 @@ const Navigation: React.FC = () => {
                 >
                   save as
                 </button>
+              )}
+              {autoSavedAt && (
+                <span className="text-xs text-zinc-400 dark:text-zinc-600 px-1">
+                  saved {autoSavedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </span>
               )}
             </>
           )}
@@ -3748,13 +3769,12 @@ const EditVariablesPage: React.FC = () => {
           <thead className="sticky top-0">
             <tr className="bg-zinc-50 dark:bg-zinc-900">
               <th className="border-b border-zinc-200 dark:border-zinc-800 px-2 py-2 text-left text-zinc-500 dark:text-zinc-400 font-medium w-7" />
-              <th className="border-b border-zinc-200 dark:border-zinc-800 px-3 py-2 text-left text-zinc-500 dark:text-zinc-400 font-medium w-36">key</th>
-              <th className="border-b border-zinc-200 dark:border-zinc-800 px-3 py-2 text-left text-zinc-500 dark:text-zinc-400 font-medium w-44">name</th>
+              <th className="border-b border-zinc-200 dark:border-zinc-800 px-3 py-2 text-left text-zinc-500 dark:text-zinc-400 font-medium w-52">name</th>
               <th className="border-b border-zinc-200 dark:border-zinc-800 px-3 py-2 text-left text-zinc-500 dark:text-zinc-400 font-medium">definition</th>
               <th className="border-b border-zinc-200 dark:border-zinc-800 px-3 py-2 text-left text-zinc-500 dark:text-zinc-400 font-medium w-24">type</th>
-              <th className="border-b border-zinc-200 dark:border-zinc-800 px-3 py-2 text-left text-zinc-500 dark:text-zinc-400 font-medium w-28">answer type</th>
+              <th className="border-b border-zinc-200 dark:border-zinc-800 px-3 py-2 text-left text-zinc-500 dark:text-zinc-400 font-medium w-36">answer type</th>
               <th className="border-b border-zinc-200 dark:border-zinc-800 px-3 py-2 text-right text-zinc-500 dark:text-zinc-400 font-medium w-24">responses</th>
-              <th className="border-b border-zinc-200 dark:border-zinc-800 px-3 py-2 text-center text-zinc-500 dark:text-zinc-400 font-medium w-16">valid</th>
+              <th className="hidden border-b border-zinc-200 dark:border-zinc-800 px-3 py-2 text-center text-zinc-500 dark:text-zinc-400 font-medium w-16">valid</th>
               <th className="border-b border-zinc-200 dark:border-zinc-800 px-3 py-2 text-right text-zinc-500 dark:text-zinc-400 font-medium w-14">codes</th>
               <th className="border-b border-zinc-200 dark:border-zinc-800 px-3 py-2 text-center text-zinc-500 dark:text-zinc-400 font-medium w-20">actions</th>
             </tr>
@@ -3776,7 +3796,6 @@ const EditVariablesPage: React.FC = () => {
                       : <span className="inline-block w-2 h-2 rounded-full bg-zinc-300 dark:bg-zinc-600" title="Original variable" />
                     }
                   </td>
-                  <td className="border-b border-zinc-100 dark:border-zinc-800/60 px-3 py-2 text-emerald-700 dark:text-emerald-400 font-medium truncate">{key}</td>
                   <td className="border-b border-zinc-100 dark:border-zinc-800/60 px-3 py-2 text-zinc-700 dark:text-zinc-300 truncate">{info.name || key}</td>
                   <td className="border-b border-zinc-100 dark:border-zinc-800/60 px-3 py-2 text-zinc-500 dark:text-zinc-400 truncate">{info.label}</td>
                   <td className="border-b border-zinc-100 dark:border-zinc-800/60 px-3 py-2 text-zinc-400 dark:text-zinc-500">{info.type}</td>
@@ -3786,7 +3805,7 @@ const EditVariablesPage: React.FC = () => {
                   <td className="border-b border-zinc-100 dark:border-zinc-800/60 px-3 py-2 text-right text-zinc-400 dark:text-zinc-500">
                     {info.responseCount} / {info.baseCount}
                   </td>
-                  <td className="border-b border-zinc-100 dark:border-zinc-800/60 px-3 py-2 text-center">
+                  <td className="hidden border-b border-zinc-100 dark:border-zinc-800/60 px-3 py-2 text-center">
                     {info.answerType === 'single_answer' ? (
                       <span className={info.isValid ? 'text-green-600' : 'text-amber-600'}>
                         {info.isValid ? 'Valid' : 'Invalid'}

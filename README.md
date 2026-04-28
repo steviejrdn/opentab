@@ -19,6 +19,7 @@ opentab_ is an open source interactive reporting tool for survey data. It has a 
 - **Grid Mode** — Display a set of variables as a compact variable-grid table
 - **Export** — Copy or download results as `.xls` (single table or all tables at once)
 - **Session Save / Load** — Export and restore the full workspace as an `.opentab` file
+- **Auto-save** — Changes are written back to the open `.opentab` file automatically 2 seconds after each edit (requires File System Access API — Chrome/Edge)
 - **Multiple Tables** — Manage many tables with folder organisation in the sidebar
 - **Dark Mode** — Built-in light/dark theme toggle
 
@@ -225,7 +226,7 @@ Frontend runs on http://localhost:5173
 2. **Define variables** — Add labels, codes, statistics toggles
 3. **Build table** — Drag variables to Header/Sidebreak zones
 4. **Run** — Click "Run" to compute crosstab
-5. **Save** — Export session as `.opentab` file
+5. **Save** — Export session as `.opentab` file; subsequent changes are auto-saved every 2 seconds
 
 ## File Structure
 
