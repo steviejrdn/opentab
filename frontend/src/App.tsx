@@ -3667,11 +3667,11 @@ const EditVariablesPage: React.FC = () => {
   const variableEntries = Object.entries(variables);
 
   const handleAddVariable = () => {
-    const key = newVarKey.trim();
+    const key = newVarName.trim();
     const name = newVarName.trim();
-    if (!key) { setAddVarError('key is required'); return; }
+    if (!key) { setAddVarError('display name is required'); return; }
     if (variables[key]) { setAddVarError(`variable '${key}' already exists`); return; }
-    addVariable(key, name || key, newVarLabel.trim(), newVarType, newVarAnswerType);
+    addVariable(key, name, newVarLabel.trim(), newVarType, newVarAnswerType);
     setShowAddVar(false);
     setNewVarKey(''); setNewVarName(''); setNewVarLabel(''); setNewVarType('categorical'); setNewVarAnswerType('single_answer'); setAddVarError('');
     setSelectedVariableKey(key);
@@ -3735,25 +3735,15 @@ const EditVariablesPage: React.FC = () => {
       {showAddVar && (
         <div className="mb-4 border border-emerald-300 dark:border-emerald-700 p-3 bg-emerald-50 dark:bg-emerald-900/10 space-y-2">
           <div className="flex items-center gap-2">
-            <div className="flex flex-col gap-0.5">
-              <span className="text-[10px] text-zinc-400 dark:text-zinc-500">key *</span>
+            <div className="flex flex-col gap-0.5 flex-1">
+              <span className="text-[10px] text-zinc-400 dark:text-zinc-500">display name *</span>
               <input
                 autoFocus
                 type="text"
                 placeholder="e.g. MySeg"
-                value={newVarKey}
-                onChange={(e) => { setNewVarKey(e.target.value); setAddVarError(''); }}
-                onKeyDown={(e) => { if (e.key === 'Enter') handleAddVariable(); if (e.key === 'Escape') setShowAddVar(false); }}
-                className="text-xs bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 px-2 py-1 text-zinc-700 dark:text-zinc-300 outline-none w-28 font-mono"
-              />
-            </div>
-            <div className="flex flex-col gap-0.5 flex-1">
-              <span className="text-[10px] text-zinc-400 dark:text-zinc-500">display name</span>
-              <input
-                type="text"
-                placeholder="optional"
                 value={newVarName}
-                onChange={(e) => setNewVarName(e.target.value)}
+                onChange={(e) => { setNewVarName(e.target.value); setAddVarError(''); }}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleAddVariable(); if (e.key === 'Escape') setShowAddVar(false); }}
                 className="text-xs bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 px-2 py-1 text-zinc-700 dark:text-zinc-300 outline-none w-full"
               />
             </div>
