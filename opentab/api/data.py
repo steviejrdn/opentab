@@ -114,7 +114,7 @@ async def merge_mr(request: MergeMRRequest):
 
     data_store['merged_variables'][request.name] = {
         'label': label,
-        'type': 'multiple_response',
+        'type': 'categorical',
         'answer_type': 'multiple_answer',
         'codes': codes,
         'source_columns': request.source_columns,
@@ -197,7 +197,7 @@ async def merge_variables(request: MergeVariablesRequest):
 
     data_store['merged_variables'][request.new_variable_name] = {
         'label': label,
-        'type': 'multiple_response',
+        'type': 'categorical',
         'answer_type': 'multiple_answer',
         'codes': codes,
         'syntax': ",".join(code_syntax),
@@ -205,7 +205,7 @@ async def merge_variables(request: MergeVariablesRequest):
         'source_columns': request.columns,
     }
 
-    return MergeVariablesResponse(name=request.new_variable_name, label=label, type='multiple_response', codes=codes, syntax=",".join(code_syntax), code_syntax=code_syntax, is_custom=True)
+    return MergeVariablesResponse(name=request.new_variable_name, label=label, type='categorical', codes=codes, syntax=",".join(code_syntax), code_syntax=code_syntax, is_custom=True)
 
 
 # ─── Merge Codes (OR / AND) ──────────────────────────────────────────────────
@@ -299,7 +299,7 @@ async def merge_codes(request: MergeCodesRequest):
 
     data_store['merged_variables'][request.new_variable_name] = {
         'label': label,
-        'type': 'code_merge',
+        'type': 'categorical',
         'answer_type': 'multiple_answer',
         'codes': codes,
         'syntax': syntax,
@@ -311,7 +311,7 @@ async def merge_codes(request: MergeCodesRequest):
     return MergeCodesResponse(
         name=request.new_variable_name,
         label=label,
-        type='code_merge',
+        type='categorical',
         codes=codes,
         syntax=syntax,
         code_syntax=code_syntax,
@@ -363,7 +363,7 @@ async def get_variables():
             variables[col] = VariableInfo(
                 name=col,
                 label=merged['label'],
-                type='multiple_response',
+                type=merged.get('type', 'categorical'),
                 answer_type='multiple_answer',
                 codes=merged['codes'],
                 response_count=response_count,

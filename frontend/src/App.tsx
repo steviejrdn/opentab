@@ -3825,7 +3825,7 @@ const EditVariablesPage: React.FC = () => {
                   </td>
                   <td className="border-b border-zinc-100 dark:border-zinc-800/60 px-3 py-2 text-zinc-700 dark:text-zinc-300 truncate">{info.name || key}</td>
                   <td className="border-b border-zinc-100 dark:border-zinc-800/60 px-3 py-2 text-zinc-500 dark:text-zinc-400 truncate">{info.label}</td>
-                  <td className="border-b border-zinc-100 dark:border-zinc-800/60 px-3 py-2 text-zinc-400 dark:text-zinc-500">{info.type}</td>
+                  <td className="border-b border-zinc-100 dark:border-zinc-800/60 px-3 py-2 text-zinc-400 dark:text-zinc-500 break-all">{info.type}</td>
                   <td className="border-b border-zinc-100 dark:border-zinc-800/60 px-3 py-2 text-zinc-500 dark:text-zinc-400">
                     {info.answerType === 'multiple_answer' ? 'Multiple Answer' : 'Single Answer'}
                   </td>
