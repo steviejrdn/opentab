@@ -32,7 +32,9 @@ opentab_ is an open source interactive reporting tool for survey data. It has a 
 
 ### Before You Start (Prerequisites)
 
-You need to install **Python** first before installing opentab:
+You need **Python** and **Git** installed before installing opentab.
+
+#### Install Python
 
 **Windows:**
 1. Go to https://python.org/downloads
@@ -50,6 +52,15 @@ You need to install **Python** first before installing opentab:
    ```bash
    brew install python
    ```
+
+#### Install Git
+
+**Windows:** Download and install from https://git-scm.com/download/win — use all default options.
+
+**Mac:** Run this in Terminal — it will prompt you to install automatically:
+```bash
+git --version
+```
 
 ### Option 1: Quick Install (Easiest - Recommended)
 
