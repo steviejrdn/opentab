@@ -2146,6 +2146,15 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
           const codeScores: Record<string, number> = {};
           scoredCodes.forEach((c: any) => { codeScores[c.code] = c.factor; });
           meanMappings.push({ variable: varName, codeScores });
+        } else if (v.sourceKey && variables[v.sourceKey]) {
+          // Custom variable with no own factor scores: inherit from source variable
+          const srcVar = variables[v.sourceKey];
+          const srcScoredCodes = srcVar.codes.filter((c: any) => c.factor != null);
+          if (srcScoredCodes.length > 0 && !meanMappings.find(m => m.variable === v.sourceKey)) {
+            const codeScores: Record<string, number> = {};
+            srcScoredCodes.forEach((c: any) => { codeScores[c.code] = c.factor; });
+            meanMappings.push({ variable: v.sourceKey, codeScores });
+          }
         }
       }
 
@@ -2944,7 +2953,7 @@ const ResultTab: React.FC = () => {
   const numHeaderRows = Math.max(colHeaderRows.length, 1);
 
   const firstRow = rowNames[0] || '';
-  const rowVarName = firstRow.split('/')[0].split('.')[0].replace(/^\$/, '');
+  const rowVarName = activeTable?.row_items?.[0]?.variable ?? firstRow.split('/')[0].split('.')[0].replace(/^\$/, '');
   const rowVarLabel = variables[rowVarName]?.label || rowVarName;
 
   const hasStats = result.mean && Object.keys(result.mean).length > 0;
@@ -2999,7 +3008,7 @@ const ResultTab: React.FC = () => {
     }
     const tNumHeaderRows = Math.max(tColHeaderRows.length, 1);
     const tFirstRow = tRowNames[0] || '';
-    const tRowVarName = tFirstRow.split('/')[0].split('.')[0];
+    const tRowVarName = table.row_items?.[0]?.variable ?? tFirstRow.split('/')[0].split('.')[0].replace(/^\$/, '');
     const tHasStats = tResult.mean && Object.keys(tResult.mean).length > 0;
     const tStatRows: { key: string; label: string }[] = [];
     if (tHasStats) {

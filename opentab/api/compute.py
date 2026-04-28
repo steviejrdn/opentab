@@ -195,22 +195,25 @@ async def compute_crosstab(request: CrosstabRequest):
             std_dev_data = {}
             variance_data = {}
 
-            # For each column, compute mean using ONLY the variable associated with that column
-            for var_name, col_name, col_mask in col_masks:
-                if var_name in score_map:
-                    # Compute score for this specific variable only
-                    working_df['_computed_score'] = None
-                    for code, score in score_map[var_name].items():
-                        mask = working_df[var_name].astype(str) == str(code)
+            # For each column, compute mean using all available score mappings
+            # (typically the row variable's factor scores filtered by the column mask)
+            working_df['_computed_score'] = None
+            has_any_scores = False
+            for sm_var, sm_codes in score_map.items():
+                if sm_var in working_df.columns:
+                    for code, score in sm_codes.items():
+                        mask = working_df[sm_var].astype(str) == str(code)
                         working_df.loc[mask, '_computed_score'] = score
+                    has_any_scores = True
 
+            for _, col_name, col_mask in col_masks:
+                if has_any_scores:
                     col_stats = _compute_stats_for_column(working_df, col_mask, request.weight_col)
                     mean_data[col_name] = col_stats['mean']
                     std_error_data[col_name] = col_stats['std_error']
                     std_dev_data[col_name] = col_stats['std_dev']
                     variance_data[col_name] = col_stats['variance']
                 else:
-                    # No score mapping for this variable
                     mean_data[col_name] = 0
                     std_error_data[col_name] = 0
                     std_dev_data[col_name] = 0
