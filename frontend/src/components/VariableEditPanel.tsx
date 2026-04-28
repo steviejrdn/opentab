@@ -507,11 +507,11 @@ export const VariableEditPanel: React.FC<VariableEditPanelProps> = ({
       });
     }
 
-    // Apply statistics settings
-    if (copiedVariableInfo.stats.showMean) onToggleVariableStat?.(variableKey, 'showMean');
-    if (copiedVariableInfo.stats.showStdError) onToggleVariableStat?.(variableKey, 'showStdError');
-    if (copiedVariableInfo.stats.showStdDev) onToggleVariableStat?.(variableKey, 'showStdDev');
-    if (copiedVariableInfo.stats.showVariance) onToggleVariableStat?.(variableKey, 'showVariance');
+    // Apply statistics settings — only toggle if current state differs from copied state
+    if (copiedVariableInfo.stats.showMean !== variable.showMean) onToggleVariableStat?.(variableKey, 'showMean');
+    if (copiedVariableInfo.stats.showStdError !== variable.showStdError) onToggleVariableStat?.(variableKey, 'showStdError');
+    if (copiedVariableInfo.stats.showStdDev !== variable.showStdDev) onToggleVariableStat?.(variableKey, 'showStdDev');
+    if (copiedVariableInfo.stats.showVariance !== variable.showVariance) onToggleVariableStat?.(variableKey, 'showVariance');
   }, [copiedVariableInfo, variable.codes, variable.name, variableKey, onUpdateCodeLabel, onUpdateCodeFactor, onToggleVariableStat, onAddNetCode, onAddCode, setLastPastedVariable]);
 
   const handleUndoPaste = useCallback(() => {

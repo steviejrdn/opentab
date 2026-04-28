@@ -41,6 +41,21 @@ class CrosstabResponse(BaseModel):
     variance: Optional[dict] = None
 
 
+def _assign_scores(working_df, var_name, sm_codes):
+    """Set _computed_score using factor scores, handling both single- and multiple-answer columns."""
+    col_str = working_df[var_name].astype(str).str.strip()
+    is_ma = col_str.str.contains(';', regex=False).any()
+    for code, score in sm_codes.items():
+        code_str = str(code).strip()
+        if is_ma:
+            mask = col_str.apply(
+                lambda x, c=code_str: c in x.split(';') if x not in ('nan', 'NaN', '') else False
+            )
+        else:
+            mask = col_str == code_str
+        working_df.loc[mask, '_computed_score'] = score
+
+
 def _compute_stats_for_column(df, col_mask, weight_col=None):
     if col_mask.sum() == 0:
         return {'mean': 0, 'std_error': 0, 'std_dev': 0, 'variance': 0}
@@ -201,9 +216,7 @@ async def compute_crosstab(request: CrosstabRequest):
             has_any_scores = False
             for sm_var, sm_codes in score_map.items():
                 if sm_var in working_df.columns:
-                    for code, score in sm_codes.items():
-                        mask = working_df[sm_var].astype(str) == str(code)
-                        working_df.loc[mask, '_computed_score'] = score
+                    _assign_scores(working_df, sm_var, sm_codes)
                     has_any_scores = True
 
             for _, col_name, col_mask in col_masks:
@@ -224,10 +237,8 @@ async def compute_crosstab(request: CrosstabRequest):
             total_has_scores = False
             for var_name, codes in score_map.items():
                 if var_name in working_df.columns:
-                    for code, score in codes.items():
-                        mask = working_df[var_name].astype(str) == str(code)
-                        working_df.loc[mask, '_computed_score'] = score
-                        total_has_scores = True
+                    _assign_scores(working_df, var_name, codes)
+                    total_has_scores = True
 
             if total_has_scores:
                 total_stats = _compute_stats_for_column(working_df, all_mask, request.weight_col)
