@@ -2139,22 +2139,20 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
       ])];
       const meanMappings: { variable: string; codeScores: Record<string, number> }[] = [];
       for (const varName of allVarNames) {
-        const v = variables[varName];
+        let v = variables[varName];
         if (!v) continue;
+        // Follow sourceKey chain to the actual CSV column
+        let targetName = varName;
+        while (v.sourceKey && variables[v.sourceKey]) {
+          targetName = v.sourceKey;
+          v = variables[v.sourceKey];
+        }
+        if (meanMappings.find(m => m.variable === targetName)) continue;
         const scoredCodes = v.codes.filter((c: any) => c.factor != null);
         if (scoredCodes.length > 0) {
           const codeScores: Record<string, number> = {};
           scoredCodes.forEach((c: any) => { codeScores[c.code] = c.factor; });
-          meanMappings.push({ variable: varName, codeScores });
-        } else if (v.sourceKey && variables[v.sourceKey]) {
-          // Custom variable with no own factor scores: inherit from source variable
-          const srcVar = variables[v.sourceKey];
-          const srcScoredCodes = srcVar.codes.filter((c: any) => c.factor != null);
-          if (srcScoredCodes.length > 0 && !meanMappings.find(m => m.variable === v.sourceKey)) {
-            const codeScores: Record<string, number> = {};
-            srcScoredCodes.forEach((c: any) => { codeScores[c.code] = c.factor; });
-            meanMappings.push({ variable: v.sourceKey, codeScores });
-          }
+          meanMappings.push({ variable: targetName, codeScores });
         }
       }
 
