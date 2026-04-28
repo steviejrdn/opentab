@@ -3795,15 +3795,14 @@ const EditVariablesPage: React.FC = () => {
         <table className="w-full border-collapse text-xs table-fixed">
           <thead className="sticky top-0">
             <tr className="bg-zinc-50 dark:bg-zinc-900">
-              <th className="border-b border-zinc-200 dark:border-zinc-800 px-2 py-2 text-left text-zinc-500 dark:text-zinc-400 font-medium w-7" />
-              <th className="border-b border-zinc-200 dark:border-zinc-800 px-3 py-2 text-left text-zinc-500 dark:text-zinc-400 font-medium w-52">name</th>
-              <th className="border-b border-zinc-200 dark:border-zinc-800 px-3 py-2 text-left text-zinc-500 dark:text-zinc-400 font-medium">definition</th>
-              <th className="border-b border-zinc-200 dark:border-zinc-800 px-3 py-2 text-left text-zinc-500 dark:text-zinc-400 font-medium w-24">type</th>
-              <th className="border-b border-zinc-200 dark:border-zinc-800 px-3 py-2 text-left text-zinc-500 dark:text-zinc-400 font-medium w-36">answer type</th>
-              <th className="border-b border-zinc-200 dark:border-zinc-800 px-3 py-2 text-right text-zinc-500 dark:text-zinc-400 font-medium w-24">responses</th>
-              <th className="hidden border-b border-zinc-200 dark:border-zinc-800 px-3 py-2 text-center text-zinc-500 dark:text-zinc-400 font-medium w-16">valid</th>
-              <th className="border-b border-zinc-200 dark:border-zinc-800 px-3 py-2 text-right text-zinc-500 dark:text-zinc-400 font-medium w-14">codes</th>
-              <th className="border-b border-zinc-200 dark:border-zinc-800 px-3 py-2 text-center text-zinc-500 dark:text-zinc-400 font-medium w-20">actions</th>
+              <th className="border-b border-zinc-200 dark:border-zinc-800 px-3 py-2.5 text-left text-zinc-400 dark:text-zinc-500 font-medium w-56">name</th>
+              <th className="border-b border-zinc-200 dark:border-zinc-800 px-3 py-2.5 text-left text-zinc-400 dark:text-zinc-500 font-medium">definition</th>
+              <th className="border-b border-zinc-200 dark:border-zinc-800 px-3 py-2.5 text-left text-zinc-400 dark:text-zinc-500 font-medium w-28">type</th>
+              <th className="border-b border-zinc-200 dark:border-zinc-800 px-3 py-2.5 text-left text-zinc-400 dark:text-zinc-500 font-medium w-28">answer</th>
+              <th className="border-b border-zinc-200 dark:border-zinc-800 px-3 py-2.5 text-right text-zinc-400 dark:text-zinc-500 font-medium w-20">n</th>
+              <th className="hidden border-b border-zinc-200 dark:border-zinc-800 px-3 py-2.5 text-center text-zinc-400 dark:text-zinc-500 font-medium w-16">valid</th>
+              <th className="border-b border-zinc-200 dark:border-zinc-800 px-3 py-2.5 text-right text-zinc-400 dark:text-zinc-500 font-medium w-14">codes</th>
+              <th className="border-b border-zinc-200 dark:border-zinc-800 px-3 py-2.5 text-center text-zinc-400 dark:text-zinc-500 font-medium w-16">actions</th>
             </tr>
           </thead>
           <tbody>
@@ -3817,22 +3816,26 @@ const EditVariablesPage: React.FC = () => {
                   className={`hover:bg-zinc-50 dark:hover:bg-zinc-800/40 cursor-pointer ${isSelected ? 'bg-emerald-50 dark:bg-emerald-900/20' : ''}`}
                   onClick={() => setSelectedVariableKey(key)}
                 >
-                  <td className="border-b border-zinc-100 dark:border-zinc-800/60 px-2 py-2 text-center">
-                    {isCustom
-                      ? <span className="inline-block w-2 h-2 rounded-full bg-amber-400" title="Custom variable" />
-                      : <span className="inline-block w-2 h-2 rounded-full bg-zinc-300 dark:bg-zinc-600" title="Original variable" />
+                  <td className="border-b border-zinc-100 dark:border-zinc-800/60 px-3 py-2.5">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className={`shrink-0 inline-block w-1.5 h-1.5 rounded-full ${isCustom ? 'bg-amber-400' : 'bg-zinc-300 dark:bg-zinc-600'}`} title={isCustom ? 'Custom variable' : 'Original variable'} />
+                      <span className="truncate text-zinc-700 dark:text-zinc-300 font-medium">{info.name || key}</span>
+                    </div>
+                  </td>
+                  <td className="border-b border-zinc-100 dark:border-zinc-800/60 px-3 py-2.5 text-zinc-400 dark:text-zinc-500 truncate">{info.label}</td>
+                  <td className="border-b border-zinc-100 dark:border-zinc-800/60 px-3 py-2.5">
+                    <span className="inline-block px-1.5 py-0.5 rounded text-[10px] bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400">{info.type}</span>
+                  </td>
+                  <td className="border-b border-zinc-100 dark:border-zinc-800/60 px-3 py-2.5">
+                    {info.answerType === 'multiple_answer'
+                      ? <span className="inline-block px-1.5 py-0.5 rounded text-[10px] bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400">MR</span>
+                      : <span className="inline-block px-1.5 py-0.5 rounded text-[10px] bg-zinc-100 dark:bg-zinc-800 text-zinc-400 dark:text-zinc-500">SA</span>
                     }
                   </td>
-                  <td className="border-b border-zinc-100 dark:border-zinc-800/60 px-3 py-2 text-zinc-700 dark:text-zinc-300 truncate">{info.name || key}</td>
-                  <td className="border-b border-zinc-100 dark:border-zinc-800/60 px-3 py-2 text-zinc-500 dark:text-zinc-400 truncate">{info.label}</td>
-                  <td className="border-b border-zinc-100 dark:border-zinc-800/60 px-3 py-2 text-zinc-400 dark:text-zinc-500 break-all">{info.type}</td>
-                  <td className="border-b border-zinc-100 dark:border-zinc-800/60 px-3 py-2 text-zinc-500 dark:text-zinc-400">
-                    {info.answerType === 'multiple_answer' ? 'Multiple Answer' : 'Single Answer'}
+                  <td className="border-b border-zinc-100 dark:border-zinc-800/60 px-3 py-2.5 text-right text-zinc-400 dark:text-zinc-500 tabular-nums">
+                    {info.responseCount}
                   </td>
-                  <td className="border-b border-zinc-100 dark:border-zinc-800/60 px-3 py-2 text-right text-zinc-400 dark:text-zinc-500">
-                    {info.responseCount} / {info.baseCount}
-                  </td>
-                  <td className="hidden border-b border-zinc-100 dark:border-zinc-800/60 px-3 py-2 text-center">
+                  <td className="hidden border-b border-zinc-100 dark:border-zinc-800/60 px-3 py-2.5 text-center">
                     {info.answerType === 'single_answer' ? (
                       <span className={info.isValid ? 'text-green-600' : 'text-amber-600'}>
                         {info.isValid ? 'Valid' : 'Invalid'}
@@ -3841,7 +3844,7 @@ const EditVariablesPage: React.FC = () => {
                       <span className="text-gray-400">-</span>
                     )}
                   </td>
-                   <td className="border-b border-zinc-100 dark:border-zinc-800/60 px-3 py-2 text-right text-zinc-400 dark:text-zinc-500">
+                  <td className="border-b border-zinc-100 dark:border-zinc-800/60 px-3 py-2.5 text-right text-zinc-400 dark:text-zinc-500 tabular-nums">
                     {info.codes.length}
                     {hiddenCount > 0 && (
                       <span className="ml-1 text-orange-500 dark:text-orange-400">
@@ -3849,7 +3852,7 @@ const EditVariablesPage: React.FC = () => {
                       </span>
                     )}
                   </td>
-                  <td className="border-b border-zinc-100 dark:border-zinc-800/60 px-3 py-2 text-center">
+                  <td className="border-b border-zinc-100 dark:border-zinc-800/60 px-3 py-2.5 text-center">
                     <div className="flex items-center justify-center gap-1">
                       <button
                         onClick={(e) => { e.stopPropagation(); handleDuplicateVariable(key); }}
