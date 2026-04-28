@@ -1956,17 +1956,7 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
   const [runAllMessage, setRunAllMessage] = useState('');
 
   useEffect(() => {
-    if (!isRunningAll) { setRunAllMessage(''); return; }
-    const msgs = [
-      'wkwking...', 'papapooting...', 'stomachacheing...', 'whaaa-ing...',
-      'number-crunching...', 'table-flipping...', 'brain-melting...',
-      'cross-tabbing...', 'math-ing...', 'vibing...', 'shenanigan-ing...',
-      'pontificating...', 'yolo-ing...', 'sweating-ing...',
-    ];
-    let i = 0;
-    setRunAllMessage(msgs[0]);
-    const interval = setInterval(() => { i = (i + 1) % msgs.length; setRunAllMessage(msgs[i]); }, 1500);
-    return () => clearInterval(interval);
+    if (!isRunningAll) { setRunAllMessage(''); }
   }, [isRunningAll]);
 
   const [showGridModal, setShowGridModal] = useState(false);
@@ -2110,7 +2100,7 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
     const canRun = (targetTable.row_items.length || 0) > 0 || (targetTable.grid_items?.length || 0) > 0;
     if (!canRun) { if (!tableId) alert('Add items to Sidebreak or create a Grid first'); return; }
     if (targetTable.filter_items.length > 1) {
-      const hasUnsetOperator = targetTable.filter_items.slice(1).some(item => !item.operatorToNext);
+      const hasUnsetOperator = targetTable.filter_items.slice(0, -1).some(item => !item.operatorToNext);
       if (hasUnsetOperator) { if (!tableId) alert('Set the operator between filter variables before running'); return; }
     }
     const isActiveTable = !tableId || tableId === activeTableId;
@@ -2210,14 +2200,18 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
   const handleRunAll = async () => {
     if (isRunningAll) return;
     const runnable = tables.filter(t => (t.row_items.length || 0) > 0 || (t.grid_items?.length || 0) > 0);
-    if (runnable.length === 0) return;
+    if (runnable.length === 0) { alert('No tables to run — add sidebreak items or create a grid first.'); return; }
     setIsRunningAll(true);
     const errors: string[] = [];
-    for (const table of runnable) {
-      try { await handleGenerate(table.id); } catch (e: any) { errors.push(`${table.name}: ${e.message}`); }
+    let success = 0;
+    for (let i = 0; i < runnable.length; i++) {
+      const table = runnable[i];
+      setRunAllMessage(`computing ${i + 1} of ${runnable.length}: ${table.name}`);
+      try { await handleGenerate(table.id); success++; } catch (e: any) { errors.push(`${table.name}: ${e.message}`); }
     }
     setIsRunningAll(false);
-    if (errors.length) alert('Some tables failed:\n' + errors.join('\n'));
+    if (errors.length) alert(`${success} table(s) done. Failed:\n` + errors.join('\n'));
+    else alert(`${success} table(s) computed.`);
   };
 
   if (!dataLoaded) {
