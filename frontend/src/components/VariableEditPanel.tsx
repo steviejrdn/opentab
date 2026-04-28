@@ -131,9 +131,9 @@ const SyntaxBuilderModal: React.FC<SyntaxBuilderModalProps> = ({ variables, init
     setTimeout(() => { textarea?.focus(); textarea?.setSelectionRange(pos + insert.length, pos + insert.length); }, 0);
   };
 
-  const insertCode = (_varKey: string, varName: string, code: string) => {
+  const insertCode = (varKey: string, _varName: string, code: string) => {
     const prefix = notMode ? 'n' : '';
-    insertAtCursor(`$${varName}/${prefix}${code}`);
+    insertAtCursor(`$${varKey}/${prefix}${code}`);
   };
 
   const toggleVar = (key: string) => {
@@ -242,11 +242,11 @@ const SyntaxBuilderModal: React.FC<SyntaxBuilderModalProps> = ({ variables, init
                 <button onClick={() => insertAtCursor(')')} className="text-xs px-3 py-1.5 bg-zinc-100 dark:bg-zinc-700 hover:bg-zinc-200 dark:hover:bg-zinc-600 text-zinc-600 dark:text-zinc-300 rounded font-medium">)</button>
                 <button onClick={() => setNotMode((prev) => !prev)} className={`text-xs px-3 py-1.5 rounded font-medium transition-colors ${notMode ? 'bg-red-500 text-white hover:bg-red-600' : 'bg-zinc-100 dark:bg-zinc-700 hover:bg-zinc-200 dark:hover:bg-zinc-600 text-zinc-600 dark:text-zinc-300'}`}>NOT</button>
               </div>
-              {notMode && <div className="text-[10px] text-red-500 dark:text-red-400 mt-1">NOT mode: next code will be negated (e.g. ol/n8)</div>}
+              {notMode && <div className="text-[10px] text-red-500 dark:text-red-400 mt-1">NOT mode: next code will be negated (e.g. $ol/n8)</div>}
             </div>
             <div className="flex-1 p-4">
               <div className="text-xs font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wide mb-2">syntax</div>
-              <textarea id="syntax-input" value={rawSyntax} onChange={(e) => setRawSyntax(e.target.value)} className="w-full h-full min-h-[80px] text-sm font-mono bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 px-3 py-2 text-zinc-700 dark:text-zinc-300 outline-none focus:border-blue-400 dark:focus:border-blue-500 resize-none" placeholder="e.g. ol/8+ol/9 or (ses/2+ses/3).age/2" autoFocus />
+              <textarea id="syntax-input" value={rawSyntax} onChange={(e) => setRawSyntax(e.target.value)} className="w-full h-full min-h-[80px] text-sm font-mono bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 px-3 py-2 text-zinc-700 dark:text-zinc-300 outline-none focus:border-blue-400 dark:focus:border-blue-500 resize-none" placeholder="e.g. $ol/8+$ol/9 or ($ses/2+$ses/3).$age/2" autoFocus />
             </div>
           </div>
         </div>
@@ -853,7 +853,7 @@ export const VariableEditPanel: React.FC<VariableEditPanelProps> = ({
                 <div className="flex-1 flex gap-1">
                   <input
                     type="text"
-                    placeholder="Syntax: Q1/1+Q1/2"
+                    placeholder="Syntax: $Q1/1+$Q1/2"
                     value={newCodeSyntax}
                     onChange={(e) => setNewCodeSyntax(e.target.value)}
                     className="flex-1 text-xs px-2 py-1 border border-emerald-300 dark:border-emerald-700 rounded bg-white dark:bg-zinc-800 dark:text-zinc-100 font-mono"
