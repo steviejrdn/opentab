@@ -262,7 +262,7 @@ const SyntaxBuilderModal: React.FC<SyntaxBuilderModalProps> = ({ variables, init
 const SortableCodeRow: React.FC<SortableCodeRowProps> = ({
   code,
   varKey,
-  varName,
+  varName: _varName,
   dataKey,
   isSelected,
   sortableId,

@@ -2419,7 +2419,7 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
                             <tr>
                               <td className="border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-zinc-500 bg-zinc-50 dark:bg-zinc-800/50">Base</td>
                               <td className="border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-center text-zinc-400 dark:text-zinc-600 bg-zinc-100 dark:bg-zinc-800">—</td>
-                              {previewColPaths.map((col, ci) => (
+                              {previewColPaths.map((_col, ci) => (
                                 <td key={`base-${ci}`} className="border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-center text-zinc-300 dark:text-zinc-700">—</td>
                               ))}
                             </tr>
@@ -2427,7 +2427,7 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
                               <tr key={ri} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/40">
                                 <td className="border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-zinc-600 dark:text-zinc-400">{previewRowLabels[ri] ?? getCodeLabel(row)}</td>
                                 <td className="border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-center text-zinc-300 dark:text-zinc-700 bg-zinc-50 dark:bg-zinc-800/30">—</td>
-                                {previewColPaths.map((col, ci) => (
+                                {previewColPaths.map((_col, ci) => (
                                   <td key={ci} className="border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-center text-zinc-300 dark:text-zinc-700">—</td>
                                 ))}
                               </tr>
@@ -3642,7 +3642,6 @@ const EditVariablesPage: React.FC = () => {
     deleteVariable,
     duplicateVariable,
     updateVariableLabel,
-    updateVariableDisplayName,
     renameVariableKey,
     updateCodeLabel,
     updateCodeVisibility,
@@ -3656,7 +3655,7 @@ const EditVariablesPage: React.FC = () => {
   } = useStore();
   const [showMergeModal, setShowMergeModal] = useState(false);
   const [showAddVar, setShowAddVar] = useState(false);
-  const [newVarKey, setNewVarKey] = useState('');
+  const [, setNewVarKey] = useState('');
   const [newVarName, setNewVarName] = useState('');
   const [newVarLabel, setNewVarLabel] = useState('');
   const [newVarType, setNewVarType] = useState('categorical');
