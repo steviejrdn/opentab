@@ -29,6 +29,8 @@ opentab_ is an open source interactive reporting tool for survey data. It has a 
 
 ## End User Install
 
+> **📦 Latest release:** beta v0.2.0 — pip package last updated **29 Apr 2026, 23:02 WIB (GMT+7)**
+
 > **🎯 Not sure which option to choose?**
 > - **Windows/Mac users, first time:** Use [Option 1: Quick Install](#option-1-quick-install-easiest---recommended)
 > - **Have other Python apps installed:** Use [Option 2: Virtual Environment](#option-2-using-virtual-environment-safer)
@@ -150,6 +152,22 @@ docker run -p 8001:8001 steviejrdn/opentab:latest
 ```
 
 Then open http://localhost:8001 in your browser.
+
+### Updating to a New Build
+
+When a new build is released, run this to update:
+
+**Windows:**
+```bash
+pip install --no-cache-dir --force-reinstall git+https://github.com/steviejrdn/opentab.git
+```
+
+**Mac:**
+```bash
+pip3 install --no-cache-dir --force-reinstall git+https://github.com/steviejrdn/opentab.git
+```
+
+> **Note:** `--no-cache-dir` is required — without it, pip may install a cached older version even if a new build is available.
 
 ---
 
