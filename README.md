@@ -29,7 +29,7 @@ opentab_ is an open source interactive reporting tool for survey data. It has a 
 
 ## End User Install
 
-> **📦 Latest release:** beta v0.2.0 — pip package last updated **29 Apr 2026, 23:02 WIB (GMT+7)**
+> **📦 Latest release:** beta v0.2.1 — pip package last updated **30 Apr 2026, WIB (GMT+7)**
 
 > **🎯 Not sure which option to choose?**
 > - **Windows/Mac users, first time:** Use [Option 1: Quick Install](#option-1-quick-install-easiest---recommended)
@@ -339,6 +339,26 @@ Contributions welcome! Please:
 ## Built With
 
 This app is vibe coded using [Claude Code](https://claude.ai/code) and [OpenCode](https://opencode.ai).
+
+---
+
+## Changelog
+
+### beta v0.2.1 *(30 Apr 2026)*
+
+- **Fix:** Duplicate variable stats now independent of original variable — duplicate variables (e.g. VQ2 copied from Q2) can now show mean/std error/std dev/variance using their own factor scores, without requiring the original variable to have factors set
+- **UI:** All drag overlays now use a uniform neutral background (`zinc-100`) so visual weight is consistent across the build tab, EZ Tables modal, and saved headers
+- **UI:** Consistent `opacity-95` applied to all drag overlays
+
+### beta v0.2.0 *(29 Apr 2026)*
+
+- Improved edit-variable table layout with pill badges and inline dot indicator
+- Fixed statistics computation for all variable types (categorical, MR, code merge)
+- Fixed derived/custom variable statistics not appearing in results
+- Better code label display for codes sharing the same syntax
+- EZ Tables modal: solid drag overlay, improved nesting, compact layout
+- Run All: fixed silent failures, added completion feedback
+- Fixed merged variable type showing 'categorical' instead of correct type
 
 ---
 
