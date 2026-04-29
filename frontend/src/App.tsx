@@ -2129,16 +2129,17 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
       ])];
       const meanMappings: { variable: string; codeScores: Record<string, number> }[] = [];
       for (const varName of allVarNames) {
-        let v = variables[varName];
-        if (!v) continue;
+        const originalVar = variables[varName];
+        if (!originalVar) continue;
         // Follow sourceKey chain to the actual CSV column
+        let v = originalVar;
         let targetName = varName;
         while (v.sourceKey && variables[v.sourceKey]) {
           targetName = v.sourceKey;
           v = variables[v.sourceKey];
         }
         if (meanMappings.find(m => m.variable === targetName)) continue;
-        const scoredCodes = v.codes.filter((c: any) => c.factor != null);
+        const scoredCodes = originalVar.codes.filter((c: any) => c.factor != null);
         if (scoredCodes.length > 0) {
           const codeScores: Record<string, number> = {};
           scoredCodes.forEach((c: any) => { codeScores[c.code] = c.factor; });
