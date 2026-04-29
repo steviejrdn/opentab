@@ -1904,7 +1904,7 @@ const App: React.FC = () => {
               const info = variables[varName];
               if (info) {
                 return (
-                  <div className="px-3 py-2 border-2 border-blue-400 bg-blue-50 dark:bg-blue-900/30 shadow-2xl cursor-grabbing w-48 rotate-1 opacity-95">
+                  <div className="px-3 py-2 border-2 border-blue-400 bg-zinc-100 dark:bg-zinc-800 shadow-2xl cursor-grabbing w-48 rotate-1 opacity-95">
                     <div className="flex justify-between items-center gap-2">
                       <div className="min-w-0">
                         <span className="text-xs font-medium text-blue-700 dark:text-blue-400 block">{info.name || varName}</span>
@@ -1922,7 +1922,7 @@ const App: React.FC = () => {
               const saved = savedHeaders[headerKey];
               if (saved) {
                 return (
-                  <div className="px-3 py-2 border-2 border-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 shadow-2xl cursor-grabbing w-48 rotate-1 opacity-95">
+                  <div className="px-3 py-2 border-2 border-indigo-400 bg-zinc-100 dark:bg-zinc-800 shadow-2xl cursor-grabbing w-48 rotate-1 opacity-95">
                     <div className="flex justify-between items-center gap-2">
                       <div className="min-w-0">
                         <span className="text-xs font-medium text-indigo-700 dark:text-indigo-400 block">{saved.name}</span>
