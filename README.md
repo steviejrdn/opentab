@@ -350,16 +350,6 @@ This app is vibe coded using [Claude Code](https://claude.ai/code) and [OpenCode
 - **UI:** All drag overlays now use a uniform neutral background (`zinc-100`) so visual weight is consistent across the build tab, EZ Tables modal, and saved headers
 - **UI:** Consistent `opacity-95` applied to all drag overlays
 
-### beta v0.2.0 *(29 Apr 2026)*
-
-- Improved edit-variable table layout with pill badges and inline dot indicator
-- Fixed statistics computation for all variable types (categorical, MR, code merge)
-- Fixed derived/custom variable statistics not appearing in results
-- Better code label display for codes sharing the same syntax
-- EZ Tables modal: solid drag overlay, improved nesting, compact layout
-- Run All: fixed silent failures, added completion feedback
-- Fixed merged variable type showing 'categorical' instead of correct type
-
 ---
 
 **Made with ❤️ from market researcher to another**
