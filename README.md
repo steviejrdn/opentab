@@ -159,15 +159,13 @@ When a new build is released, run this to update:
 
 **Windows:**
 ```bash
-pip install --no-cache-dir --force-reinstall git+https://github.com/steviejrdn/opentab.git
+pip install --upgrade git+https://github.com/steviejrdn/opentab.git
 ```
 
 **Mac:**
 ```bash
-pip3 install --no-cache-dir --force-reinstall git+https://github.com/steviejrdn/opentab.git
+pip3 install --upgrade git+https://github.com/steviejrdn/opentab.git
 ```
-
-> **Note:** `--no-cache-dir` is required — without it, pip may install a cached older version even if a new build is available.
 
 ---
 
