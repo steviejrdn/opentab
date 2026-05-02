@@ -361,7 +361,7 @@ const EzHeaderItem: React.FC<{
 
 // ─── Theme Toggle ────────────────────────────────────────────────────────────
 const ThemeToggle: React.FC = () => {
-  const [isDark, setIsDark] = useState(() => localStorage.getItem('opentab-theme') === 'dark');
+  const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains('dark'));
 
   const toggle = () => {
     const next = !isDark;
