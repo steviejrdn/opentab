@@ -742,6 +742,8 @@ const WelcomeScreen: React.FC<{ onLoadSample: () => void; loading: boolean }> = 
   const [isDragOver, setIsDragOver] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [status, setStatus] = useState<{ type: 'error' | 'info'; message: string } | null>(null);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [sheetOptions, setSheetOptions] = useState<string[] | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [loadingText, setLoadingText] = useState('Twerking...');
@@ -756,10 +758,12 @@ const WelcomeScreen: React.FC<{ onLoadSample: () => void; loading: boolean }> = 
   }, [uploading]);
 
   const processFiles = async (files: File[]) => {
-    const validFiles = files.filter(f => /\.(csv|opentab)$/i.test(f.name));
+    setSheetOptions(null);
+    setPendingFile(null);
+    const validFiles = files.filter(f => /\.(csv|xlsx|sav|opentab)$/i.test(f.name));
 
     if (validFiles.length === 0) {
-      setStatus({ type: 'error', message: 'Unsupported file format. Drop a .csv or .opentab file.' });
+      setStatus({ type: 'error', message: 'Unsupported file format. Drop a .csv, .xlsx, .sav, or .opentab file.' });
       return;
     }
 
@@ -813,6 +817,31 @@ const WelcomeScreen: React.FC<{ onLoadSample: () => void; loading: boolean }> = 
 
     try {
       const result = await dataApi.uploadFile(file);
+      if (result.sheets && result.sheets.length > 1) {
+        setPendingFile(file);
+        setSheetOptions(result.sheets);
+        return;
+      }
+      const vars = await dataApi.getVariables();
+      mergeAndSetVariables(vars);
+      setDataInfo(file.name, result.row_count);
+      setDataLoaded(true);
+    } catch (e: any) {
+      const detail = e.response?.data?.detail || e.message || 'Upload failed.';
+      setStatus({ type: 'error', message: detail });
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleSheetSelect = async (sheet: string) => {
+    if (!pendingFile) return;
+    const file = pendingFile;
+    setPendingFile(null);
+    setSheetOptions(null);
+    setUploading(true);
+    try {
+      const result = await dataApi.uploadFile(file, sheet);
       const vars = await dataApi.getVariables();
       mergeAndSetVariables(vars);
       setDataInfo(file.name, result.row_count);
@@ -861,7 +890,7 @@ const WelcomeScreen: React.FC<{ onLoadSample: () => void; loading: boolean }> = 
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
-        onClick={() => !uploading && fileInputRef.current?.click()}
+        onClick={() => !uploading && !sheetOptions && fileInputRef.current?.click()}
         className={`w-96 h-72 border-2 border-dashed rounded-lg transition-all flex flex-col items-center justify-center gap-4 ${
           uploading
             ? 'border-zinc-300 dark:border-zinc-700 cursor-wait'
@@ -874,15 +903,30 @@ const WelcomeScreen: React.FC<{ onLoadSample: () => void; loading: boolean }> = 
           ref={fileInputRef}
           type="file"
           className="hidden"
-          accept=".csv,.opentab"
+          accept=".csv,.xlsx,.sav,.opentab"
           onChange={handleFileInput}
         />
         {uploading ? (
           <p className="text-sm text-zinc-500 animate-pulse">{loadingText}</p>
+        ) : sheetOptions ? (
+          <div className="flex flex-col items-center gap-2 w-full px-6" onClick={e => e.stopPropagation()}>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-1">select a sheet</p>
+            <div className="flex flex-col gap-1 w-full max-h-48 overflow-y-auto">
+              {sheetOptions.map(s => (
+                <button
+                  key={s}
+                  onClick={() => handleSheetSelect(s)}
+                  className="text-xs text-left px-3 py-1.5 rounded border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300 transition-colors"
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
+          </div>
         ) : isDragOver ? (
           <p className="text-sm text-blue-500 font-medium">drop to load</p>
         ) : (
-          <p className="text-sm text-zinc-400 dark:text-zinc-500">drop .csv or .opentab here</p>
+          <p className="text-sm text-zinc-400 dark:text-zinc-500">drop .csv, .xlsx, .sav or .opentab here</p>
         )}
         <p className="text-xs text-zinc-400 dark:text-zinc-600">
           or{' '}
@@ -2265,7 +2309,16 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
 
       <div className="flex-1 overflow-auto p-4">
         {!activeTable ? (
-          <div className="flex items-center justify-center h-full text-zinc-400 dark:text-zinc-600 text-sm">create a table first</div>
+          <div className="flex flex-col items-center justify-center h-full gap-3">
+            <span className="text-zinc-400 dark:text-zinc-600 text-sm">create a table first</span>
+            <span className="text-zinc-300 dark:text-zinc-700 text-xs">— or —</span>
+            <button
+              onClick={() => setShowEzTablesModal(true)}
+              className="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white text-xs rounded transition-colors flex items-center gap-1"
+            >
+              ⚡ EZ Tables
+            </button>
+          </div>
         ) : (
           <>
             {localTab === 'build' && (

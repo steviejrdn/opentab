@@ -98,10 +98,13 @@ export interface CrosstabResult {
 }
 
 export const dataApi = {
-  uploadFile: async (file: File) => {
+  uploadFile: async (file: File, sheet?: string) => {
     const formData = new FormData();
     formData.append('file', file);
-    const response = await api.post('/api/data/upload', formData, {
+    const url = sheet
+      ? `/api/data/upload?sheet=${encodeURIComponent(sheet)}`
+      : '/api/data/upload';
+    const response = await api.post(url, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
     return response.data;

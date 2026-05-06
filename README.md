@@ -29,7 +29,7 @@ opentab_ is an open source interactive reporting tool for survey data. It has a 
 
 ## End User Install
 
-> **📦 Latest release:** beta v0.2.1 — pip package last updated **30 Apr 2026**
+> **📦 Latest release:** beta v0.2.2 — pip package last updated **7 May 2026**
 
 > **🎯 Not sure which option to choose?**
 > - **Windows/Mac users, first time:** Use [Option 1: Quick Install](#option-1-quick-install-easiest---recommended)
@@ -343,6 +343,12 @@ This app is vibe coded using [Claude Code](https://claude.ai/code) and [OpenCode
 ---
 
 ## Changelog
+
+### beta v0.2.2 *(7 May 2026)*
+
+- **Feature:** Upload `.xlsx` and `.sav` files directly — Excel and SPSS files are now supported alongside CSV. Multi-sheet Excel files prompt for sheet selection; SPSS files auto-import variable labels and value labels
+- **Fix:** Column names containing `.` no longer cause crosstab 400 errors — dots are automatically converted to underscores on file load
+- **UX:** "⚡ EZ Tables" button now appears in the empty state when no tables exist, eliminating the need to create a dummy table first
 
 ### beta v0.2.1 *(30 Apr 2026)*
 

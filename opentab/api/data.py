@@ -1,13 +1,14 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException, Response
+from fastapi import APIRouter, UploadFile, File, HTTPException, Response, Query
 from pathlib import Path
 from pydantic import BaseModel
 from typing import Optional
 import os
 import io
+import pandas as pd
 
 _SAMPLE_DIR = Path(__file__).parent.parent / "sample_data"
 
-from ..core.data_loader import load_csv, merge_multiple_response, merge_spread_columns, detect_column_types
+from ..core.data_loader import load_csv, load_excel, load_sav, merge_multiple_response, merge_spread_columns, detect_column_types
 
 router = APIRouter()
 
@@ -24,6 +25,7 @@ class UploadResponse(BaseModel):
     row_count: int
     metadata: dict
     format: Optional[str] = None
+    sheets: Optional[list[str]] = None
 
 
 
@@ -54,11 +56,12 @@ class DataInfo(BaseModel):
     columns: list[str]
 
 
-# ─── CSV upload ───────────────────────────────────────────────────────────────
+# ─── File upload (CSV, XLSX, SAV) ─────────────────────────────────────────────
 @router.post("/upload", response_model=UploadResponse)
-async def upload_file(file: UploadFile = File(...)):
-    if not file.filename.lower().endswith(('.csv', '.txt')):
-        raise HTTPException(status_code=400, detail="Only CSV/TXT files are supported.")
+async def upload_file(file: UploadFile = File(...), sheet: Optional[str] = Query(None)):
+    ext = file.filename.lower().rsplit('.', 1)[-1] if '.' in file.filename else ''
+    if ext not in ('csv', 'txt', 'xlsx', 'sav'):
+        raise HTTPException(status_code=400, detail="Only CSV, XLSX, and SAV files are supported.")
 
     temp_path = os.path.join("temp", file.filename)
     os.makedirs("temp", exist_ok=True)
@@ -68,11 +71,21 @@ async def upload_file(file: UploadFile = File(...)):
         f.write(content)
 
     try:
-        df, metadata = load_csv(temp_path)
+        if ext in ('csv', 'txt'):
+            df, metadata = load_csv(temp_path)
+        elif ext == 'xlsx':
+            xl = pd.ExcelFile(temp_path)
+            sheets = xl.sheet_names
+            if len(sheets) > 1 and sheet is None:
+                return UploadResponse(columns=[], row_count=0, metadata={}, format='xlsx', sheets=sheets)
+            df, metadata = load_excel(temp_path, sheet_name=sheet or sheets[0])
+        else:  # sav
+            df, metadata = load_sav(temp_path)
+
         data_store['df'] = df
         data_store['metadata'] = metadata
         data_store['file_name'] = file.filename
-        return UploadResponse(columns=list(df.columns), row_count=len(df), metadata=metadata, format='csv')
+        return UploadResponse(columns=list(df.columns), row_count=len(df), metadata=metadata, format=ext)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

@@ -15,6 +15,7 @@ def load_csv(path, encoding=None):
     if encoding is None:
         encoding = detect_encoding(path)
     df = pd.read_csv(path, encoding=encoding, dtype=str)
+    df.columns = df.columns.str.replace('.', '_', regex=False)
     metadata = detect_column_types(df)
 
     labels_path = os.path.splitext(path)[0] + '_labels.json'
@@ -144,6 +145,77 @@ def detect_column_types(df):
                     'is_valid': len(non_null) == base_count
                 }
     return metadata
+
+
+def load_excel(path, sheet_name=0):
+    df = pd.read_excel(path, sheet_name=sheet_name, dtype=str)
+    df.columns = df.columns.str.replace('.', '_', regex=False)
+    metadata = detect_column_types(df)
+    return df, metadata
+
+
+def load_sav(path):
+    try:
+        import pyreadstat
+    except ImportError:
+        raise ImportError("pyreadstat is required for .sav files: pip install pyreadstat")
+
+    df, meta = pyreadstat.read_sav(path, apply_value_formats=False)
+
+    # Build label mappings before renaming columns
+    rename_map = {c: c.replace('.', '_') for c in df.columns}
+
+    def _norm_key(k):
+        try:
+            return str(int(float(k)))
+        except (ValueError, TypeError):
+            return str(k)
+
+    col_labels_list = meta.column_labels or []
+    col_label_map = {
+        rename_map.get(orig, orig): lbl
+        for orig, lbl in zip(meta.column_names, col_labels_list)
+        if lbl
+    }
+    val_label_map = {
+        rename_map.get(orig, orig): {_norm_key(k): v for k, v in vl.items()}
+        for orig, vl in (meta.variable_value_labels or {}).items()
+    }
+
+    df = df.rename(columns=rename_map)
+
+    def _to_str(x):
+        if pd.isna(x):
+            return None
+        if isinstance(x, float) and x == int(x):
+            return str(int(x))
+        return str(x)
+
+    df = df.apply(lambda col: col.map(_to_str))
+    metadata = detect_column_types(df)
+
+    for col in df.columns:
+        if col not in metadata:
+            continue
+        if col in col_label_map:
+            metadata[col]['label'] = col_label_map[col]
+        if col in val_label_map:
+            code_labels = val_label_map[col]
+            new_codes = []
+            for c in metadata[col].get('codes', []):
+                if isinstance(c, dict):
+                    code_val = str(c['code'])
+                    fallback = c.get('label', code_val)
+                else:
+                    try:
+                        code_val = str(int(float(c)))
+                    except (ValueError, TypeError):
+                        code_val = str(c)
+                    fallback = code_val
+                new_codes.append({'code': code_val, 'label': code_labels.get(code_val, fallback)})
+            metadata[col]['codes'] = new_codes
+
+    return df, metadata
 
 
 def merge_multiple_response(df, source_columns, name):
