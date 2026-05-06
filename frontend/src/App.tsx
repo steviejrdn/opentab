@@ -396,31 +396,12 @@ const Navigation: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { dataLoaded, variables, tables, folders, displayOptions, activeTableId, fileName, rowCount,
-          importState, setDataLoaded, resetSession, mergeAndSetVariables, setDataInfo, setVariables } = useStore();
+          importState, setDataLoaded, resetSession } = useStore();
   const openFileRef = useRef<HTMLInputElement>(null);
   const opentabHandle = useRef<FileSystemFileHandle | null>(null);
   const [restoreStatus, setRestoreStatus] = useState<{ loading: boolean; message: string } | null>(null);
   const [autoSavedAt, setAutoSavedAt] = useState<Date | null>(null);
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const updateDatasetRef = useRef<HTMLInputElement>(null);
-  const [updating, setUpdating] = useState(false);
-  const [updatePendingFile, setUpdatePendingFile] = useState<{ file: File; oldCsv: string; oldMergedVars: Record<string, any> } | null>(null);
-  const [updateSheetOptions, setUpdateSheetOptions] = useState<string[] | null>(null);
-  const [updateConfirm, setUpdateConfirm] = useState<{
-    file: File;
-    result: { row_count: number };
-    newVars: Record<string, VariableInfo>;
-    oldCsv: string;
-    oldFileName: string | null;
-    oldMergedVars: Record<string, any>;
-    oldMergedVarState: Record<string, VariableInfo>;
-    matched: number;
-    added: string[];
-    dropped: string[];
-    typeChanged: string[];
-    mergedVarsAffected: string[];
-  } | null>(null);
-
   const buildPayload = async () => {
     const [rawCsv, mergedVars] = await Promise.all([
       dataApi.getRawCsv(),
@@ -578,141 +559,6 @@ const Navigation: React.FC = () => {
     e.target.value = '';
   };
 
-  const prepareUpdateConfirm = async (
-    file: File,
-    result: { row_count: number },
-    oldCsv: string,
-    oldMergedVars: Record<string, any>
-  ) => {
-    const newVars = await dataApi.getVariables();
-    const mergedVarNames = new Set(Object.keys(oldMergedVars));
-    const currentKeys = Object.keys(variables);
-    const newKeys = Object.keys(newVars);
-
-    const matched = currentKeys.filter(k => newKeys.includes(k) && !mergedVarNames.has(k)).length;
-    const added = newKeys.filter(k => !currentKeys.includes(k));
-    const dropped = currentKeys.filter(k => !newKeys.includes(k) && !mergedVarNames.has(k));
-    const typeChanged = currentKeys
-      .filter(k => newKeys.includes(k) && variables[k].type !== newVars[k].type)
-      .map(k => `${k} (${variables[k].type} → ${newVars[k].type})`);
-
-    const mergedVarsAffected = Object.entries(oldMergedVars)
-      .filter(([, meta]: [string, any]) => {
-        const sources: string[] = meta.source_columns || meta.source_variables || [];
-        return sources.some(s => dropped.includes(s));
-      })
-      .map(([name]) => name);
-
-    const oldMergedVarState: Record<string, VariableInfo> = {};
-    for (const name of mergedVarNames) {
-      if (variables[name]) oldMergedVarState[name] = variables[name];
-    }
-
-    setUpdateConfirm({
-      file, result, newVars, oldCsv, oldFileName: fileName,
-      oldMergedVars, oldMergedVarState,
-      matched, added, dropped, typeChanged, mergedVarsAffected,
-    });
-    setUpdating(false);
-  };
-
-  const handleUpdateDataset = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    e.target.value = '';
-    setUpdating(true);
-    try {
-      const [oldCsv, oldMergedVars] = await Promise.all([
-        dataApi.getRawCsv(),
-        dataApi.getMergedVariables(),
-      ]);
-      const result = await dataApi.uploadFile(file);
-      if (result.sheets && result.sheets.length > 1) {
-        setUpdatePendingFile({ file, oldCsv, oldMergedVars });
-        setUpdateSheetOptions(result.sheets);
-        setUpdating(false);
-        return;
-      }
-      await prepareUpdateConfirm(file, result, oldCsv, oldMergedVars);
-    } catch (err: any) {
-      setRestoreStatus({ loading: false, message: 'Update failed: ' + (err.response?.data?.detail || err.message || 'Upload failed.') });
-      setTimeout(() => setRestoreStatus(null), 5000);
-      setUpdating(false);
-    }
-  };
-
-  const handleUpdateSheetSelect = async (sheet: string) => {
-    if (!updatePendingFile) return;
-    const { file, oldCsv, oldMergedVars } = updatePendingFile;
-    setUpdatePendingFile(null);
-    setUpdateSheetOptions(null);
-    setUpdating(true);
-    try {
-      const result = await dataApi.uploadFile(file, sheet);
-      await prepareUpdateConfirm(file, result, oldCsv, oldMergedVars);
-    } catch (err: any) {
-      setRestoreStatus({ loading: false, message: 'Update failed: ' + (err.response?.data?.detail || err.message || 'Upload failed.') });
-      setTimeout(() => setRestoreStatus(null), 5000);
-      setUpdating(false);
-    }
-  };
-
-  const handleUpdateConfirmProceed = async () => {
-    if (!updateConfirm) return;
-    const { file, result, newVars, oldMergedVars, oldMergedVarState } = updateConfirm;
-    setUpdateConfirm(null);
-    setUpdating(true);
-
-    mergeAndSetVariables(newVars);
-    setDataInfo(file.name, result.row_count);
-
-    const failedMergedVars: string[] = [];
-    for (const [name, meta] of Object.entries(oldMergedVars)) {
-      try {
-        if (meta.merge_operator) {
-          await dataApi.mergeCodes({ variables: meta.source_variables, new_variable_name: name, merge_operator: meta.merge_operator, description: meta.label });
-        } else if (!meta.syntax) {
-          await dataApi.mergeMR(name, meta.source_columns, meta.label);
-        } else {
-          await dataApi.mergeVariables({ columns: meta.source_columns, new_variable_name: name, merge_type: 'binary' });
-        }
-      } catch {
-        failedMergedVars.push(name);
-      }
-    }
-
-    const successfulMergedVarState: Record<string, VariableInfo> = {};
-    for (const [name, varInfo] of Object.entries(oldMergedVarState)) {
-      if (!failedMergedVars.includes(name)) successfulMergedVarState[name] = varInfo;
-    }
-    if (Object.keys(successfulMergedVarState).length > 0) {
-      const currentVars = useStore.getState().variables;
-      setVariables({ ...currentVars, ...successfulMergedVarState });
-    }
-
-    let msg = `Dataset updated: ${file.name} (${result.row_count} rows)`;
-    if (failedMergedVars.length > 0) {
-      msg += `. ${failedMergedVars.length} merged variable(s) removed (source columns missing): ${failedMergedVars.join(', ')}`;
-    }
-    setRestoreStatus({ loading: false, message: msg });
-    setTimeout(() => setRestoreStatus(null), failedMergedVars.length > 0 ? 8000 : 3000);
-    setUpdating(false);
-  };
-
-  const handleUpdateConfirmCancel = async () => {
-    if (!updateConfirm) return;
-    const { oldCsv, oldFileName, oldMergedVars } = updateConfirm;
-    setUpdateConfirm(null);
-    try {
-      await dataApi.uploadText(oldCsv, oldFileName || 'session.csv');
-      for (const [name, meta] of Object.entries(oldMergedVars)) {
-        await dataApi.registerMerged(name, meta);
-      }
-    } catch {
-      // Frontend state is unchanged; backend restore best-effort
-    }
-  };
-
   return (
     <>
     <nav className="bg-zinc-50 dark:bg-zinc-950 border-b border-zinc-200 dark:border-zinc-800 px-4 py-3 flex justify-between items-center">
@@ -779,21 +625,6 @@ const Navigation: React.FC = () => {
                   saved {autoSavedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                 </span>
               )}
-              <button
-                onClick={() => updateDatasetRef.current?.click()}
-                disabled={updating}
-                title="Replace dataset while preserving all labels and tables"
-                className="px-2.5 py-1 text-xs text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors disabled:opacity-40 disabled:cursor-wait"
-              >
-                {updating ? 'updating...' : 'update data'}
-              </button>
-              <input
-                ref={updateDatasetRef}
-                type="file"
-                accept=".csv,.xlsx,.sav"
-                className="hidden"
-                onChange={handleUpdateDataset}
-              />
             </>
           )}
           <button
@@ -824,67 +655,6 @@ const Navigation: React.FC = () => {
           ? 'bg-zinc-100 dark:bg-zinc-800 border-zinc-300 dark:border-zinc-600 text-zinc-600 dark:text-zinc-400 animate-pulse'
           : 'bg-zinc-50 dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300'}`}>
         {restoreStatus.message}
-      </div>
-    )}
-    {updateSheetOptions && (
-      <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/30">
-        <div className="bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 shadow-lg p-4 w-64">
-          <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-2">select a sheet</p>
-          <div className="flex flex-col gap-1 max-h-48 overflow-y-auto">
-            {updateSheetOptions.map(s => (
-              <button key={s} onClick={() => handleUpdateSheetSelect(s)}
-                className="text-xs text-left px-3 py-1.5 border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300 transition-colors">
-                {s}
-              </button>
-            ))}
-          </div>
-          <button onClick={() => { setUpdateSheetOptions(null); setUpdatePendingFile(null); }}
-            className="mt-2 text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300">
-            cancel
-          </button>
-        </div>
-      </div>
-    )}
-    {updateConfirm && (
-      <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/30">
-        <div className="bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 shadow-lg p-5 w-80">
-          <p className="text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-3">
-            replace dataset with <span className="font-mono">{updateConfirm.file.name}</span>?
-          </p>
-          <div className="text-xs text-zinc-500 dark:text-zinc-400 space-y-1 mb-4">
-            <p>matched: <span className="text-zinc-700 dark:text-zinc-300">{updateConfirm.matched}</span></p>
-            {updateConfirm.added.length > 0 && (
-              <p>new columns: <span className="text-zinc-700 dark:text-zinc-300">{updateConfirm.added.join(', ')}</span></p>
-            )}
-            {updateConfirm.dropped.length > 0 && (
-              <p className="text-amber-600 dark:text-amber-400">dropped: {updateConfirm.dropped.join(', ')}</p>
-            )}
-            {updateConfirm.typeChanged.length > 0 && (
-              <p className="text-amber-600 dark:text-amber-400">type changed: {updateConfirm.typeChanged.join(', ')}</p>
-            )}
-            {updateConfirm.mergedVarsAffected.length > 0 && (
-              <p className="text-amber-600 dark:text-amber-400">
-                merged variables at risk: {updateConfirm.mergedVarsAffected.join(', ')} (source columns missing)
-              </p>
-            )}
-            {Object.keys(updateConfirm.oldMergedVars).length > 0 && updateConfirm.mergedVarsAffected.length === 0 && (
-              <p className="text-zinc-400">
-                {Object.keys(updateConfirm.oldMergedVars).length} merged variable(s) will be rebuilt
-              </p>
-            )}
-            <p className="pt-1 text-zinc-400">rows: {updateConfirm.result.row_count}</p>
-          </div>
-          <div className="flex gap-2">
-            <button onClick={handleUpdateConfirmProceed}
-              className="flex-1 px-3 py-1.5 text-xs bg-zinc-800 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:bg-zinc-700 dark:hover:bg-zinc-200 transition-colors">
-              proceed
-            </button>
-            <button onClick={handleUpdateConfirmCancel}
-              className="flex-1 px-3 py-1.5 text-xs border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors">
-              cancel
-            </button>
-          </div>
-        </div>
       </div>
     )}
     </>
