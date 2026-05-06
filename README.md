@@ -349,6 +349,8 @@ This app is vibe coded using [Claude Code](https://claude.ai/code) and [OpenCode
 - **Feature:** Upload `.xlsx` and `.sav` files directly — Excel and SPSS files are now supported alongside CSV. Multi-sheet Excel files prompt for sheet selection; SPSS files auto-import variable labels and value labels
 - **Fix:** Column names containing `.` no longer cause crosstab 400 errors — dots are automatically converted to underscores on file load
 - **UX:** "⚡ EZ Tables" button now appears in the empty state when no tables exist, eliminating the need to create a dummy table first
+- **UX:** Renaming a custom variable to a name that already exists now shows an inline warning instead of silently doing nothing
+- **UX:** Duplicate variable names now use the prefix `d_` (e.g. `d_Q1`) instead of `Q1 (copy)`
 
 ### beta v0.2.1 *(30 Apr 2026)*
 
