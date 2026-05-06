@@ -590,7 +590,7 @@ export const useStore = create<AppState>()((set, get) => ({
           ...state.variables,
           [targetKey]: {
             ...sourceVar,
-            name: `${sourceVar.name || sourceKey} (copy)`,
+            name: `d_${sourceVar.name || sourceKey}`,
             codes,
             isCustom: true,
             sourceKey: sourceKey,

@@ -411,7 +411,8 @@ export const VariableEditPanel: React.FC<VariableEditPanelProps> = ({
   const { copiedVariableInfo, setCopiedVariableInfo, lastPastedVariable, setLastPastedVariable, restoreVariableCodes } = useStore();
 
   const [localDisplayName, setLocalDisplayName] = useState(variable.name || '');
-  useEffect(() => { setLocalDisplayName(variable.name || ''); }, [variableKey, variable.name]);
+  const [displayNameError, setDisplayNameError] = useState('');
+  useEffect(() => { setLocalDisplayName(variable.name || ''); setDisplayNameError(''); }, [variableKey, variable.name]);
 
   const [selectedCodes, setSelectedCodes] = useState<string[]>([]);
   const [showNetInput, setShowNetInput] = useState(false);
@@ -645,20 +646,31 @@ export const VariableEditPanel: React.FC<VariableEditPanelProps> = ({
               <input
                 type="text"
                 value={variable.isCustom ? localDisplayName : (variable.name || '')}
-                onChange={(e) => variable.isCustom && setLocalDisplayName(e.target.value)}
+                onChange={(e) => { variable.isCustom && setLocalDisplayName(e.target.value); setDisplayNameError(''); }}
                 onBlur={() => {
                   if (variable.isCustom && localDisplayName.trim() && localDisplayName !== variable.name) {
-                    onUpdateDisplayName(variableKey, localDisplayName.trim());
+                    if (variables[localDisplayName.trim()]) {
+                      setDisplayNameError('A variable with this name already exists');
+                    } else {
+                      setDisplayNameError('');
+                      onUpdateDisplayName(variableKey, localDisplayName.trim());
+                    }
                   }
                 }}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && variable.isCustom && localDisplayName.trim() && localDisplayName !== variable.name) {
-                    onUpdateDisplayName(variableKey, localDisplayName.trim());
+                    if (variables[localDisplayName.trim()]) {
+                      setDisplayNameError('A variable with this name already exists');
+                    } else {
+                      setDisplayNameError('');
+                      onUpdateDisplayName(variableKey, localDisplayName.trim());
+                    }
                   }
                 }}
                 disabled={!variable.isCustom}
                 className="w-full px-2 py-1.5 text-sm border border-zinc-300 dark:border-zinc-600 rounded bg-white dark:bg-zinc-800 dark:text-zinc-100 disabled:opacity-50 disabled:cursor-not-allowed"
               />
+              {displayNameError && <p className="text-xs text-red-500 mt-0.5">{displayNameError}</p>}
             </div>
             <div>
               <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-0.5">
