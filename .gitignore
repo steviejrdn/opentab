@@ -52,3 +52,5 @@ backend/temp/
 
 # Test data
 test_data/
+test_*.sav
+test_*.csv

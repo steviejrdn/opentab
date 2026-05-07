@@ -184,14 +184,19 @@ def load_sav(path):
 
     df = df.rename(columns=rename_map)
 
-    def _to_str(x):
-        if pd.isna(x):
-            return None
-        if isinstance(x, float) and x == int(x):
-            return str(int(x))
-        return str(x)
-
-    df = df.apply(lambda col: col.map(_to_str))
+    result = {}
+    for col_name in df.columns:
+        s = df[col_name]
+        if pd.api.types.is_float_dtype(s) or pd.api.types.is_integer_dtype(s):
+            out = pd.Series([None] * len(s), index=s.index, dtype=object)
+            non_null = s.notna()
+            is_whole = non_null & (s % 1 == 0)
+            out[is_whole] = s[is_whole].astype('int64').astype(str)
+            out[non_null & ~is_whole] = s[non_null & ~is_whole].astype(str)
+            result[col_name] = out
+        else:
+            result[col_name] = s.where(s.notna(), other=None)
+    df = pd.DataFrame(result)
     metadata = detect_column_types(df)
 
     for col in df.columns:

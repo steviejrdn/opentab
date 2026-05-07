@@ -1,4 +1,5 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import { BrowserRouter as Router, Routes, Route, Navigate, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useStore } from './store/useStore';
 import { DndContext, useSensor, useSensors, PointerSensor, useDraggable, useDroppable, DragOverlay } from '@dnd-kit/core';
@@ -975,16 +976,9 @@ const WelcomeScreen: React.FC<{ onLoadSample: () => void; loading: boolean }> = 
   const [sheetOptions, setSheetOptions] = useState<string[] | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [loadingText, setLoadingText] = useState('Twerking...');
-
-  useEffect(() => {
-    if (!uploading) { setLoadingText('Twerking...'); return; }
-    // Keep it simple with just twerking
-    const interval = setInterval(() => {
-      setLoadingText(prev => prev === 'Twerking...' ? 'Twerking..' : 'Twerking...');
-    }, 500);
-    return () => clearInterval(interval);
-  }, [uploading]);
+  const [loadingPhase, setLoadingPhase] = useState<'uploading' | 'loading-vars'>('uploading');
+  const loadingText = loadingPhase === 'loading-vars' ? 'Loading variable list...' : 'Twerking...';
+  const phaseProgress = loadingPhase === 'uploading' ? 33 : 90;
 
   const processFiles = async (files: File[]) => {
     setSheetOptions(null);
@@ -997,7 +991,7 @@ const WelcomeScreen: React.FC<{ onLoadSample: () => void; loading: boolean }> = 
     }
 
     setUploading(true);
-    setLoadingText('Twerking...');
+    setLoadingPhase('uploading');
     setStatus(null);
 
     const file = validFiles[0];
@@ -1051,6 +1045,7 @@ const WelcomeScreen: React.FC<{ onLoadSample: () => void; loading: boolean }> = 
         setSheetOptions(result.sheets);
         return;
       }
+      setLoadingPhase('loading-vars');
       const vars = await dataApi.getVariables();
       mergeAndSetVariables(vars);
       setDataInfo(file.name, result.row_count);
@@ -1069,8 +1064,10 @@ const WelcomeScreen: React.FC<{ onLoadSample: () => void; loading: boolean }> = 
     setPendingFile(null);
     setSheetOptions(null);
     setUploading(true);
+    setLoadingPhase('uploading');
     try {
       const result = await dataApi.uploadFile(file, sheet);
+      setLoadingPhase('loading-vars');
       const vars = await dataApi.getVariables();
       mergeAndSetVariables(vars);
       setDataInfo(file.name, result.row_count);
@@ -1136,7 +1133,15 @@ const WelcomeScreen: React.FC<{ onLoadSample: () => void; loading: boolean }> = 
           onChange={handleFileInput}
         />
         {uploading ? (
-          <p className="text-sm text-zinc-500 animate-pulse">{loadingText}</p>
+          <div className="flex flex-col items-center gap-2 w-full px-8">
+            <p className="text-sm text-zinc-500 animate-pulse">{loadingText}</p>
+            <div className="w-full bg-zinc-200 dark:bg-zinc-700 rounded-full h-1 overflow-hidden">
+              <div
+                className="bg-zinc-500 dark:bg-zinc-400 h-full rounded-full transition-all duration-700"
+                style={{ width: `${phaseProgress}%` }}
+              />
+            </div>
+          </div>
         ) : sheetOptions ? (
           <div className="flex flex-col items-center gap-2 w-full px-6" onClick={e => e.stopPropagation()}>
             <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-1">select a sheet</p>
@@ -1246,16 +1251,35 @@ const SavedHeaderCard: React.FC<{ varKey: string; name: string; onRemove: () => 
 const VariableList: React.FC = () => {
   const { variables, dataLoaded, savedHeaders, removeSavedHeader } = useStore();
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const parentRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search), 200);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  const filtered = useMemo(() => {
+    const q = debouncedSearch.toLowerCase();
+    return Object.entries(variables).filter(([name, info]) =>
+      !q || name.toLowerCase().includes(q) || (info.name || '').toLowerCase().includes(q) || (info.label || '').toLowerCase().includes(q)
+    );
+  }, [variables, debouncedSearch]);
+
+  const virtualizer = useVirtualizer({
+    count: filtered.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => 57,
+    overscan: 5,
+  });
+
   if (!dataLoaded) return (
     <div className="flex flex-col h-full px-3 py-3">
       <span className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-3">variables</span>
       <div className="flex-1 flex items-center justify-center text-zinc-400 dark:text-zinc-600 text-xs">load data first</div>
     </div>
   );
-  const q = search.toLowerCase();
-  const filtered = Object.entries(variables).filter(([name, info]) =>
-    name.toLowerCase().includes(q) || (info.name || '').toLowerCase().includes(q) || (info.label || '').toLowerCase().includes(q)
-  );
+
   return (
     <div className="flex flex-col h-full px-3 py-3">
       <div className="flex justify-between items-center mb-2">
@@ -1269,10 +1293,21 @@ const VariableList: React.FC = () => {
         placeholder="search..."
         className="mb-2 px-2 py-1 text-xs bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 placeholder-zinc-400 dark:placeholder-zinc-600 outline-none focus:border-zinc-400 dark:focus:border-zinc-500 w-full"
       />
-      <div className="flex-1 overflow-y-auto space-y-1">
-        {filtered.map(([name, info]) => (
-          <DraggableVariable key={name} name={name} displayName={info.name || name} label={info.label} codeCount={info.codes.length} />
-        ))}
+      <div ref={parentRef} className="flex-1 overflow-y-auto">
+        <div style={{ height: `${virtualizer.getTotalSize()}px`, position: 'relative' }}>
+          {virtualizer.getVirtualItems().map((vi) => {
+            const [name, info] = filtered[vi.index];
+            return (
+              <div
+                key={vi.key}
+                style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: `${vi.size}px`, transform: `translateY(${vi.start}px)` }}
+                className="pb-1"
+              >
+                <DraggableVariable name={name} displayName={info.name || name} label={info.label} codeCount={info.codes.length} />
+              </div>
+            );
+          })}
+        </div>
         {filtered.length === 0 && (
           <div className="text-xs text-zinc-400 dark:text-zinc-600 italic px-1">no match</div>
         )}

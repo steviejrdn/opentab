@@ -29,7 +29,7 @@ opentab_ is an open source interactive reporting tool for survey data. It has a 
 
 ## End User Install
 
-> **📦 Latest release:** beta v0.2.2 — pip package last updated **7 May 2026**
+> **📦 Latest release:** beta v0.3.0 — pip package last updated **8 May 2026**
 
 > **🎯 Not sure which option to choose?**
 > - **Windows/Mac users, first time:** Use [Option 1: Quick Install](#option-1-quick-install-easiest---recommended)
@@ -343,6 +343,14 @@ This app is vibe coded using [Claude Code](https://claude.ai/code) and [OpenCode
 ---
 
 ## Changelog
+
+### beta v0.3.0 *(8 May 2026)*
+
+- **Feature:** Update dataset without losing your work — swap in a new CSV, XLSX, or SAV file from the settings panel while keeping all existing tables, variable edits, and folder structure intact. Columns missing from the new file are flagged automatically
+- **Performance:** Variable sidebar now virtualizes rendering — only visible items are in the DOM, making the app stay responsive even with 10,000+ variable datasets
+- **Performance:** Large SAV file loading is significantly faster — string conversion is now vectorized instead of calling a Python function per cell
+- **Performance:** Crosstab computation no longer copies the full dataframe — only the columns needed for mean score calculation are copied, reducing memory overhead on wide datasets
+- **UX:** Loading screen now shows a progress bar with phase-aware text ("Twerking..." → "Loading variable list...") so it's clear the app is working and not frozen
 
 ### beta v0.2.2 *(7 May 2026)*
 

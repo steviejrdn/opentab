@@ -191,10 +191,15 @@ async def compute_crosstab(request: CrosstabRequest):
             for m in request.mean_score_mappings:
                 score_map[m.variable] = m.codeScores
 
-            working_df = df.copy()
+            score_vars = set(score_map.keys())
+            col_vars = {cd['name'] for cd in col_defs}
+            needed_cols = list((score_vars | col_vars) & set(df.columns))
+            if request.weight_col and request.weight_col in df.columns:
+                needed_cols.append(request.weight_col)
+            working_df = df[needed_cols].copy()
             if request.filter_def:
                 from ..core.code_parser import parse_code_def
-                filter_mask = parse_code_def(request.filter_def, working_df)
+                filter_mask = parse_code_def(request.filter_def, df)
                 working_df = working_df[filter_mask]
 
             # Build column masks with their associated variable names
