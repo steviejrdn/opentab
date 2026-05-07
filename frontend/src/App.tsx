@@ -1612,6 +1612,7 @@ const BuildPageLayout: React.FC<{ onLoadSample: () => void; loading: boolean }> 
       <div className="flex-1 overflow-hidden bg-white dark:bg-zinc-950">
         <BuildPage onLoadSample={onLoadSample} loading={loading} />
       </div>
+      <EzTablesModal />
     </div>
   );
 };
@@ -1746,15 +1747,16 @@ const NestingBuilderItem: React.FC<{
   depth?: number;
 }> = ({ item, zoneType, onRemove, onAddChild, depth = 0 }) => {
   const { variables } = useStore();
-  const displayName = variables[item.variable]?.name || item.variable;
+  const varLabel = variables[item.variable]?.label;
+  const hasDistinctLabel = varLabel && varLabel !== item.variable;
   const hasChildren = (item.children?.length || 0) > 0;
 
   return (
     <div className="flex flex-col">
       <div className={`flex items-center gap-2 px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 ${depth === 0 ? 'rounded-t-lg' : 'border-t-0'} ${hasChildren ? 'rounded-b-lg' : 'rounded-lg'}`}>
         <div className="flex-1 min-w-0">
-          <div className={`text-xs font-medium truncate ${depth === 0 ? 'text-emerald-700 dark:text-emerald-400' : 'text-blue-600 dark:text-blue-400'}`}>{displayName}</div>
-          {depth === 0 && <div className="text-[10px] text-zinc-400 mt-0.5">{item.variable}</div>}
+          <div className={`text-xs font-medium truncate ${depth === 0 ? 'text-emerald-700 dark:text-emerald-400' : 'text-blue-600 dark:text-blue-400'}`}>{item.variable}</div>
+          {depth === 0 && hasDistinctLabel && <div className="text-[10px] text-zinc-400 mt-0.5 truncate">{varLabel}</div>}
         </div>
         {depth < 3 && !hasChildren && (
           <button
@@ -1781,7 +1783,7 @@ const NestingBuilderItem: React.FC<{
 
 const NestingBuilderModal: React.FC<NestingBuilderModalProps> = ({ item, zoneType, onClose }) => {
   const { variables, activeTableId, nestItem } = useStore();
-  const displayName = variables[item.variable]?.name || item.variable;
+  const displayName = variables[item.variable]?.label || item.variable;
   const [showPicker, setShowPicker] = useState(false);
   const [nestSearch, setNestSearch] = useState('');
   const [selectedParent, setSelectedParent] = useState<string | null>(null);
@@ -1866,8 +1868,10 @@ const NestingBuilderModal: React.FC<NestingBuilderModalProps> = ({ item, zoneTyp
                     onClick={() => handleConfirmAdd(name)}
                     className="w-full text-left px-3 py-1.5 text-xs hover:bg-blue-50 dark:hover:bg-blue-900/30 text-zinc-700 dark:text-zinc-300"
                   >
-                    <span className="font-medium text-emerald-700 dark:text-emerald-400">{(info as any).name || name}</span>
-                    <span className="text-zinc-400 ml-1">({name})</span>
+                    <span className="font-medium text-emerald-700 dark:text-emerald-400">{name}</span>
+                    {(info as any).label && (info as any).label !== name && (
+                      <span className="text-zinc-400 ml-1">({(info as any).label})</span>
+                    )}
                   </button>
                 ))
               )}
@@ -1903,7 +1907,7 @@ const DraggableZoneItem: React.FC<{
   });
   const [showNestingBuilder, setShowNestingBuilder] = useState(false);
 
-  const displayName = variables[item.variable]?.name || item.variable;
+  const displayName = variables[item.variable]?.label || item.variable;
   const hasChildren = (item.children?.length || 0) > 0;
   const maxDepth = (it: DropItem, d: number = 0): number => {
     if (!it.children?.length) return d;
@@ -2183,7 +2187,7 @@ const App: React.FC = () => {
                 ? activeTable?.row_items.find((i: any) => i.id === itemId)
                 : activeTable?.col_items.find((i: any) => i.id === itemId);
               if (!item) return null;
-              const displayName = variables[item.variable]?.name || item.variable;
+              const displayName = variables[item.variable]?.label || item.variable;
               return (
                 <div className="flex items-center gap-2 bg-zinc-100 dark:bg-zinc-800 border-2 border-zinc-400 dark:border-zinc-500 px-2 py-1.5 shadow-2xl cursor-grabbing rotate-1 opacity-95">
                   <span className="text-xs text-emerald-700 dark:text-emerald-400">{displayName}</span>
@@ -2251,14 +2255,223 @@ const App: React.FC = () => {
   );
 };
 
+// ─── EZ Tables Modal ──────────────────────────────────────────────────────────
+const EzTablesModal: React.FC = () => {
+  const { showEzTablesModal, setShowEzTablesModal, variables, savedHeaders, removeSavedHeader } = useStore();
+
+  const [ezHeaderItems, setEzHeaderItems] = useState<DropItem[]>([]);
+  const [ezSelectedRowVars, setEzSelectedRowVars] = useState<string[]>([]);
+  const [ezWeightCol, setEzWeightCol] = useState<string | null>(null);
+  const [ezVarSearch, setEzVarSearch] = useState('');
+  const [ezRowVarSearch, setEzRowVarSearch] = useState('');
+  const [debouncedEzVarSearch, setDebouncedEzVarSearch] = useState('');
+  const [debouncedEzRowVarSearch, setDebouncedEzRowVarSearch] = useState('');
+  const ezVarParentRef = useRef<HTMLDivElement>(null);
+  const ezRowParentRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => { const t = setTimeout(() => setDebouncedEzVarSearch(ezVarSearch), 200); return () => clearTimeout(t); }, [ezVarSearch]);
+  useEffect(() => { const t = setTimeout(() => setDebouncedEzRowVarSearch(ezRowVarSearch), 200); return () => clearTimeout(t); }, [ezRowVarSearch]);
+
+  useEffect(() => {
+    const addHandler = (e: CustomEvent) => {
+      const newItem = e.detail as DropItem;
+      setEzHeaderItems(prev => [...prev, newItem]);
+    };
+    const nestHandler = (e: CustomEvent) => {
+      const { parentId, newItem } = e.detail;
+      setEzHeaderItems(prev => {
+        const addToParent = (items: DropItem[]): DropItem[] =>
+          items.map(item => {
+            if (item.id === parentId) return { ...item, children: [...(item.children || []), newItem] };
+            if (item.children?.length) return { ...item, children: addToParent(item.children) };
+            return item;
+          });
+        return addToParent(prev);
+      });
+    };
+    const loadHandler = (e: CustomEvent) => { setEzHeaderItems(e.detail as DropItem[]); };
+
+    window.addEventListener('ez-header-item-added', addHandler as EventListener);
+    window.addEventListener('ez-header-item-nested', nestHandler as EventListener);
+    window.addEventListener('ez-header-load', loadHandler as EventListener);
+    return () => {
+      window.removeEventListener('ez-header-item-added', addHandler as EventListener);
+      window.removeEventListener('ez-header-item-nested', nestHandler as EventListener);
+      window.removeEventListener('ez-header-load', loadHandler as EventListener);
+    };
+  }, []);
+
+  const filteredEzVars = useMemo(() => {
+    const q = debouncedEzVarSearch.toLowerCase();
+    return Object.entries(variables).filter(([key, info]) =>
+      !q || key.toLowerCase().includes(q) || (info.name || '').toLowerCase().includes(q) || (info.label || '').toLowerCase().includes(q)
+    );
+  }, [variables, debouncedEzVarSearch]);
+
+  const filteredEzRowVars = useMemo(() => {
+    const q = debouncedEzRowVarSearch.toLowerCase();
+    return Object.entries(variables).filter(([key, info]) =>
+      !q || key.toLowerCase().includes(q) || (info.name || '').toLowerCase().includes(q) || (info.label || '').toLowerCase().includes(q)
+    );
+  }, [variables, debouncedEzRowVarSearch]);
+
+  const ezVarVirtualizer = useVirtualizer({ count: filteredEzVars.length, getScrollElement: () => ezVarParentRef.current, estimateSize: () => 48, overscan: 5 });
+  const ezRowVirtualizer = useVirtualizer({ count: filteredEzRowVars.length, getScrollElement: () => ezRowParentRef.current, estimateSize: () => 28, overscan: 5 });
+
+  const close = () => { setShowEzTablesModal(false); setEzHeaderItems([]); setEzSelectedRowVars([]); setEzWeightCol(null); };
+
+  if (!showEzTablesModal) return null;
+
+  return (
+    <div id="ez-tables-modal" className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+      <div className="bg-white dark:bg-zinc-900 rounded-lg shadow-xl w-[900px] max-h-[90vh] flex flex-col">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-200 dark:border-zinc-700">
+          <h3 className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">EZ Tables Constructor</h3>
+          <button onClick={close} className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300">×</button>
+        </div>
+        <div className="flex flex-1 overflow-hidden">
+          {/* Left Side - Variables List (Draggable) */}
+          <div className="w-64 border-r border-zinc-200 dark:border-zinc-700 flex flex-col">
+            <div className="px-3 py-2 border-b border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/50 flex flex-col gap-1.5">
+              <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400">Variables (drag to right →)</span>
+              <input
+                type="text"
+                value={ezVarSearch}
+                onChange={e => setEzVarSearch(e.target.value)}
+                placeholder="search..."
+                className="px-2 py-0.5 text-xs bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 placeholder-zinc-400 outline-none focus:border-zinc-400 dark:focus:border-zinc-500 w-full"
+              />
+            </div>
+            <div ref={ezVarParentRef} className="flex-1 overflow-y-auto p-2">
+              <div style={{ height: `${ezVarVirtualizer.getTotalSize()}px`, position: 'relative' }}>
+                {ezVarVirtualizer.getVirtualItems().map(vi => {
+                  const [key, info] = filteredEzVars[vi.index];
+                  return (
+                    <div key={vi.key} style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: `${vi.size}px`, transform: `translateY(${vi.start}px)` }} className="pb-1">
+                      <EzDraggableVariable name={key} displayName={info.name || key} label={info.label} codeCount={info.codes.length} />
+                    </div>
+                  );
+                })}
+              </div>
+              {Object.keys(savedHeaders).length > 0 && (
+                <div className="mt-2 pt-2 border-t border-zinc-200 dark:border-zinc-700">
+                  <div className="text-[9px] text-zinc-400 uppercase tracking-wider px-1 mb-1">saved headers</div>
+                  {Object.entries(savedHeaders).map(([key, hdr]) => (
+                    <SavedHeaderCard key={key} varKey={key} name={hdr.name} onRemove={() => removeSavedHeader(key)} compact={true} />
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Right Side - Form */}
+          <div className="flex-1 flex flex-col overflow-hidden">
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              <div>
+                <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-2 block">Header Structure (optional)</label>
+                <EzHeaderDropZone
+                  items={ezHeaderItems}
+                  onRemove={(id) => {
+                    const removeFromItems = (items: DropItem[]): DropItem[] =>
+                      items.filter(item => item.id !== id).map(item => ({ ...item, children: item.children ? removeFromItems(item.children) : undefined }));
+                    setEzHeaderItems(removeFromItems(ezHeaderItems));
+                  }}
+                  variables={variables}
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-2 block">Weight Column</label>
+                <select
+                  value={ezWeightCol || ''}
+                  onChange={(e) => setEzWeightCol(e.target.value || null)}
+                  className="w-full px-2 py-1.5 border border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 text-xs bg-white dark:bg-zinc-900 rounded"
+                >
+                  <option value="">No weight</option>
+                  {Object.entries(variables).filter(([, info]) => info.type === 'numeric' || info.type === 'boolean').map(([varName]) => (
+                    <option key={varName} value={varName}>{varName}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-2 block">Select Row Variables</label>
+                <input
+                  type="text"
+                  value={ezRowVarSearch}
+                  onChange={e => setEzRowVarSearch(e.target.value)}
+                  placeholder="search..."
+                  className="mb-1.5 px-2 py-1 text-xs bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 placeholder-zinc-400 outline-none focus:border-zinc-400 dark:focus:border-zinc-500 w-full"
+                />
+                <div ref={ezRowParentRef} className="border border-zinc-200 dark:border-zinc-700 rounded p-3 max-h-[200px] overflow-y-auto bg-zinc-50 dark:bg-zinc-800/50">
+                  <div style={{ height: `${ezRowVirtualizer.getTotalSize()}px`, position: 'relative' }}>
+                    {ezRowVirtualizer.getVirtualItems().map(vi => {
+                      const [key, info] = filteredEzRowVars[vi.index];
+                      return (
+                        <div key={vi.key} style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: `${vi.size}px`, transform: `translateY(${vi.start}px)` }}>
+                          <label className="flex items-center gap-2 text-xs cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-800 p-1 rounded h-full">
+                            <input
+                              type="checkbox"
+                              checked={ezSelectedRowVars.includes(key)}
+                              onChange={(e) => {
+                                if (e.target.checked) setEzSelectedRowVars([...ezSelectedRowVars, key]);
+                                else setEzSelectedRowVars(ezSelectedRowVars.filter(v => v !== key));
+                              }}
+                              className="rounded"
+                            />
+                            <span className="text-zinc-700 dark:text-zinc-300">
+                              {info.label && info.label !== key ? info.label : key} <span className="text-zinc-400">({key})</span>
+                            </span>
+                          </label>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="px-4 py-3 border-t border-zinc-200 dark:border-zinc-700 flex items-center justify-between shrink-0">
+              <span className="text-xs text-zinc-500">Will create <strong>{ezSelectedRowVars.length}</strong> tables</span>
+              <div className="flex items-center gap-2">
+                <button onClick={close} className="px-3 py-1.5 text-xs text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded border border-zinc-300 dark:border-zinc-600">Cancel</button>
+                <button
+                  onClick={() => {
+                    if (ezSelectedRowVars.length === 0) { alert('Select at least one row variable'); return; }
+                    const { addTable } = useStore.getState();
+                    ezSelectedRowVars.forEach((rowVar) => {
+                      addTable({
+                        id: crypto.randomUUID(),
+                        name: variables[rowVar]?.label || rowVar,
+                        row_items: [{ id: crypto.randomUUID(), variable: rowVar, codeDef: `$${rowVar}/*`, codes: [] }],
+                        col_items: JSON.parse(JSON.stringify(ezHeaderItems)),
+                        grid_items: [],
+                        filter_items: [],
+                        weight_col: ezWeightCol,
+                        filter_def: null,
+                        result: null
+                      });
+                    });
+                    close();
+                    alert(`Created ${ezSelectedRowVars.length} tables!`);
+                  }}
+                  disabled={ezSelectedRowVars.length === 0}
+                  className="px-3 py-1.5 text-xs bg-emerald-500 hover:bg-emerald-600 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded"
+                >
+                  Create {ezSelectedRowVars.length} Tables
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // ─── Build Page ───────────────────────────────────────────────────────────────
 const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ onLoadSample, loading }) => {
-  const { dataLoaded, activeTableId, tables, variables, savedHeaders, addSavedHeader, removeSavedHeader, removeRowItem, removeColItem, removeGridItem, setTableResult, updateTable, setGridMode, toggleVariableStat } = useStore();
+  const { dataLoaded, activeTableId, tables, variables, savedHeaders, addSavedHeader, removeSavedHeader, removeRowItem, removeColItem, removeGridItem, setTableResult, updateTable, setGridMode, toggleVariableStat, setShowEzTablesModal } = useStore();
   const [localTab, setLocalTab] = useState<'build' | 'filter' | 'result'>('build');
   const [saveHeaderName, setSaveHeaderName] = useState('');
   const [showSaveHeaderForm, setShowSaveHeaderForm] = useState(false);
-  const [ezVarSearch, setEzVarSearch] = useState('');
-  const [ezRowVarSearch, setEzRowVarSearch] = useState('');
   const [isComputing, setIsComputing] = useState(false);
   const [isRunningAll, setIsRunningAll] = useState(false);
   const [runAllMessage, setRunAllMessage] = useState('');
@@ -2270,55 +2483,22 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
   const [showGridModal, setShowGridModal] = useState(false);
   const [selectedGridVars, setSelectedGridVars] = useState<string[]>([]);
   const [gridStatToggles, setGridStatToggles] = useState({ showMean: false, showStdError: false, showStdDev: false, showVariance: false });
+  const [gridVarSearch, setGridVarSearch] = useState('');
+  const [debouncedGridVarSearch, setDebouncedGridVarSearch] = useState('');
 
-  // EZ Tables state
-  const [showEzTablesModal, setShowEzTablesModal] = useState(false);
-  const [ezHeaderItems, setEzHeaderItems] = useState<DropItem[]>([]);
-  const [ezSelectedRowVars, setEzSelectedRowVars] = useState<string[]>([]);
-  const [ezWeightCol, setEzWeightCol] = useState<string | null>(null);
+  // Refs + virtualizers for grid modal variable list
+  const gridParentRef = useRef<HTMLDivElement>(null);
 
-  // Listen for EZ header item added from App component (DnD)
-  useEffect(() => {
-    const addHandler = (e: CustomEvent) => {
-      const newItem = e.detail as DropItem;
-      setEzHeaderItems(prev => [...prev, newItem]);
-    };
-    
-    const nestHandler = (e: CustomEvent) => {
-      const { parentId, newItem } = e.detail;
-      setEzHeaderItems(prev => {
-        const addToParent = (items: DropItem[]): DropItem[] => {
-          return items.map(item => {
-            if (item.id === parentId) {
-              return {
-                ...item,
-                children: [...(item.children || []), newItem]
-              };
-            }
-            if (item.children?.length) {
-              return { ...item, children: addToParent(item.children) };
-            }
-            return item;
-          });
-        };
-        return addToParent(prev);
-      });
-    };
-    
-    const loadHandler = (e: CustomEvent) => {
-      setEzHeaderItems(e.detail as DropItem[]);
-    };
+  useEffect(() => { const t = setTimeout(() => setDebouncedGridVarSearch(gridVarSearch), 200); return () => clearTimeout(t); }, [gridVarSearch]);
 
-    window.addEventListener('ez-header-item-added', addHandler as EventListener);
-    window.addEventListener('ez-header-item-nested', nestHandler as EventListener);
-    window.addEventListener('ez-header-load', loadHandler as EventListener);
+  const filteredGridVars = useMemo(() => {
+    const q = debouncedGridVarSearch.toLowerCase();
+    return Object.entries(variables).filter(([key, info]) =>
+      !q || key.toLowerCase().includes(q) || (info.label || '').toLowerCase().includes(q)
+    );
+  }, [variables, debouncedGridVarSearch]);
 
-    return () => {
-      window.removeEventListener('ez-header-item-added', addHandler as EventListener);
-      window.removeEventListener('ez-header-item-nested', nestHandler as EventListener);
-      window.removeEventListener('ez-header-load', loadHandler as EventListener);
-    };
-  }, []);
+  const gridVirtualizer = useVirtualizer({ count: filteredGridVars.length, getScrollElement: () => gridParentRef.current, estimateSize: () => 36, overscan: 5 });
 
   const activeTable = tables.find((t) => t.id === activeTableId);
 
@@ -2786,7 +2966,7 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
                       title="Select Weight Column"
                     >
                       <option value="">No weight</option>
-                      {Object.keys(variables).map((varName) => (
+                      {Object.entries(variables).filter(([, info]) => info.type === 'numeric' || info.type === 'boolean').map(([varName]) => (
                         <option key={varName} value={varName}>{varName}</option>
                       ))}
                     </select>
@@ -2808,34 +2988,46 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
               <h3 className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">Create Variable Grid</h3>
               <button onClick={() => { setShowGridModal(false); setSelectedGridVars([]); setGridStatToggles({ showMean: false, showStdError: false, showStdDev: false, showVariance: false }); }} className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300">×</button>
             </div>
-            <div className="p-4 overflow-y-auto flex-1">
-              <p className="text-xs text-zinc-500 mb-3">Select variables with the same code structure (e.g., Q11A-D)</p>
-              <div className="space-y-1">
-                {Object.entries(variables).map(([key, info]) => {
+            <div className="px-4 pt-3 pb-2 border-b border-zinc-100 dark:border-zinc-800 shrink-0">
+              <p className="text-xs text-zinc-500 mb-2">Select variables with the same code structure (e.g., Q11A-D)</p>
+              <input
+                type="text"
+                value={gridVarSearch}
+                onChange={e => setGridVarSearch(e.target.value)}
+                placeholder="search..."
+                className="px-2 py-1 text-xs bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 placeholder-zinc-400 outline-none focus:border-zinc-400 dark:focus:border-zinc-500 w-full"
+              />
+            </div>
+            <div ref={gridParentRef} className="overflow-y-auto flex-1 p-2">
+              <div style={{ height: `${gridVirtualizer.getTotalSize()}px`, position: 'relative' }}>
+                {gridVirtualizer.getVirtualItems().map(vi => {
+                  const [key, info] = filteredGridVars[vi.index];
                   const isSelected = selectedGridVars.includes(key);
                   return (
-                    <label key={key} className={`flex items-center gap-3 p-2 rounded cursor-pointer ${isSelected ? 'bg-indigo-50 dark:bg-indigo-900/20' : 'hover:bg-zinc-50 dark:hover:bg-zinc-800'}`}>
-                      <input
-                        type="checkbox"
-                        checked={isSelected}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setSelectedGridVars([...selectedGridVars, key]);
-                          } else {
-                            setSelectedGridVars(selectedGridVars.filter((v) => v !== key));
-                          }
-                        }}
-                        className="rounded border-zinc-300 shrink-0"
-                      />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-baseline gap-2">
-                          <span className="text-xs font-medium text-zinc-700 dark:text-zinc-300">{key}</span>
-                          {info.label && (
-                            <span className="text-xs text-zinc-500 truncate">- {info.label}</span>
-                          )}
+                    <div key={vi.key} style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: `${vi.size}px`, transform: `translateY(${vi.start}px)` }} className="pb-1">
+                      <label className={`flex items-center gap-3 p-2 rounded cursor-pointer h-full ${isSelected ? 'bg-indigo-50 dark:bg-indigo-900/20' : 'hover:bg-zinc-50 dark:hover:bg-zinc-800'}`}>
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedGridVars([...selectedGridVars, key]);
+                            } else {
+                              setSelectedGridVars(selectedGridVars.filter((v) => v !== key));
+                            }
+                          }}
+                          className="rounded border-zinc-300 shrink-0"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-baseline gap-2">
+                            <span className="text-xs font-medium text-zinc-700 dark:text-zinc-300">{key}</span>
+                            {info.label && info.label !== key && (
+                              <span className="text-xs text-zinc-500 truncate">- {info.label}</span>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    </label>
+                      </label>
+                    </div>
                   );
                 })}
               </div>
@@ -2905,199 +3097,6 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
         </div>
       )}
 
-      {/* EZ Tables Modal */}
-      {showEzTablesModal && (
-        <div id="ez-tables-modal" className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white dark:bg-zinc-900 rounded-lg shadow-xl w-[900px] max-h-[90vh] flex flex-col">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-200 dark:border-zinc-700">
-              <h3 className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">EZ Tables Constructor</h3>
-              <button 
-                onClick={() => { setShowEzTablesModal(false); setEzHeaderItems([]); setEzSelectedRowVars([]); setEzWeightCol(null); }} 
-                className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
-              >
-                ×
-              </button>
-            </div>
-            <div className="flex flex-1 overflow-hidden">
-              {/* Left Side - Variables List (Draggable) */}
-              <div className="w-64 border-r border-zinc-200 dark:border-zinc-700 flex flex-col">
-                <div className="px-3 py-2 border-b border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/50 flex flex-col gap-1.5">
-                  <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400">Variables (drag to right →)</span>
-                  <input
-                    type="text"
-                    value={ezVarSearch}
-                    onChange={e => setEzVarSearch(e.target.value)}
-                    placeholder="search..."
-                    className="px-2 py-0.5 text-xs bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 placeholder-zinc-400 outline-none focus:border-zinc-400 dark:focus:border-zinc-500 w-full"
-                  />
-                </div>
-                <div className="flex-1 overflow-y-auto p-2 space-y-1">
-                  {Object.entries(variables)
-                    .filter(([key, info]) => {
-                      const q = ezVarSearch.toLowerCase();
-                      return !q || key.toLowerCase().includes(q) || (info.name || '').toLowerCase().includes(q) || (info.label || '').toLowerCase().includes(q);
-                    })
-                    .map(([key, info]) => (
-                    <EzDraggableVariable
-                      key={key}
-                      name={key}
-                      displayName={info.name || key}
-                      label={info.label}
-                      codeCount={info.codes.length}
-                    />
-                  ))}
-                  {Object.keys(savedHeaders).length > 0 && (
-                    <div className="mt-2 pt-2 border-t border-zinc-200 dark:border-zinc-700">
-                      <div className="text-[9px] text-zinc-400 uppercase tracking-wider px-1 mb-1">saved headers</div>
-                      {Object.entries(savedHeaders).map(([key, hdr]) => (
-                        <SavedHeaderCard key={key} varKey={key} name={hdr.name} onRemove={() => removeSavedHeader(key)} compact={true} />
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-              
-              {/* Right Side - Form */}
-              <div className="flex-1 flex flex-col overflow-hidden">
-              <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                {/* Header Constructor - Droppable Zone (Fixed height, no scroll) */}
-                <div>
-                  <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-2 block">
-                    Header Structure (optional)
-                  </label>
-                  <EzHeaderDropZone 
-                    items={ezHeaderItems}
-                    onRemove={(id) => {
-                      const removeFromItems = (items: DropItem[]): DropItem[] => {
-                        return items.filter(item => item.id !== id).map(item => ({
-                          ...item,
-                          children: item.children ? removeFromItems(item.children) : undefined
-                        }));
-                      };
-                      setEzHeaderItems(removeFromItems(ezHeaderItems));
-                    }}
-                    variables={variables}
-                  />
-                </div>
-
-              {/* Weight Column */}
-              <div>
-                <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-2 block">
-                  Weight Column
-                </label>
-                <select
-                  value={ezWeightCol || ''}
-                  onChange={(e) => setEzWeightCol(e.target.value || null)}
-                  className="w-full px-2 py-1.5 border border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 text-xs bg-white dark:bg-zinc-900 rounded"
-                >
-                  <option value="">No weight</option>
-                  {Object.keys(variables).map((varName) => (
-                    <option key={varName} value={varName}>{varName}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Row Variables Selector */}
-              <div>
-                <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-2 block">
-                  Select Row Variables
-                </label>
-                <input
-                  type="text"
-                  value={ezRowVarSearch}
-                  onChange={e => setEzRowVarSearch(e.target.value)}
-                  placeholder="search..."
-                  className="mb-1.5 px-2 py-1 text-xs bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 placeholder-zinc-400 outline-none focus:border-zinc-400 dark:focus:border-zinc-500 w-full"
-                />
-                <div className="border border-zinc-200 dark:border-zinc-700 rounded p-3 max-h-[200px] overflow-y-auto bg-zinc-50 dark:bg-zinc-800/50">
-                  <div className="space-y-1">
-                    {Object.entries(variables)
-                      .filter(([key, info]) => {
-                        const q = ezRowVarSearch.toLowerCase();
-                        return !q || key.toLowerCase().includes(q) || (info.name || '').toLowerCase().includes(q) || (info.label || '').toLowerCase().includes(q);
-                      })
-                      .map(([key, info]) => (
-                      <label key={key} className="flex items-center gap-2 text-xs cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-800 p-1 rounded">
-                        <input
-                          type="checkbox"
-                          checked={ezSelectedRowVars.includes(key)}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setEzSelectedRowVars([...ezSelectedRowVars, key]);
-                            } else {
-                              setEzSelectedRowVars(ezSelectedRowVars.filter(v => v !== key));
-                            }
-                          }}
-                          className="rounded"
-                        />
-                        <span className="text-zinc-700 dark:text-zinc-300">
-                          {info.label || key} <span className="text-zinc-400">({key})</span>
-                        </span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              </div>
-              {/* Summary and Buttons — pinned footer */}
-              <div className="px-4 py-3 border-t border-zinc-200 dark:border-zinc-700 flex items-center justify-between shrink-0">
-                <span className="text-xs text-zinc-500">
-                  Will create <strong>{ezSelectedRowVars.length}</strong> tables
-                </span>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => { setShowEzTablesModal(false); setEzHeaderItems([]); setEzSelectedRowVars([]); setEzWeightCol(null); }}
-                    className="px-3 py-1.5 text-xs text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded border border-zinc-300 dark:border-zinc-600"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={() => {
-                      if (ezSelectedRowVars.length === 0) {
-                        alert('Select at least one row variable');
-                        return;
-                      }
-                      
-                       // Create tables
-                      const { addTable } = useStore.getState();
-                      ezSelectedRowVars.forEach((rowVar) => {
-                        addTable({
-                          id: crypto.randomUUID(),
-                          name: variables[rowVar]?.label || rowVar,
-                          row_items: [{
-                            id: crypto.randomUUID(),
-                            variable: rowVar,
-                            codeDef: `$${rowVar}/*`,
-                            codes: []
-                          }],
-                          col_items: JSON.parse(JSON.stringify(ezHeaderItems)),
-                          grid_items: [],
-                          filter_items: [],
-                          weight_col: ezWeightCol,
-                          filter_def: null,
-                          result: null
-                        });
-                      });
-                      
-                      setShowEzTablesModal(false);
-                      setEzHeaderItems([]);
-                      setEzSelectedRowVars([]);
-                      setEzWeightCol(null);
-                      alert(`Created ${ezSelectedRowVars.length} tables!`);
-                    }}
-                    disabled={ezSelectedRowVars.length === 0}
-                    className="px-3 py-1.5 text-xs bg-emerald-500 hover:bg-emerald-600 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded"
-                  >
-                    Create {ezSelectedRowVars.length} Tables
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-      )}
     </div>
   );
 }
@@ -3983,6 +3982,29 @@ const EditVariablesPage: React.FC = () => {
 
   const variableEntries = Object.entries(variables);
 
+  const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const tableParentRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search), 200);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  const filteredEntries = useMemo(() => {
+    const q = debouncedSearch.toLowerCase();
+    return !q ? variableEntries : variableEntries.filter(([key, info]) =>
+      key.toLowerCase().includes(q) || (info.label || '').toLowerCase().includes(q)
+    );
+  }, [variableEntries, debouncedSearch]);
+
+  const tableVirtualizer = useVirtualizer({
+    count: filteredEntries.length,
+    getScrollElement: () => tableParentRef.current,
+    estimateSize: () => 38,
+    overscan: 10,
+  });
+
   const handleAddVariable = () => {
     const key = newVarName.trim();
     const name = newVarName.trim();
@@ -4033,6 +4055,13 @@ const EditVariablesPage: React.FC = () => {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="search variables..."
+            className="px-2 py-1.5 text-xs bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 placeholder-zinc-400 dark:placeholder-zinc-600 outline-none focus:border-zinc-400 dark:focus:border-zinc-500 w-48"
+          />
           <button
             onClick={() => setShowAddVar((v) => !v)}
             className="px-3 py-1.5 text-xs bg-emerald-500 text-white hover:bg-emerald-600 transition-colors"
@@ -4045,7 +4074,7 @@ const EditVariablesPage: React.FC = () => {
           >
             Merge
           </button>
-          <span className="text-xs text-zinc-400 dark:text-zinc-600">{variableEntries.length}</span>
+          <span className="text-xs text-zinc-400 dark:text-zinc-600">{search ? `${filteredEntries.length}/` : ''}{variableEntries.length}</span>
         </div>
       </div>
 
@@ -4108,7 +4137,7 @@ const EditVariablesPage: React.FC = () => {
         </div>
       )}
 
-      <div className="flex-1 overflow-auto border border-zinc-200 dark:border-zinc-800">
+      <div ref={tableParentRef} className="flex-1 overflow-auto border border-zinc-200 dark:border-zinc-800">
         <table className="w-full border-collapse text-xs table-fixed">
           <thead className="sticky top-0">
             <tr className="bg-zinc-50 dark:bg-zinc-900">
@@ -4123,7 +4152,9 @@ const EditVariablesPage: React.FC = () => {
             </tr>
           </thead>
           <tbody>
-             {variableEntries.map(([key, info]) => {
+            <tr><td style={{ height: tableVirtualizer.getVirtualItems()[0]?.start ?? 0 }} /></tr>
+            {tableVirtualizer.getVirtualItems().map((vi) => {
+              const [key, info] = filteredEntries[vi.index];
               const hiddenCount = info.codes.filter((c: any) => c.visibility === 'hidden').length;
               const isCustom = info.isCustom;
               const isSelected = selectedVariableKey === key;
@@ -4192,6 +4223,7 @@ const EditVariablesPage: React.FC = () => {
                 </tr>
               );
             })}
+            <tr><td style={{ height: tableVirtualizer.getTotalSize() - (tableVirtualizer.getVirtualItems().at(-1)?.end ?? 0) }} /></tr>
           </tbody>
         </table>
       </div>

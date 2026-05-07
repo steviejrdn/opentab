@@ -89,6 +89,9 @@ interface AppState {
   setSidebarWidth: (width: number) => void;
   toggleSidebar: () => void;
 
+  showEzTablesModal: boolean;
+  setShowEzTablesModal: (show: boolean) => void;
+
   updateVariableLabel: (varName: string, label: string) => void;
   updateVariableDisplayName: (varName: string, displayName: string) => void;
   renameVariableKey: (oldKey: string, newKey: string) => void;
@@ -312,6 +315,8 @@ export const useStore = create<AppState>()((set, get) => ({
     })),
   setSidebarWidth: (width) => set({ sidebarWidth: Math.max(200, Math.min(600, width)) }),
   toggleSidebar: () => set((state) => ({ sidebarVisible: !state.sidebarVisible })),
+  showEzTablesModal: false,
+  setShowEzTablesModal: (show) => set({ showEzTablesModal: show }),
 
   setCopiedVariableInfo: (info) => set({ copiedVariableInfo: info }),
   setLastPastedVariable: (info) => set({ lastPastedVariable: info }),

@@ -10,6 +10,15 @@
 
 opentab_ is an open source interactive reporting tool for survey data. It has a clean, command-line-inspired interface that's straightforward to operate — no formulas, no pivot tables, just drag and drop.
 
+## What's New — beta v0.3.0
+
+> **Latest release:** beta v0.3.0 — 8 May 2026
+
+- 🔄 **Update dataset** — swap in a new file without losing tables, edits, or folder structure
+- ⚡ **10,000+ variable support** — sidebar, Edit Variables page, EZ Tables, and Create Grid all virtualize their lists; the app stays responsive at any scale
+- 🚀 **Faster modals** — EZ Tables and Create Grid open instantly; Edit Variables panel opens without lag
+- 🏷️ **SPSS file support improved** — variable labels from `.sav` files now display correctly across the build nesting zone and variable picker
+
 ## Features
 
 - **Drag-and-drop table builder** — Drop variables into Header and Sidebreak zones; supports nested structures up to 3 levels deep
@@ -348,8 +357,14 @@ This app is vibe coded using [Claude Code](https://claude.ai/code) and [OpenCode
 
 - **Feature:** Update dataset without losing your work — swap in a new CSV, XLSX, or SAV file from the settings panel while keeping all existing tables, variable edits, and folder structure intact. Columns missing from the new file are flagged automatically
 - **Performance:** Variable sidebar now virtualizes rendering — only visible items are in the DOM, making the app stay responsive even with 10,000+ variable datasets
+- **Performance:** Edit Variables page virtualizes table rows and adds a search filter — opening and closing the variable editor panel is instant even with 10,000+ variable datasets
+- **Performance:** EZ Tables and Create Grid modals virtualize their variable lists — both open instantly regardless of dataset size
+- **Performance:** EZ Tables modal is now an independent component — opening it no longer re-renders the build zone, eliminating lag when a table is active
+- **Performance:** Weight column selector now only lists numeric variables, eliminating thousands of DOM nodes on modal open
 - **Performance:** Large SAV file loading is significantly faster — string conversion is now vectorized instead of calling a Python function per cell
 - **Performance:** Crosstab computation no longer copies the full dataframe — only the columns needed for mean score calculation are copied, reducing memory overhead on wide datasets
+- **Fix:** Build nesting items now correctly show SPSS variable labels for `.sav` files — variable key in green, SPSS label as grey sub-text (was showing the key twice when no distinct label was set)
+- **Fix:** Variable picker inside the nesting modal now shows SPSS labels in grey parentheses next to the variable key
 - **UX:** Loading screen now shows a progress bar with phase-aware text ("Twerking..." → "Loading variable list...") so it's clear the app is working and not frozen
 
 ### beta v0.2.2 *(7 May 2026)*
