@@ -365,6 +365,9 @@ This app is vibe coded using [Claude Code](https://claude.ai/code) and [OpenCode
 - **Performance:** Weight column selector now only lists numeric variables, eliminating thousands of DOM nodes on modal open
 - **Performance:** Large SAV file loading is significantly faster — string conversion is now vectorized instead of calling a Python function per cell
 - **Performance:** Crosstab computation no longer copies the full dataframe — only the columns needed for mean score calculation are copied, reducing memory overhead on wide datasets
+- **Performance:** Crosstab computation is faster on weighted data — the weight column is now cast to float once before the row×column loop instead of once per cell
+- **Performance:** UI interactions (drag, build zone updates) are smoother — expensive label-lookup and code-registry functions are now memoized and only recompute when variable definitions change, not on every render
+- **Performance:** Merge variable operations (dichotomous, spread, OR/AND) are significantly faster on large datasets — row-by-row `.at[]` loops replaced with vectorized pandas operations
 - **Fix:** Build nesting items now correctly show SPSS variable labels for `.sav` files — variable key in green, SPSS label as grey sub-text (was showing the key twice when no distinct label was set)
 - **Fix:** Variable picker inside the nesting modal now shows SPSS labels in grey parentheses next to the variable key
 - **UX:** Loading screen now shows a progress bar with phase-aware text ("Twerking..." → "Loading variable list...") so it's clear the app is working and not frozen
