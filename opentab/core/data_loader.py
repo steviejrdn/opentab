@@ -73,14 +73,31 @@ def detect_column_types(df):
                         'is_valid': len(non_null) == base_count
                     }
                 else:
-                    metadata[col] = {
-                        'type': 'numeric',
-                        'answer_type': 'single_answer',
-                        'codes': unique_vals,
-                        'response_count': len(non_null),
-                        'base_count': base_count,
-                        'is_valid': len(non_null) == base_count
-                    }
+                    if len(unique_vals) > 10:
+                        metadata[col] = {
+                            'type': 'scale',
+                            'answer_type': 'single_answer',
+                            'codes': [],
+                            'stats': {
+                                'min': round(float(numeric_vals.min()), 2),
+                                'max': round(float(numeric_vals.max()), 2),
+                                'mean': round(float(numeric_vals.mean()), 2),
+                                'median': round(float(numeric_vals.median()), 2),
+                                'std': round(float(numeric_vals.std()), 2),
+                            },
+                            'response_count': len(non_null),
+                            'base_count': base_count,
+                            'is_valid': len(non_null) == base_count,
+                        }
+                    else:
+                        metadata[col] = {
+                            'type': 'numeric',
+                            'answer_type': 'single_answer',
+                            'codes': unique_vals,
+                            'response_count': len(non_null),
+                            'base_count': base_count,
+                            'is_valid': len(non_null) == base_count
+                        }
             else:
                 # Check for semicolon-delimited multiple response
                 has_semicolon = non_null.astype(str).str.contains(';', regex=False).any()
@@ -219,6 +236,28 @@ def load_sav(path):
                     fallback = code_val
                 new_codes.append({'code': code_val, 'label': code_labels.get(code_val, fallback)})
             metadata[col]['codes'] = new_codes
+
+    # SPSS variable_measure override: catch scale vars with ≤10 distinct values
+    var_measure_map = {
+        rename_map.get(orig, orig): measure
+        for orig, measure in (meta.variable_measure or {}).items()
+    }
+    for col in df.columns:
+        if col not in metadata:
+            continue
+        if var_measure_map.get(col) == 'scale' and metadata[col]['type'] == 'numeric':
+            numeric_col = pd.to_numeric(df[col], errors='coerce').dropna()
+            if len(numeric_col) == 0:
+                continue
+            metadata[col]['type'] = 'scale'
+            metadata[col]['codes'] = []
+            metadata[col]['stats'] = {
+                'min': round(float(numeric_col.min()), 2),
+                'max': round(float(numeric_col.max()), 2),
+                'mean': round(float(numeric_col.mean()), 2),
+                'median': round(float(numeric_col.median()), 2),
+                'std': round(float(numeric_col.std()), 2),
+            }
 
     return df, metadata
 

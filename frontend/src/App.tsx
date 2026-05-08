@@ -14,6 +14,16 @@ import { v4 as uuidv4 } from 'uuid';
 const DragStateContext = React.createContext<{ activeDragId: string | null }>({ activeDragId: null });
 
 // ─── Helper Functions ─────────────────────────────────────────────────────────
+function isNewerVersion(remote: string, local: string): boolean {
+  const r = remote.split('.').map(Number);
+  const l = local.split('.').map(Number);
+  for (let i = 0; i < 3; i++) {
+    if ((r[i] ?? 0) > (l[i] ?? 0)) return true;
+    if ((r[i] ?? 0) < (l[i] ?? 0)) return false;
+  }
+  return false;
+}
+
 function buildNameToKeyMap(vars: Record<string, VariableInfo>): Record<string, string> {
   const map: Record<string, string> = {};
   Object.entries(vars).forEach(([key, info]) => {
@@ -1194,7 +1204,7 @@ const WelcomeScreen: React.FC<{ onLoadSample: () => void; loading: boolean }> = 
 };
 
 // ─── Draggable Variable ───────────────────────────────────────────────────────
-const DraggableVariable: React.FC<{ name: string; displayName: string; label: string; codeCount: number }> = ({ name, displayName, label, codeCount }) => {
+const DraggableVariable: React.FC<{ name: string; displayName: string; label: string; badge: string }> = ({ name, displayName, label, badge }) => {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: name });
   return (
     <div
@@ -1212,7 +1222,7 @@ const DraggableVariable: React.FC<{ name: string; displayName: string; label: st
           <span className="text-xs font-medium text-emerald-700 dark:text-emerald-400">{displayName}</span>
           <span className="text-xs text-zinc-500 block truncate">{label}</span>
         </div>
-        <span className="text-xs text-zinc-400 dark:text-zinc-600 shrink-0">{codeCount}</span>
+        <span className="text-xs text-zinc-400 dark:text-zinc-600 shrink-0">{badge}</span>
       </div>
     </div>
   );
@@ -1303,7 +1313,7 @@ const VariableList: React.FC = () => {
                 style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: `${vi.size}px`, transform: `translateY(${vi.start}px)` }}
                 className="pb-1"
               >
-                <DraggableVariable name={name} displayName={info.name || name} label={info.label} codeCount={info.codes.length} />
+                <DraggableVariable name={name} displayName={info.name || name} label={info.label} badge={info.type === 'scale' ? 'scale' : String(info.codes.length)} />
               </div>
             );
           })}
@@ -2044,6 +2054,7 @@ const App: React.FC = () => {
   } = useStore();
   const [loading, setLoading] = useState(false);
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
+  const [updateInfo, setUpdateInfo] = useState<{ current: string; latest: string } | null>(null);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
   const handleDragStart = (event: DragStartEvent) => {
@@ -2115,7 +2126,14 @@ const App: React.FC = () => {
 
     const varName = activeId;
     const varInfo = variables[varName];
-    if (!varInfo?.codes?.length) return;
+    if (!varInfo) return;
+
+    if (varInfo.type === 'scale') {
+      if (over.id === 'row-zone') addRowItem(activeTableId, { id: uuidv4(), variable: varName, codeDef: '__scale__' });
+      return;
+    }
+
+    if (!varInfo.codes?.length) return;
     const allCodes = varInfo.codes.map((c: any) => c.code).join(',');
 
     if (over.id === 'row-zone') addRowItem(activeTableId, { id: uuidv4(), variable: varName, codeDef: allCodes });
@@ -2142,6 +2160,28 @@ const App: React.FC = () => {
     }
   };
 
+  useEffect(() => {
+    const checkUpdate = async () => {
+      try {
+        const [versionRes, pyprojectRes] = await Promise.all([
+          fetch('/api/version'),
+          fetch('https://raw.githubusercontent.com/steviejrdn/opentab/main/pyproject.toml'),
+        ]);
+        const { version: current } = await versionRes.json();
+        const text = await pyprojectRes.text();
+        const match = text.match(/^version\s*=\s*"([^"]+)"/m);
+        if (!match) return;
+        const latest = match[1];
+        if (current !== 'dev' && isNewerVersion(latest, current)) {
+          setUpdateInfo({ current, latest });
+        }
+      } catch {
+        // no network or fetch failed — silently skip
+      }
+    };
+    checkUpdate();
+  }, []);
+
   const handleLoadSample = async () => {
     setLoading(true);
     try {
@@ -2163,6 +2203,28 @@ const App: React.FC = () => {
       <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd} onDragCancel={handleDragCancel}>
         <div className="h-screen flex flex-col bg-white dark:bg-zinc-950 font-mono">
           <Navigation />
+          {updateInfo && (
+            <div className="flex items-center gap-3 px-4 py-1.5 bg-blue-50 dark:bg-blue-950 border-b border-blue-200 dark:border-blue-800 text-xs font-mono">
+              <span className="text-blue-700 dark:text-blue-300">
+                ↑ update available: v{updateInfo.current} → v{updateInfo.latest}
+              </span>
+              <code className="text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-900 px-1.5 py-0.5 rounded select-all">
+                pip install git+https://github.com/steviejrdn/opentab.git
+              </code>
+              <button
+                onClick={() => navigator.clipboard.writeText('pip install git+https://github.com/steviejrdn/opentab.git')}
+                className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-200 underline"
+              >
+                copy
+              </button>
+              <button
+                onClick={() => setUpdateInfo(null)}
+                className="ml-auto text-blue-400 dark:text-blue-600 hover:text-blue-700 dark:hover:text-blue-300"
+              >
+                ✕
+              </button>
+            </div>
+          )}
           <Routes>
             <Route path="/build" element={
               <BuildPageLayout onLoadSample={handleLoadSample} loading={loading} />
@@ -2665,8 +2727,13 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
         colItemsForBackend = flattenItemsForBackend(effectiveColItems, getVisibleCodesList, '', resolveCode);
       }
 
+      const regularRowItems = effectiveRowItems.filter((item: any) => variables[item.variable]?.type !== 'scale');
+      const scaleRowItems = effectiveRowItems.filter((item: any) => variables[item.variable]?.type === 'scale');
+      const flatRegularRows = flattenItemsForBackend(regularRowItems, getVisibleCodesList, '', resolveCode);
+      const scaleRows = scaleRowItems.map((item: any) => ({ variable: item.variable, codeDef: '__scale__' }));
+
       const result = await computeApi.crosstab({
-        row_items: flattenItemsForBackend(effectiveRowItems, getVisibleCodesList, '', resolveCode),
+        row_items: [...flatRegularRows, ...scaleRows],
         col_items: colItemsForBackend,
         is_grid_mode: isGridMode,
         filter_def: effectiveFilter,
@@ -2844,6 +2911,7 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
                       const isGridMode = activeTable.grid_items && activeTable.grid_items.length > 0 && activeTable.row_items.length === 0;
 
                       let colHeaderRows, previewColPaths, previewRowPaths, previewRowLabels: string[], numHeaderRows;
+                      let scalePreviewRows: { label: string }[] = [];
 
                       if (isGridMode) {
                         // Grid mode: columns = grid items (show variable labels), rows = codes from first grid var
@@ -2869,13 +2937,27 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
                         const colResult = buildAxisStructure(activeTable.col_items, getVisibleCodesList, getCodeLabel, resolveCode);
                         colHeaderRows = colResult.headerRows;
                         previewColPaths = colResult.axisPaths;
-                        const rowResult = buildAxisStructure(activeTable.row_items, getVisibleCodesList, getCodeLabel, resolveCode);
+                        const regularRowItems = activeTable.row_items.filter(item => variables[item.variable]?.type !== 'scale');
+                        const scaleRowItems = activeTable.row_items.filter(item => variables[item.variable]?.type === 'scale');
+                        const rowResult = buildAxisStructure(regularRowItems, getVisibleCodesList, getCodeLabel, resolveCode);
                         previewRowPaths = rowResult.axisPaths;
                         previewRowLabels = rowResult.axisLabels;
                         numHeaderRows = Math.max(colHeaderRows.length, 1);
+                        for (const item of scaleRowItems) {
+                          const v = variables[item.variable];
+                          const hasAny = v?.showMean || v?.showStdDev || v?.showStdError || v?.showVariance;
+                          if (!hasAny) {
+                            scalePreviewRows.push({ label: 'Mean' });
+                          } else {
+                            if (v?.showMean) scalePreviewRows.push({ label: 'Mean' });
+                            if (v?.showStdDev) scalePreviewRows.push({ label: 'Std Dev' });
+                            if (v?.showStdError) scalePreviewRows.push({ label: 'Std Error' });
+                            if (v?.showVariance) scalePreviewRows.push({ label: 'Variance' });
+                          }
+                        }
                       }
 
-                      if (previewRowPaths.length === 0 && previewColPaths.length === 0) {
+                      if (previewRowPaths.length === 0 && previewColPaths.length === 0 && scalePreviewRows.length === 0) {
                         return (
                           <div className="h-full flex items-center justify-center">
                             <span className="text-zinc-300 dark:text-zinc-700 text-xs">drop variables to header and sidebreak to preview</span>
@@ -2924,6 +3006,15 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
                             {previewRowPaths.map((row, ri) => (
                               <tr key={ri} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/40">
                                 <td className="border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-zinc-600 dark:text-zinc-400">{previewRowLabels[ri] ?? getCodeLabel(row)}</td>
+                                <td className="border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-center text-zinc-300 dark:text-zinc-700 bg-zinc-50 dark:bg-zinc-800/30">—</td>
+                                {previewColPaths.map((_col, ci) => (
+                                  <td key={ci} className="border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-center text-zinc-300 dark:text-zinc-700">—</td>
+                                ))}
+                              </tr>
+                            ))}
+                            {scalePreviewRows.map((sr, si) => (
+                              <tr key={`scale-preview-${si}`} className="bg-amber-50 dark:bg-amber-900/10">
+                                <td className="border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-amber-700 dark:text-amber-400/80 italic">{sr.label}</td>
                                 <td className="border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-center text-zinc-300 dark:text-zinc-700 bg-zinc-50 dark:bg-zinc-800/30">—</td>
                                 {previewColPaths.map((_col, ci) => (
                                   <td key={ci} className="border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-center text-zinc-300 dark:text-zinc-700">—</td>
@@ -3114,6 +3205,7 @@ function buildTableHtmlPure(p: {
   rowLabels?: string[];
   formatPct: (val: number) => string;
   statValue: (statKey: string, col: string) => string;
+  scaleStatRows?: { label: string; values: Record<string, number> }[];
 }): string {
   const { result, rowNames, colPaths, colHeaderRows, numHeaderRows, displayOptions, statRows, getCodeLabel, formatPct, statValue } = p;
   const th = (label: string, colspan: number, rowspan: number, bg: string, bold: boolean, align = 'center') =>
@@ -3172,6 +3264,13 @@ function buildTableHtmlPure(p: {
   if (statRows.length > 0) {
     statRows.forEach(sr => {
       html += `<tr>${td(sr.label, '#FFFBEB', true, 'left', '#666')}${td(String(statValue(sr.key, 'Total')), '#FFFBEB', false, 'center', '#92400E')}${colPaths.map(c => td(String(statValue(sr.key, c)), '#FFFBEB', false, 'center', '#92400E')).join('')}</tr>`;
+    });
+  }
+  if (p.scaleStatRows && p.scaleStatRows.length > 0) {
+    const dec = displayOptions.statDecimalPlaces;
+    p.scaleStatRows.forEach(sr => {
+      const totalVal = sr.values['Total'] != null ? sr.values['Total'].toFixed(dec) : '—';
+      html += `<tr>${td(sr.label, '#FFFBEB', true, 'left', '#666')}${td(totalVal, '#FFFBEB', false, 'center', '#92400E')}${colPaths.map(c => { const v = sr.values[c]; return td(v != null ? v.toFixed(dec) : '—', '#FFFBEB', false, 'center', '#92400E'); }).join('')}</tr>`;
     });
   }
   html += '</tbody></table>';
@@ -3292,7 +3391,19 @@ const ResultTab: React.FC = () => {
     ? buildAxisStructure(activeTable.row_items, getVisibleCodesList, getCodeLabel, resolveCode).axisLabels
     : [];
 
-  const buildTableHtml = () => buildTableHtmlPure({ result, rowNames, colPaths, colHeaderRows, numHeaderRows, displayOptions, statRows, getCodeLabel, rowLabels, formatPct, statValue });
+  const scaleStatRows = result.scale_rows
+    ? Object.entries(result.scale_rows).flatMap(([varName, varData]) => {
+        const v = variables[varName];
+        const rows: { label: string; values: Record<string, number> }[] = [];
+        if (v?.showMean) rows.push({ label: 'Mean', values: varData.mean });
+        if (v?.showStdDev) rows.push({ label: 'Std Dev', values: varData.std_dev });
+        if (v?.showStdError) rows.push({ label: 'Std Error', values: varData.std_error });
+        if (v?.showVariance) rows.push({ label: 'Variance', values: varData.variance });
+        return rows;
+      })
+    : [];
+
+  const buildTableHtml = () => buildTableHtmlPure({ result, rowNames, colPaths, colHeaderRows, numHeaderRows, displayOptions, statRows, getCodeLabel, rowLabels, formatPct, statValue, scaleStatRows });
 
   const buildTableHtmlForTable = (table: Table): string | null => {
     if (!table.result) return null;
@@ -3340,7 +3451,18 @@ const ResultTab: React.FC = () => {
     const tRowLabels = table.row_items?.length
       ? buildAxisStructure(table.row_items, getVisibleCodesList, getCodeLabel, resolveCode).axisLabels
       : [];
-    return buildTableHtmlPure({ result: tResult, rowNames: tRowNames, colPaths: tColPaths, colHeaderRows: tColHeaderRows, numHeaderRows: tNumHeaderRows, displayOptions, statRows: tStatRows, getCodeLabel, rowLabels: tRowLabels, formatPct: tFormatPct, statValue: tStatValue });
+    const tScaleStatRows = tResult.scale_rows
+      ? Object.entries(tResult.scale_rows).flatMap(([varName, varData]) => {
+          const v = variables[varName];
+          const rows: { label: string; values: Record<string, number> }[] = [];
+          if (v?.showMean) rows.push({ label: 'Mean', values: varData.mean });
+          if (v?.showStdDev) rows.push({ label: 'Std Dev', values: varData.std_dev });
+          if (v?.showStdError) rows.push({ label: 'Std Error', values: varData.std_error });
+          if (v?.showVariance) rows.push({ label: 'Variance', values: varData.variance });
+          return rows;
+        })
+      : [];
+    return buildTableHtmlPure({ result: tResult, rowNames: tRowNames, colPaths: tColPaths, colHeaderRows: tColHeaderRows, numHeaderRows: tNumHeaderRows, displayOptions, statRows: tStatRows, getCodeLabel, rowLabels: tRowLabels, formatPct: tFormatPct, statValue: tStatValue, scaleStatRows: tScaleStatRows });
   };
 
   const handleCopy = () => {
@@ -3705,6 +3827,20 @@ const ResultTab: React.FC = () => {
                 {colPaths.map((col, ci) => (
                   <td key={`${sr.key}-${ci}`} className="border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-center text-amber-700 dark:text-amber-400/80">
                     {statValue(sr.key, col)}
+                  </td>
+                ))}
+              </tr>
+            ))}
+            {/* Scale variable stat rows */}
+            {scaleStatRows.map((sr, si) => (
+              <tr key={`scale-stat-${si}`} className="bg-amber-50 dark:bg-amber-900/10">
+                <td className="border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-zinc-500 dark:text-zinc-500 italic font-medium">{sr.label}</td>
+                <td className="border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-center text-amber-700 dark:text-amber-400/80 bg-zinc-100 dark:bg-zinc-800/40 font-medium">
+                  {sr.values['Total'] != null ? sr.values['Total'].toFixed(displayOptions.statDecimalPlaces) : '—'}
+                </td>
+                {colPaths.map((col, ci) => (
+                  <td key={`scale-${si}-${ci}`} className="border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-center text-amber-700 dark:text-amber-400/80">
+                    {sr.values[col] != null ? sr.values[col].toFixed(displayOptions.statDecimalPlaces) : '—'}
                   </td>
                 ))}
               </tr>

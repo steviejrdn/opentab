@@ -39,6 +39,7 @@ class CrosstabResponse(BaseModel):
     std_error: Optional[dict] = None
     std_dev: Optional[dict] = None
     variance: Optional[dict] = None
+    scale_rows: Optional[dict] = None
 
 
 def _assign_scores(working_df, var_name, sm_codes):
@@ -56,11 +57,11 @@ def _assign_scores(working_df, var_name, sm_codes):
         working_df.loc[mask, '_computed_score'] = score
 
 
-def _compute_stats_for_column(df, col_mask, weight_col=None):
+def _compute_stats_for_column(df, col_mask, weight_col=None, col_name='_computed_score'):
     if col_mask.sum() == 0:
         return {'mean': 0, 'std_error': 0, 'std_dev': 0, 'variance': 0}
 
-    values = df.loc[col_mask, '_computed_score'].astype(float)
+    values = pd.to_numeric(df.loc[col_mask, col_name], errors='coerce')
     valid = values.dropna()
 
     if len(valid) == 0:
@@ -68,7 +69,7 @@ def _compute_stats_for_column(df, col_mask, weight_col=None):
 
     if weight_col and weight_col in df.columns:
         weights = df.loc[col_mask, weight_col].astype(float)
-        valid_mask = df.loc[col_mask, '_computed_score'].notna()
+        valid_mask = df.loc[col_mask, col_name].notna()
         weights = weights[valid_mask]
         total_w = weights.sum()
         if total_w == 0:
@@ -146,8 +147,12 @@ async def compute_crosstab(request: CrosstabRequest):
         raise HTTPException(status_code=400, detail="Row definitions are required")
 
     try:
+        scale_item_vars = []
         row_defs = []
         for item in request.row_items:
+            if item.codeDef == '__scale__':
+                scale_item_vars.append(item.variable)
+                continue
             if '/' in item.codeDef:
                 var_part, codes_part = item.codeDef.split('/', 1)
                 codes = codes_part.split(',')
@@ -174,11 +179,21 @@ async def compute_crosstab(request: CrosstabRequest):
                 code_def = f"{var_part}/{code_clean}"
                 col_defs.append({'name': item.variable, 'label': code_def, 'code_def': code_def})
 
-        if request.is_grid_mode and col_defs:
-            crosstab = _compute_grid_crosstab(df, row_defs, col_defs, request.filter_def, request.weight_col)
+        if row_defs:
+            if request.is_grid_mode and col_defs:
+                crosstab = _compute_grid_crosstab(df, row_defs, col_defs, request.filter_def, request.weight_col)
+            else:
+                crosstab = create_crosstab(df, row_defs, col_defs, request.weight_col, request.filter_def)
+            stats = calculate_frequencies(crosstab)
+            counts_dict = stats['counts'].to_dict(orient='index')
+            row_pct_dict = stats['row_pct'].round(1).to_dict(orient='index')
+            col_pct_dict = stats['col_pct'].round(1).to_dict(orient='index')
+            total_pct_dict = stats['total_pct'].round(1).to_dict(orient='index')
         else:
-            crosstab = create_crosstab(df, row_defs, col_defs, request.weight_col, request.filter_def)
-        stats = calculate_frequencies(crosstab)
+            counts_dict = {}
+            row_pct_dict = {}
+            col_pct_dict = {}
+            total_pct_dict = {}
         base = calculate_base(df, request.filter_def)
 
         mean_data = None
@@ -306,16 +321,55 @@ async def compute_crosstab(request: CrosstabRequest):
                     std_dev_data['Total'] = 0
                     variance_data['Total'] = 0
 
+        scale_rows_data = None
+        if scale_item_vars:
+            col_vars_for_scale = {cd['name'] for cd in col_defs}
+            scale_cols_available = set(scale_item_vars) & set(df.columns)
+            if scale_cols_available:
+                needed_cols = list((col_vars_for_scale | scale_cols_available) & set(df.columns))
+                if request.weight_col and request.weight_col in df.columns:
+                    needed_cols.append(request.weight_col)
+                scale_df = df[needed_cols].copy()
+                if request.filter_def:
+                    from ..core.code_parser import parse_code_def
+                    filter_mask = parse_code_def(request.filter_def, df)
+                    scale_df = scale_df[filter_mask]
+
+                scale_col_masks = []
+                for cd in col_defs:
+                    from ..core.code_parser import evaluate_code_def
+                    scale_col_masks.append((cd['label'], evaluate_code_def(cd['code_def'], scale_df)))
+                all_scale_mask = pd.Series([True] * len(scale_df), index=scale_df.index)
+
+                scale_rows_data = {}
+                for var_name in scale_item_vars:
+                    if var_name not in scale_df.columns:
+                        continue
+                    var_stats: dict = {'mean': {}, 'std_dev': {}, 'std_error': {}, 'variance': {}}
+                    for col_label, col_mask in scale_col_masks:
+                        s = _compute_stats_for_column(scale_df, col_mask, request.weight_col, col_name=var_name)
+                        var_stats['mean'][col_label] = s['mean']
+                        var_stats['std_dev'][col_label] = s['std_dev']
+                        var_stats['std_error'][col_label] = s['std_error']
+                        var_stats['variance'][col_label] = s['variance']
+                    s_total = _compute_stats_for_column(scale_df, all_scale_mask, request.weight_col, col_name=var_name)
+                    var_stats['mean']['Total'] = s_total['mean']
+                    var_stats['std_dev']['Total'] = s_total['std_dev']
+                    var_stats['std_error']['Total'] = s_total['std_error']
+                    var_stats['variance']['Total'] = s_total['variance']
+                    scale_rows_data[var_name] = var_stats
+
         return CrosstabResponse(
-            counts=stats['counts'].to_dict(orient='index'),
-            row_pct=stats['row_pct'].round(1).to_dict(orient='index'),
-            col_pct=stats['col_pct'].round(1).to_dict(orient='index'),
-            total_pct=stats['total_pct'].round(1).to_dict(orient='index'),
+            counts=counts_dict,
+            row_pct=row_pct_dict,
+            col_pct=col_pct_dict,
+            total_pct=total_pct_dict,
             base=int(base),
             mean=mean_data,
             std_error=std_error_data,
             std_dev=std_dev_data,
             variance=variance_data,
+            scale_rows=scale_rows_data,
         )
     except ValueError as e:
         print(f"ERROR ValueError: {e}")

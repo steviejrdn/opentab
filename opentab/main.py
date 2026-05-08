@@ -1,4 +1,5 @@
 from pathlib import Path
+from importlib.metadata import version as pkg_version, PackageNotFoundError
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -19,6 +20,13 @@ app.add_middleware(
 app.include_router(data_router, prefix="/api/data")
 app.include_router(tables_router, prefix="/api/tables")
 app.include_router(compute_router, prefix="/api/compute")
+
+@app.get("/api/version")
+def get_version():
+    try:
+        return {"version": pkg_version("opentab")}
+    except PackageNotFoundError:
+        return {"version": "dev"}
 
 static_dir = Path(__file__).parent / "static"
 if static_dir.exists():

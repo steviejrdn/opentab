@@ -38,6 +38,7 @@ export interface VariableInfo {
   showStdError: boolean;
   showStdDev: boolean;
   showVariance: boolean;
+  stats?: { min: number; max: number; mean: number; median: number; std: number };
 }
 
 export interface Table {
@@ -95,6 +96,12 @@ export interface CrosstabResult {
   std_error?: Record<string, Record<string, number>> | null;
   std_dev?: Record<string, Record<string, number>> | null;
   variance?: Record<string, Record<string, number>> | null;
+  scale_rows?: Record<string, {
+    mean: Record<string, number>;
+    std_dev: Record<string, number>;
+    std_error: Record<string, number>;
+    variance: Record<string, number>;
+  }> | null;
 }
 
 export const dataApi = {

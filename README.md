@@ -18,6 +18,7 @@ opentab_ is an open source interactive reporting tool for survey data. It has a 
 - ⚡ **10,000+ variable support** — sidebar, Edit Variables page, EZ Tables, and Create Grid all virtualize their lists; the app stays responsive at any scale
 - 🚀 **Faster modals** — EZ Tables and Create Grid open instantly; Edit Variables panel opens without lag
 - 🏷️ **SPSS file support improved** — variable labels from `.sav` files now display correctly across the build nesting zone and variable picker
+- 📊 **Scale variable support** — continuous/numeric variables (age, score, spend) are auto-detected and display summary stats in the variable panel; drop them to the sidebreak to output Mean, Std Dev, Std Error, and Variance rows in the crosstab
 
 ## Features
 
@@ -26,7 +27,7 @@ opentab_ is an open source interactive reporting tool for survey data. It has a 
 - **Saved Headers** — Save a header configuration as a named variable and reuse it across tables with a single drag
 - **Run All** — Compute all configured tables in one click with live progress feedback
 - **Variable Editor** — Manage codes, labels, visibility, net codes, custom syntax, and factor scores per variable
-- **Statistical Summaries** — Per-variable mean, standard error, standard deviation, and variance alongside frequency counts
+- **Statistical Summaries** — Per-variable mean, standard error, standard deviation, and variance alongside frequency counts; scale/continuous variables output stat rows directly in the crosstab
 - **Filters** — Apply complex AND/OR filter expressions directly to any table
 - **Survey Weights** — Weight counts and statistics by any numeric column
 - **Grid Mode** — Display a set of variables as a compact variable-grid table
@@ -355,6 +356,7 @@ This app is vibe coded using [Claude Code](https://claude.ai/code) and [OpenCode
 
 ### beta v0.3.0 *(8 May 2026)*
 
+- **Feature:** Scale/continuous variable support — numeric variables with more than 10 distinct values (e.g. age, spend, score) are auto-detected as `scale` type across CSV, XLSX, and SAV files. SPSS `variable_measure = scale` is also respected for variables with fewer distinct values. The variable panel shows summary statistics (min, max, mean, median, std dev, N) instead of a code list. Dropping a scale variable to the sidebreak outputs stat rows (Mean, Std Dev, Std Error, Variance) per banner column — with no code-based rows. Each stat can be toggled individually. The build-tab preview shows amber stat row placeholders matching the result layout
 - **Feature:** Update dataset without losing your work — swap in a new CSV, XLSX, or SAV file from the settings panel while keeping all existing tables, variable edits, and folder structure intact. Columns missing from the new file are flagged automatically
 - **Performance:** Variable sidebar now virtualizes rendering — only visible items are in the DOM, making the app stay responsive even with 10,000+ variable datasets
 - **Performance:** Edit Variables page virtualizes table rows and adds a search filter — opening and closing the variable editor panel is instant even with 10,000+ variable datasets

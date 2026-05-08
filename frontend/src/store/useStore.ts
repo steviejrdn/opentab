@@ -145,8 +145,12 @@ export const useStore = create<AppState>()((set, get) => ({
     // Sort codes for each variable
     const sortedVars: Record<string, VariableInfo> = {};
     for (const [key, info] of Object.entries(variables)) {
+      const scaleDefaults = info.type === 'scale'
+        ? { showMean: info.showMean ?? true, showStdDev: info.showStdDev ?? true, showStdError: info.showStdError ?? true, showVariance: info.showVariance ?? true }
+        : {};
       sortedVars[key] = {
         ...info,
+        ...scaleDefaults,
         codes: [...info.codes].sort((a, b) => {
           const aCode = String(a.code);
           const bCode = String(b.code);

@@ -736,7 +736,7 @@ export const VariableEditPanel: React.FC<VariableEditPanelProps> = ({
         </div>
 
         {/* Fixed Toolbar */}
-        <div className="px-4 py-2 border-b border-zinc-200 dark:border-zinc-700 shrink-0 flex items-center gap-2">
+        {variable.type !== 'scale' && <div className="px-4 py-2 border-b border-zinc-200 dark:border-zinc-700 shrink-0 flex items-center gap-2">
           {/* Netting button - appears when 2+ codes selected, custom vars only */}
           {variable.isCustom && canNet && !showNetInput && (
             <button
@@ -802,10 +802,37 @@ export const VariableEditPanel: React.FC<VariableEditPanelProps> = ({
               </span>
             )}
           </button>
-        </div>
+        </div>}
+
+        {/* Scale Variable Stats Grid */}
+        {variable.type === 'scale' && (
+          <div className="flex-1 px-4 py-4">
+            <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300 mb-3">Summary Statistics</h3>
+            {variable.stats ? (
+              <div className="grid grid-cols-2 gap-3">
+                {([
+                  ['Min', variable.stats.min],
+                  ['Max', variable.stats.max],
+                  ['Mean', variable.stats.mean],
+                  ['Median', variable.stats.median],
+                  ['Std Dev', variable.stats.std],
+                  ['N', variable.responseCount],
+                ] as [string, number][]).map(([label, value]) => (
+                  <div key={label} className="flex justify-between items-center px-3 py-2 bg-zinc-50 dark:bg-zinc-800 rounded border border-zinc-200 dark:border-zinc-700">
+                    <span className="text-xs text-zinc-500">{label}</span>
+                    <span className="text-xs font-mono font-medium text-zinc-800 dark:text-zinc-200">{value}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-zinc-400">No summary statistics available.</p>
+            )}
+            <p className="mt-3 text-xs text-zinc-400 dark:text-zinc-600">Drag to Sidebreak to compute mean, std dev, std error, and variance in the crosstab.</p>
+          </div>
+        )}
 
         {/* Scrollable Codes Section */}
-        <div className="flex-1 overflow-y-auto px-4 py-3">
+        {variable.type !== 'scale' && <div className="flex-1 overflow-y-auto px-4 py-3">
           {/* Codes Header */}
           <div className="mb-3">
             <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Codes</h3>
@@ -946,7 +973,7 @@ export const VariableEditPanel: React.FC<VariableEditPanelProps> = ({
               No codes available
             </p>
           )}
-        </div>
+        </div>}
       </div>
 
       {/* Syntax Builder Modal */}
