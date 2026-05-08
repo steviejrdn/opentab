@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { BrowserRouter as Router, Routes, Route, Navigate, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useStore } from './store/useStore';
@@ -31,6 +31,30 @@ function buildNameToKeyMap(vars: Record<string, VariableInfo>): Record<string, s
     map[displayName] = key;
   });
   return map;
+}
+
+function buildNetRegistry(vars: Record<string, VariableInfo>): Record<string, { variable: string; label: string; netOf: string[]; syntax: string }> {
+  const registry: Record<string, { variable: string; label: string; netOf: string[]; syntax: string }> = {};
+  Object.entries(vars).forEach(([varKey, info]) => {
+    info.codes.forEach((code: any) => {
+      if (code.isNet && code.code) {
+        registry[code.code] = { variable: varKey, label: code.label || code.code, netOf: code.netOf || [], syntax: code.syntax || '' };
+      }
+    });
+  });
+  return registry;
+}
+
+function buildCodeRegistry(vars: Record<string, VariableInfo>): Record<string, { variable: string; code: string; syntax: string }> {
+  const registry: Record<string, { variable: string; code: string; syntax: string }> = {};
+  Object.entries(vars).forEach(([varKey, info]) => {
+    info.codes.forEach((code: any) => {
+      if (!code.isNet && code.syntax && code.code) {
+        registry[`${varKey}/${code.code}`] = { variable: varKey, code: code.code, syntax: code.syntax };
+      }
+    });
+  });
+  return registry;
 }
 
 function getTreeMaxDepth(item: DropItem): number {
@@ -2564,7 +2588,7 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
 
   const activeTable = tables.find((t) => t.id === activeTableId);
 
-  const resolveCode = (variable: string, code: string): string => {
+  const resolveCode = useCallback((variable: string, code: string): string => {
     const codeObj = variables[variable]?.codes.find((c: any) => c.code === code);
     const raw = codeObj?.syntax ?? `$${variable}/${code}`;
     return raw.replace(/\$([A-Za-z_][A-Za-z0-9_]*)\//g, (_, vn) => {
@@ -2572,19 +2596,25 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
       while (variables[v]?.sourceKey && depth++ < 10) v = variables[v].sourceKey!;
       return `$${v}/`;
     });
-  };
+  }, [variables]);
 
-  const getCodeLabel = (key: string, variable?: string, code?: string): string => {
+  const getVisibleCodesList = useCallback((variable: string): string[] => {
+    const v = variables[variable];
+    if (!v) return [];
+    return v.codes
+      .filter((c: any) => c.visibility !== 'removed' && c.visibility !== 'hidden')
+      .map((c: any) => c.code);
+  }, [variables]);
+
+  const getCodeLabel = useCallback((key: string, variable?: string, code?: string): string => {
     if (variable && code) {
       const codeObj = variables[variable]?.codes.find((c: any) => c.code === code);
       if (codeObj) return codeObj.label || code;
     }
-    // Pass 1: custom/new codes take priority to resolve label conflicts (e.g. TB vs original code)
     for (const [varKey, vInfo] of Object.entries(variables)) {
       const m = (vInfo.codes as any[]).find((c) => c.syntax && (c.isNew || c.isCustom) && resolveCode(varKey, c.code) === key);
       if (m) return m.label;
     }
-    // Pass 2: regular codes with syntax
     for (const [varKey, vInfo] of Object.entries(variables)) {
       const m = (vInfo.codes as any[]).find((c) => c.syntax && resolveCode(varKey, c.code) === key);
       if (m) return m.label;
@@ -2599,49 +2629,11 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
     if (!variable_) return code_;
     const codeObj = variable_.codes.find((c: any) => c.code === code_);
     return codeObj?.label || code_;
-  };
+  }, [variables, resolveCode]);
 
-  const getVisibleCodesList = (variable: string): string[] => {
-    const v = variables[variable];
-    if (!v) return [];
-    return v.codes
-      .filter((c: any) => c.visibility !== 'removed' && c.visibility !== 'hidden')
-      .map((c: any) => c.code);
-  };
-
-  const buildNetRegistry = (vars: Record<string, VariableInfo>): Record<string, { variable: string; label: string; netOf: string[]; syntax: string }> => {
-    const registry: Record<string, { variable: string; label: string; netOf: string[]; syntax: string }> = {};
-    Object.entries(vars).forEach(([varKey, info]) => {
-      info.codes.forEach((code: any) => {
-        if (code.isNet && code.code) {
-          registry[code.code] = {
-            variable: varKey,
-            label: code.label || code.code,
-            netOf: code.netOf || [],
-            syntax: code.syntax || '',
-          };
-        }
-      });
-    });
-    return registry;
-  };
-
-  const buildCodeRegistry = (vars: Record<string, VariableInfo>): Record<string, { variable: string; code: string; syntax: string }> => {
-    const registry: Record<string, { variable: string; code: string; syntax: string }> = {};
-    Object.entries(vars).forEach(([varKey, info]) => {
-      info.codes.forEach((code: any) => {
-        // Only register non-net codes that have custom syntax
-        if (!code.isNet && code.syntax && code.code) {
-          registry[`${varKey}/${code.code}`] = {
-            variable: varKey,
-            code: code.code,
-            syntax: code.syntax,
-          };
-        }
-      });
-    });
-    return registry;
-  };
+  const netRegistry = useMemo(() => buildNetRegistry(variables), [variables]);
+  const codeRegistry = useMemo(() => buildCodeRegistry(variables), [variables]);
+  const nameToKeyMap = useMemo(() => buildNameToKeyMap(variables), [variables]);
 
   const handleGenerate = async (tableId?: string) => {
     const targetId = tableId ?? activeTableId;
@@ -2739,9 +2731,9 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
         filter_def: effectiveFilter,
         weight_col: targetTable.weight_col || undefined,
         mean_score_mappings: meanMappings.length > 0 ? meanMappings : undefined,
-        name_to_key: buildNameToKeyMap(variables),
-        net_registry: buildNetRegistry(variables),
-        code_registry: buildCodeRegistry(variables),
+        name_to_key: nameToKeyMap,
+        net_registry: netRegistry,
+        code_registry: codeRegistry,
       });
       setTableResult(targetId!, result);
       if (isActiveTable) setLocalTab('result');
@@ -3283,13 +3275,7 @@ const ResultTab: React.FC = () => {
   const activeTable = tables.find((t) => t.id === activeTableId);
   const result = activeTable?.result;
 
-  if (!result) return (
-    <div className="flex items-center justify-center h-full text-zinc-400 dark:text-zinc-600 text-sm">run a table first</div>
-  );
-
-  const rowNames = Object.keys(result.counts).filter((k) => k !== 'Total');
-
-  const resolveCode = (variable: string, code: string): string => {
+  const resolveCode = useCallback((variable: string, code: string): string => {
     const codeObj = variables[variable]?.codes.find((c: any) => c.code === code);
     const raw = codeObj?.syntax ?? `$${variable}/${code}`;
     return raw.replace(/\$([A-Za-z_][A-Za-z0-9_]*)\//g, (_, vn) => {
@@ -3297,19 +3283,25 @@ const ResultTab: React.FC = () => {
       while (variables[v]?.sourceKey && depth++ < 10) v = variables[v].sourceKey!;
       return `$${v}/`;
     });
-  };
+  }, [variables]);
 
-  const getCodeLabel = (key: string, variable?: string, code?: string): string => {
+  const getVisibleCodesList = useCallback((variable: string): string[] => {
+    const v = variables[variable];
+    if (!v) return [];
+    return v.codes
+      .filter((c: any) => c.visibility !== 'removed' && c.visibility !== 'hidden')
+      .map((c: any) => c.code);
+  }, [variables]);
+
+  const getCodeLabel = useCallback((key: string, variable?: string, code?: string): string => {
     if (variable && code) {
       const codeObj = variables[variable]?.codes.find((c: any) => c.code === code);
       if (codeObj) return codeObj.label || code;
     }
-    // Pass 1: custom/new codes take priority to resolve label conflicts (e.g. TB vs original code)
     for (const [varKey, vInfo] of Object.entries(variables)) {
       const m = (vInfo.codes as any[]).find((c) => c.syntax && (c.isNew || c.isCustom) && resolveCode(varKey, c.code) === key);
       if (m) return m.label;
     }
-    // Pass 2: regular codes with syntax
     for (const [varKey, vInfo] of Object.entries(variables)) {
       const m = (vInfo.codes as any[]).find((c) => c.syntax && resolveCode(varKey, c.code) === key);
       if (m) return m.label;
@@ -3324,15 +3316,27 @@ const ResultTab: React.FC = () => {
     if (!variable_) return code_;
     const codeObj = variable_.codes.find((c: any) => c.code === code_);
     return codeObj?.label || code_;
-  };
+  }, [variables, resolveCode]);
 
-  const getVisibleCodesList = (variable: string): string[] => {
-    const v = variables[variable];
-    if (!v) return [];
-    return v.codes
-      .filter((c: any) => c.visibility !== 'removed' && c.visibility !== 'hidden')
-      .map((c: any) => c.code);
-  };
+  const colAxisResult = useMemo(() =>
+    activeTable?.col_items?.length
+      ? buildAxisStructure(activeTable.col_items, getVisibleCodesList, getCodeLabel, resolveCode)
+      : null,
+    [activeTable?.col_items, getVisibleCodesList, getCodeLabel, resolveCode]
+  );
+
+  const rowLabels = useMemo(() =>
+    activeTable?.row_items?.length
+      ? buildAxisStructure(activeTable.row_items, getVisibleCodesList, getCodeLabel, resolveCode).axisLabels
+      : [],
+    [activeTable?.row_items, getVisibleCodesList, getCodeLabel, resolveCode]
+  );
+
+  if (!result) return (
+    <div className="flex items-center justify-center h-full text-zinc-400 dark:text-zinc-600 text-sm">run a table first</div>
+  );
+
+  const rowNames = Object.keys(result.counts).filter((k) => k !== 'Total');
 
   // Detect grid mode and build column headers accordingly
   const isGridMode = activeTable?.grid_items && activeTable.grid_items.length > 0 && activeTable.col_items.length === 0;
@@ -3340,7 +3344,6 @@ const ResultTab: React.FC = () => {
   let colHeaderRows: ColHeaderCell[][], colPaths: string[];
 
   if (isGridMode) {
-    // Grid mode: columns from grid_items, show variable labels
     colPaths = activeTable!.grid_items.map(item => `$${item.variable}/*`);
     colHeaderRows = [[
       ...activeTable!.grid_items.map(item => ({
@@ -3348,13 +3351,11 @@ const ResultTab: React.FC = () => {
         colSpan: 1,
         rowSpan: 1
       }))
-    ]];}
-  else if (activeTable?.col_items.length) {
-    const colResult = buildAxisStructure(activeTable.col_items, getVisibleCodesList, getCodeLabel, resolveCode);
-    colHeaderRows = colResult.headerRows;
-    colPaths = colResult.axisPaths;
+    ]];
+  } else if (activeTable?.col_items.length) {
+    colHeaderRows = colAxisResult!.headerRows;
+    colPaths = colAxisResult!.axisPaths;
   } else {
-    // Fallback for normal tables without col_items
     colPaths = Object.keys(result.counts[rowNames[0] || 'Total'] || {}).filter((k) => k !== 'Total');
     colHeaderRows = [[]];
   }
@@ -3386,10 +3387,6 @@ const ResultTab: React.FC = () => {
     if (val == null) return '—';
     return typeof val === 'number' ? val.toFixed(displayOptions.statDecimalPlaces) : val;
   };
-
-  const rowLabels: string[] = activeTable?.row_items?.length
-    ? buildAxisStructure(activeTable.row_items, getVisibleCodesList, getCodeLabel, resolveCode).axisLabels
-    : [];
 
   const scaleStatRows = result.scale_rows
     ? Object.entries(result.scale_rows).flatMap(([varName, varData]) => {

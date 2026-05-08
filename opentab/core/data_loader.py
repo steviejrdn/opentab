@@ -273,16 +273,13 @@ def merge_multiple_response(df, source_columns, name):
     Returns:
         pandas Series with semicolon-delimited codes (e.g. "1;3;5") or empty string if none selected.
     """
-    result = pd.Series(index=df.index, dtype=object)
-    for idx in df.index:
-        selected = []
-        for i, col in enumerate(source_columns):
-            val = str(df.at[idx, col]).strip()
-            if val == '1':
-                selected.append(str(i + 1))
-        result.iloc[idx] = ';'.join(selected) if selected else ''
-
-    return result
+    bool_df = pd.DataFrame(
+        {col: df[col].astype(str).str.strip() == '1' for col in source_columns}
+    )
+    return bool_df.apply(
+        lambda row: ';'.join(str(i + 1) for i, v in enumerate(row) if v),
+        axis=1
+    )
 
 
 def merge_spread_columns(df, source_columns, name):
@@ -296,16 +293,12 @@ def merge_spread_columns(df, source_columns, name):
     Returns:
         pandas Series with semicolon-delimited codes (e.g. "1;2;3;4") or empty string if none selected.
     """
-    result = pd.Series(index=df.index, dtype=object)
-    for idx in df.index:
-        selected = []
-        for col in source_columns:
-            val = str(df.at[idx, col]).strip()
-            if val and val.lower() not in ('', 'nan', 'null', 'none'):
-                selected.append(val)
-        result.iloc[idx] = ';'.join(selected) if selected else ''
+    def clean(series):
+        s = series.astype(str).str.strip()
+        return s.where(~s.str.lower().isin(['', 'nan', 'null', 'none']), other='')
 
-    return result
+    parts = pd.concat([clean(df[col]).rename(col) for col in source_columns], axis=1)
+    return parts.apply(lambda row: ';'.join(v for v in row if v), axis=1)
 
 
 def merge_codes_or_and(df, source_variables, result_name, operator):
@@ -348,26 +341,16 @@ def merge_codes_or_and(df, source_variables, result_name, operator):
                 "All variables must have the same number of codes."
             )
 
-    result = pd.Series(index=df.index, dtype=object)
-    code_sep = ";"
+    bool_cols = {}
+    for code_pos in range(1, n_codes + 1):
+        col_series = [
+            df[f"{var}_{code_pos}"].astype(str).str.strip() == '1'
+            if f"{var}_{code_pos}" in df.columns
+            else pd.Series(False, index=df.index)
+            for var in source_variables
+        ]
+        combined = pd.concat(col_series, axis=1)
+        bool_cols[str(code_pos)] = combined.any(axis=1) if operator == "OR" else combined.all(axis=1)
 
-    for idx in df.index:
-        selected = []
-        for code_pos in range(1, n_codes + 1):
-            code_str = str(code_pos)
-            vals = []
-            for var in source_variables:
-                col_name = f"{var}_{code_pos}"
-                val = str(df.at[idx, col_name]).strip() if col_name in df.columns else "0"
-                vals.append(val)
-
-            if operator == "OR":
-                if any(v == "1" for v in vals):
-                    selected.append(code_str)
-            elif operator == "AND":
-                if all(v == "1" for v in vals):
-                    selected.append(code_str)
-
-        result.iloc[idx] = code_sep.join(selected) if selected else ""
-
-    return result
+    result_df = pd.DataFrame(bool_cols, index=df.index)
+    return result_df.apply(lambda row: ';'.join(c for c in result_df.columns if row[c]), axis=1)
