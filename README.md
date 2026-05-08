@@ -12,7 +12,7 @@ opentab_ is an open source interactive reporting tool for survey data. It has a 
 
 ## What's New — beta v0.3.0
 
-> **Latest release:** beta v0.3.0 — 8 May 2026
+> **Latest release:** beta v0.3.0 — 9 May 2026
 
 - 🔔 **Auto-update check** — opentab now silently checks for a newer version on startup. If one is available, a banner appears with the update command ready to copy — no need to check GitHub manually
 - 🔄 **Update dataset** — swap in a new file without losing tables, edits, or folder structure
@@ -20,6 +20,7 @@ opentab_ is an open source interactive reporting tool for survey data. It has a 
 - 🚀 **Faster modals** — EZ Tables and Create Grid open instantly; Edit Variables panel opens without lag
 - 🏷️ **SPSS file support improved** — variable labels from `.sav` files now display correctly across the build nesting zone and variable picker
 - 📊 **Scale variable support** — continuous/numeric variables (age, score, spend) are auto-detected and display summary stats in the variable panel; drop them to the sidebreak to output Mean, Std Dev, Std Error, and Variance rows in the crosstab
+- 🗂️ **Survey tool format support** — datasets from Dimensions, Confirmit, and similar tools using `{_N}` coded format are now loaded and detected correctly out of the box
 
 ## Features
 
@@ -353,7 +354,7 @@ This app is vibe coded using [Claude Code](https://claude.ai/code) and [OpenCode
 
 ## Changelog
 
-### beta v0.3.0 *(8 May 2026)*
+### beta v0.3.0 *(9 May 2026)*
 
 - **Feature:** Auto-update check — on startup, opentab silently fetches the latest version from the main branch. If a newer version is available, a banner appears below the navigation bar showing the current and latest versions, with the pip install command ready to copy. The banner only appears for pip-installed users; dev mode is unaffected
 - **Feature:** Scale/continuous variable support — numeric variables with more than 10 distinct values (e.g. age, spend, score) are auto-detected as `scale` type across CSV, XLSX, and SAV files. SPSS `variable_measure = scale` is also respected for variables with fewer distinct values. The variable panel shows summary statistics (min, max, mean, median, std dev, N) instead of a code list. Dropping a scale variable to the sidebreak outputs stat rows (Mean, Std Dev, Std Error, Variance) per banner column — with no code-based rows. Each stat can be toggled individually. The build-tab preview shows amber stat row placeholders matching the result layout
@@ -368,6 +369,9 @@ This app is vibe coded using [Claude Code](https://claude.ai/code) and [OpenCode
 - **Performance:** Crosstab computation is faster on weighted data — the weight column is now cast to float once before the row×column loop instead of once per cell
 - **Performance:** UI interactions (drag, build zone updates) are smoother — expensive label-lookup and code-registry functions are now memoized and only recompute when variable definitions change, not on every render
 - **Performance:** Merge variable operations (dichotomous, spread, OR/AND) are significantly faster on large datasets — row-by-row `.at[]` loops replaced with vectorized pandas operations
+- **Feature:** Survey tool coded format support (`{_N}`) — datasets exported from tools like Dimensions/Confirmit use `{_1}`, `{_2}` for single-answer codes and `{_1,_2,_3}` for multiple-answer. opentab now detects and normalizes this format automatically at load time — no manual conversion needed. Multiple-answer variables in this format are detected correctly without relying on semicolons
+- **Feature:** Open-ended/text column detection — free-text columns, date fields, and ID columns are now classified as `text` type and excluded from code-based analysis
+- **UX:** Version number (`v0.3.0`) now displayed in the navigation bar alongside the beta badge
 - **Fix:** Build nesting items now correctly show SPSS variable labels for `.sav` files — variable key in green, SPSS label as grey sub-text (was showing the key twice when no distinct label was set)
 - **Fix:** Variable picker inside the nesting modal now shows SPSS labels in grey parentheses next to the variable key
 - **UX:** Loading screen now shows a progress bar with phase-aware text ("Twerking..." → "Loading variable list...") so it's clear the app is working and not frozen
