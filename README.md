@@ -14,6 +14,7 @@ opentab_ is an open source interactive reporting tool for survey data. It has a 
 
 > **Latest release:** beta v0.3.0 — 8 May 2026
 
+- 🔔 **Auto-update check** — opentab now silently checks for a newer version on startup. If one is available, a banner appears with the update command ready to copy — no need to check GitHub manually
 - 🔄 **Update dataset** — swap in a new file without losing tables, edits, or folder structure
 - ⚡ **10,000+ variable support** — sidebar, Edit Variables page, EZ Tables, and Create Grid all virtualize their lists; the app stays responsive at any scale
 - 🚀 **Faster modals** — EZ Tables and Create Grid open instantly; Edit Variables panel opens without lag
@@ -356,6 +357,7 @@ This app is vibe coded using [Claude Code](https://claude.ai/code) and [OpenCode
 
 ### beta v0.3.0 *(8 May 2026)*
 
+- **Feature:** Auto-update check — on startup, opentab silently fetches the latest version from the main branch. If a newer version is available, a banner appears below the navigation bar showing the current and latest versions, with the pip install command ready to copy. The banner only appears for pip-installed users; dev mode is unaffected
 - **Feature:** Scale/continuous variable support — numeric variables with more than 10 distinct values (e.g. age, spend, score) are auto-detected as `scale` type across CSV, XLSX, and SAV files. SPSS `variable_measure = scale` is also respected for variables with fewer distinct values. The variable panel shows summary statistics (min, max, mean, median, std dev, N) instead of a code list. Dropping a scale variable to the sidebreak outputs stat rows (Mean, Std Dev, Std Error, Variance) per banner column — with no code-based rows. Each stat can be toggled individually. The build-tab preview shows amber stat row placeholders matching the result layout
 - **Feature:** Update dataset without losing your work — swap in a new CSV, XLSX, or SAV file from the settings panel while keeping all existing tables, variable edits, and folder structure intact. Columns missing from the new file are flagged automatically
 - **Performance:** Variable sidebar now virtualizes rendering — only visible items are in the DOM, making the app stay responsive even with 10,000+ variable datasets
