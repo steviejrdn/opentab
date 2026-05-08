@@ -2530,7 +2530,7 @@ const EzTablesModal: React.FC = () => {
 
 // ─── Build Page ───────────────────────────────────────────────────────────────
 const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ onLoadSample, loading }) => {
-  const { dataLoaded, activeTableId, tables, variables, savedHeaders, addSavedHeader, removeSavedHeader, removeRowItem, removeColItem, removeGridItem, setTableResult, updateTable, setGridMode, toggleVariableStat, setShowEzTablesModal } = useStore();
+  const { dataLoaded, activeTableId, tables, variables, addSavedHeader, removeRowItem, removeColItem, removeGridItem, setTableResult, updateTable, setGridMode, toggleVariableStat, setShowEzTablesModal } = useStore();
   const [localTab, setLocalTab] = useState<'build' | 'filter' | 'result'>('build');
   const [saveHeaderName, setSaveHeaderName] = useState('');
   const [showSaveHeaderForm, setShowSaveHeaderForm] = useState(false);
