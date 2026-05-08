@@ -369,20 +369,6 @@ This app is vibe coded using [Claude Code](https://claude.ai/code) and [OpenCode
 - **Fix:** Variable picker inside the nesting modal now shows SPSS labels in grey parentheses next to the variable key
 - **UX:** Loading screen now shows a progress bar with phase-aware text ("Twerking..." → "Loading variable list...") so it's clear the app is working and not frozen
 
-### beta v0.2.2 *(7 May 2026)*
-
-- **Feature:** Upload `.xlsx` and `.sav` files directly — Excel and SPSS files are now supported alongside CSV. Multi-sheet Excel files prompt for sheet selection; SPSS files auto-import variable labels and value labels
-- **Fix:** Column names containing `.` no longer cause crosstab 400 errors — dots are automatically converted to underscores on file load
-- **UX:** "⚡ EZ Tables" button now appears in the empty state when no tables exist, eliminating the need to create a dummy table first
-- **UX:** Renaming a custom variable to a name that already exists now shows an inline warning instead of silently doing nothing
-- **UX:** Duplicate variable names now use the prefix `d_` (e.g. `d_Q1`) instead of `Q1 (copy)`
-
-### beta v0.2.1 *(30 Apr 2026)*
-
-- **Fix:** Duplicate variable stats now independent of original variable — duplicate variables (e.g. VQ2 copied from Q2) can now show mean/std error/std dev/variance using their own factor scores, without requiring the original variable to have factors set
-- **UI:** All drag overlays now use a uniform neutral background (`zinc-100`) so visual weight is consistent across the build tab, EZ Tables modal, and saved headers
-- **UI:** Consistent `opacity-95` applied to all drag overlays
-
 ---
 
 **Made with ❤️ from market researcher to another**
