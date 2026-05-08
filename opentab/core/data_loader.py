@@ -1,7 +1,23 @@
 import json
 import os
+import re
 import pandas as pd
 import chardet
+
+_CURLY_RE = re.compile(r'^\{([^}]*)\}$')
+
+
+def _parse_curly_codes(val):
+    """Parse '{_1,_2,_3}' → ['1', '2', '3']. Returns None if not curly format."""
+    m = _CURLY_RE.match(str(val))
+    if not m:
+        return None
+    inner = m.group(1)
+    return [p.lstrip('_') for p in inner.split(',') if p.strip()]
+
+
+def _code_sort_key(x):
+    return (int(x) if str(x).isdigit() else float('inf'), str(x))
 
 
 def detect_encoding(path):
@@ -56,13 +72,54 @@ def detect_column_types(df):
             metadata[col] = {'type': 'unknown', 'answer_type': 'single_answer', 'codes': [], 'response_count': 0, 'base_count': base_count, 'is_valid': True}
             continue
 
+        str_vals = non_null.astype(str)
+
+        # --- Rule 1: {_N} survey coded format ---
+        if str_vals.str.match(r'^\{[^}]*\}$').all():
+            has_multi = str_vals.str.contains(',', regex=False).any()
+            if has_multi:
+                all_codes = set()
+                response_count = 0
+                for val in non_null:
+                    codes = _parse_curly_codes(val) or []
+                    all_codes.update(codes)
+                    response_count += len(codes)
+                df[col] = df[col].map(
+                    lambda v: ';'.join(_parse_curly_codes(str(v))) if pd.notna(v) else v
+                )
+                metadata[col] = {
+                    'type': 'categorical',
+                    'answer_type': 'multiple_answer',
+                    'codes': [{'code': c, 'label': c} for c in sorted(all_codes, key=_code_sort_key)],
+                    'response_count': response_count,
+                    'base_count': base_count,
+                    'is_valid': True
+                }
+            else:
+                unique_codes = sorted(
+                    {_parse_curly_codes(v)[0] for v in non_null if _parse_curly_codes(v)},
+                    key=_code_sort_key
+                )
+                df[col] = df[col].map(
+                    lambda v: _parse_curly_codes(str(v))[0] if pd.notna(v) else v
+                )
+                metadata[col] = {
+                    'type': 'categorical',
+                    'answer_type': 'single_answer',
+                    'codes': [{'code': c, 'label': c} for c in unique_codes],
+                    'response_count': len(non_null),
+                    'base_count': base_count,
+                    'is_valid': len(non_null) == base_count
+                }
+            continue
+
+        # --- Rule 2: Raw numeric → boolean / numeric / scale ---
         try:
             numeric_vals = pd.to_numeric(non_null, errors='coerce')
             if numeric_vals.isna().sum() == 0:
                 unique_vals = sorted(numeric_vals.unique().tolist())
-
-                # Detect boolean (only 0 and/or 1)
                 unique_set = set(unique_vals)
+
                 if unique_set.issubset({0, 1, 0.0, 1.0}):
                     metadata[col] = {
                         'type': 'boolean',
@@ -72,95 +129,63 @@ def detect_column_types(df):
                         'base_count': base_count,
                         'is_valid': len(non_null) == base_count
                     }
-                else:
-                    if len(unique_vals) > 10:
-                        metadata[col] = {
-                            'type': 'scale',
-                            'answer_type': 'single_answer',
-                            'codes': [],
-                            'stats': {
-                                'min': round(float(numeric_vals.min()), 2),
-                                'max': round(float(numeric_vals.max()), 2),
-                                'mean': round(float(numeric_vals.mean()), 2),
-                                'median': round(float(numeric_vals.median()), 2),
-                                'std': round(float(numeric_vals.std()), 2),
-                            },
-                            'response_count': len(non_null),
-                            'base_count': base_count,
-                            'is_valid': len(non_null) == base_count,
-                        }
-                    else:
-                        metadata[col] = {
-                            'type': 'numeric',
-                            'answer_type': 'single_answer',
-                            'codes': unique_vals,
-                            'response_count': len(non_null),
-                            'base_count': base_count,
-                            'is_valid': len(non_null) == base_count
-                        }
-            else:
-                # Check for semicolon-delimited multiple response
-                has_semicolon = non_null.astype(str).str.contains(';', regex=False).any()
-
-                if has_semicolon:
-                    # Auto-extract individual codes from semicolon-delimited values
-                    all_codes = set()
-                    response_count = 0
-
-                    for val in non_null:
-                        codes = [c.strip() for c in str(val).split(';') if c.strip()]
-                        all_codes.update(codes)
-                        response_count += len(codes)
-
+                elif len(unique_vals) > 10:
                     metadata[col] = {
-                        'type': 'categorical',
-                        'answer_type': 'multiple_answer',
-                        'codes': [{'code': c, 'label': c} for c in sorted(all_codes)],
-                        'response_count': response_count,
+                        'type': 'scale',
+                        'answer_type': 'single_answer',
+                        'codes': [],
+                        'stats': {
+                            'min': round(float(numeric_vals.min()), 2),
+                            'max': round(float(numeric_vals.max()), 2),
+                            'mean': round(float(numeric_vals.mean()), 2),
+                            'median': round(float(numeric_vals.median()), 2),
+                            'std': round(float(numeric_vals.std()), 2),
+                        },
+                        'response_count': len(non_null),
                         'base_count': base_count,
-                        'is_valid': True  # Multiple answer is always valid
+                        'is_valid': len(non_null) == base_count,
                     }
                 else:
-                    unique_vals = sorted(non_null.unique().tolist(), key=lambda x: (int(x) if str(x).isdigit() else float('inf'), str(x)))
                     metadata[col] = {
-                        'type': 'categorical',
+                        'type': 'numeric',
                         'answer_type': 'single_answer',
-                        'codes': [{'code': v, 'label': str(v)} for v in unique_vals],
+                        'codes': unique_vals,
                         'response_count': len(non_null),
                         'base_count': base_count,
                         'is_valid': len(non_null) == base_count
                     }
+                continue
         except Exception:
-            # Check for semicolon-delimited multiple response even in exception case
-            has_semicolon = non_null.astype(str).str.contains(';', regex=False).any()
+            pass
 
-            if has_semicolon:
-                all_codes = set()
-                response_count = 0
+        # --- Rule 3: Semicolon-delimited multiple response (legacy CSV format) ---
+        if str_vals.str.contains(';', regex=False).any():
+            all_codes = set()
+            response_count = 0
+            for val in non_null:
+                codes = [c.strip() for c in str(val).split(';') if c.strip()]
+                all_codes.update(codes)
+                response_count += len(codes)
+            metadata[col] = {
+                'type': 'categorical',
+                'answer_type': 'multiple_answer',
+                'codes': [{'code': c, 'label': c} for c in sorted(all_codes, key=_code_sort_key)],
+                'response_count': response_count,
+                'base_count': base_count,
+                'is_valid': True
+            }
+            continue
 
-                for val in non_null:
-                    codes = [c.strip() for c in str(val).split(';') if c.strip()]
-                    all_codes.update(codes)
-                    response_count += len(codes)
+        # --- Rule 4: Everything else → text (open-ended / dates / IDs / misc) ---
+        metadata[col] = {
+            'type': 'text',
+            'answer_type': 'single_answer',
+            'codes': [],
+            'response_count': len(non_null),
+            'base_count': base_count,
+            'is_valid': len(non_null) == base_count
+        }
 
-                metadata[col] = {
-                    'type': 'categorical',
-                    'answer_type': 'multiple_answer',
-                    'codes': [{'code': c, 'label': c} for c in sorted(all_codes)],
-                    'response_count': response_count,
-                    'base_count': base_count,
-                    'is_valid': True
-                }
-            else:
-                unique_vals = sorted(non_null.unique().tolist(), key=lambda x: (int(x) if str(x).isdigit() else float('inf'), str(x)))
-                metadata[col] = {
-                    'type': 'categorical',
-                    'answer_type': 'single_answer',
-                    'codes': [{'code': v, 'label': str(v)} for v in unique_vals],
-                    'response_count': len(non_null),
-                    'base_count': base_count,
-                    'is_valid': len(non_null) == base_count
-                }
     return metadata
 
 

@@ -764,6 +764,9 @@ const Navigation: React.FC = () => {
         <span className="text-xs text-zinc-400 dark:text-zinc-600 border border-zinc-300 dark:border-zinc-700 px-1.5 py-0.5 leading-none">
           beta
         </span>
+        <span className="text-xs text-zinc-400 dark:text-zinc-600 leading-none">
+          v0.3.0
+        </span>
       </div>
       <div className="flex items-center gap-4">
         <div className="flex gap-1">

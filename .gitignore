@@ -54,3 +54,6 @@ backend/temp/
 test_data/
 test_*.sav
 test_*.csv
+
+# Internal docs
+QA_CHALLENGE.md
