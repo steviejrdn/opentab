@@ -20,7 +20,7 @@ import type { VariableInfo, VariableCode } from '../lib/api';
 import { useStore } from '../store/useStore';
 
 // Simple icons using text/symbols
-const XIcon = () => <span className="text-xl">×</span>;
+const XIcon = () => <span className="text-xl text-zinc-400 dark:text-zinc-500">×</span>;
 const GripIcon = () => <span className="text-zinc-400">⋮⋮</span>;
 const EyeIcon = () => <span>👁</span>;
 const EyeOffIcon = () => <span className="opacity-50">👁</span>;
@@ -151,7 +151,7 @@ const SyntaxBuilderModal: React.FC<SyntaxBuilderModalProps> = ({ variables, init
       <div className="bg-white dark:bg-zinc-900 rounded-lg shadow-xl w-[820px] max-h-[85vh] flex flex-col">
         <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-200 dark:border-zinc-700">
           <h3 className="text-sm font-medium text-zinc-700 dark:text-zinc-200">Build Syntax</h3>
-          <button onClick={onClose} className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 text-lg leading-none">×</button>
+          <button onClick={onClose} className="text-zinc-400 dark:text-zinc-500 hover:text-zinc-600 dark:hover:text-zinc-300 text-lg leading-none">×</button>
         </div>
         <div className="flex-1 overflow-hidden flex">
           <div className="w-80 border-r border-zinc-200 dark:border-zinc-700 flex flex-col">
@@ -629,7 +629,7 @@ export const VariableEditPanel: React.FC<VariableEditPanelProps> = ({
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg transition-colors"
+            className="p-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-700 rounded-lg transition-colors"
           >
             <XIcon />
           </button>
@@ -864,9 +864,9 @@ export const VariableEditPanel: React.FC<VariableEditPanelProps> = ({
                 >
                   Create
                 </button>
-                <button 
+                <button
                   onClick={() => { setShowNetInput(false); setNetLabel(''); }}
-                  className="text-xs px-2 py-1 text-zinc-500 hover:text-zinc-700"
+                  className="text-xs px-2 py-1 text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
                 >
                   ×
                 </button>
