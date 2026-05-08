@@ -40,8 +40,6 @@ opentab_ is an open source interactive reporting tool for survey data. It has a 
 
 ## End User Install
 
-> **📦 Latest release:** beta v0.3.0 — pip package last updated **8 May 2026**
-
 > **🎯 Not sure which option to choose?**
 > - **Windows/Mac users, first time:** Use [Option 1: Quick Install](#option-1-quick-install-easiest---recommended)
 > - **Have other Python apps installed:** Use [Option 2: Virtual Environment](#option-2-using-virtual-environment-safer)
