@@ -24,4 +24,4 @@ def run_update():
 
 def _delayed_exit():
     time.sleep(1)
-    os._exit(0)
+    os._exit(42)

@@ -2308,16 +2308,24 @@ const App: React.FC = () => {
         setUpdateState('done');
         setUpdateMessage('Update complete. Restarting...');
         let attempts = 0;
+        let serverWentDown = false;
         const poll = setInterval(async () => {
           try {
             await fetch('/api/version');
-            clearInterval(poll);
-            window.location.reload();
-          } catch {
-            attempts++;
-            if (attempts > 30) {
+            if (serverWentDown) {
               clearInterval(poll);
-              setUpdateMessage('Server did not restart. Please run opentab manually.');
+              window.location.reload();
+            }
+          } catch {
+            if (serverWentDown) {
+              attempts++;
+              if (attempts > 30) {
+                clearInterval(poll);
+                setUpdateMessage('Server did not restart. Please run opentab manually.');
+              }
+            } else {
+              serverWentDown = true;
+              attempts = 0;
             }
           }
         }, 1000);

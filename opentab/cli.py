@@ -1,9 +1,10 @@
 import argparse
 import socket
-import uvicorn
-import webbrowser
+import subprocess
+import sys
 import threading
 import time
+import webbrowser
 
 
 def main():
@@ -34,4 +35,26 @@ def main():
         webbrowser.open(f"http://localhost:{port}")
 
     threading.Thread(target=open_browser, daemon=True).start()
-    uvicorn.run("opentab.main:app", host="127.0.0.1", port=port)
+
+    cmd = [
+        sys.executable, "-m", "uvicorn", "opentab.main:app",
+        "--host", "127.0.0.1", "--port", str(port),
+    ]
+
+    while True:
+        proc = subprocess.Popen(cmd)
+        try:
+            proc.wait()
+        except KeyboardInterrupt:
+            proc.terminate()
+            break
+
+        if proc.returncode == 42:
+            print("[INFO] Update applied. Restarting...")
+            time.sleep(2)
+            continue
+        elif proc.returncode != 0:
+            print(f"[INFO] opentab exited (code {proc.returncode}). Restarting in 5s...")
+            time.sleep(5)
+            continue
+        break
