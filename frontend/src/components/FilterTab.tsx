@@ -62,8 +62,8 @@ const FilterTab: React.FC = () => {
                 {!isFirst && (
                   <div className="flex items-center justify-center py-1">
                     <select
-                      value={item.operatorToNext ?? ''}
-                      onChange={(e) => setFilterOperator(activeTable.id, item.id, e.target.value as 'AND' | 'OR')}
+                      value={activeTable.filter_items[index - 1].operatorToNext ?? ''}
+                      onChange={(e) => setFilterOperator(activeTable.id, activeTable.filter_items[index - 1].id, e.target.value as 'AND' | 'OR')}
                       className="text-xs bg-zinc-100 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-600 text-zinc-600 dark:text-zinc-300 px-3 py-1 font-medium"
                     >
                       <option value="" disabled>—</option>

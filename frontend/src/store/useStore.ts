@@ -666,6 +666,11 @@ export const useStore = create<AppState>()((set, get) => ({
         })),
       };
     }
+    for (const [key, existing] of Object.entries(state.variables)) {
+      if (!existing.isCustom || merged[key]) continue;
+      if (existing.sourceKey && !merged[existing.sourceKey]) continue;
+      merged[key] = existing;
+    }
     return { variables: merged };
   }),
 

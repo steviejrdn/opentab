@@ -197,6 +197,7 @@
   --color-zinc-50: var(--color-ctp-base);
   --color-zinc-100: var(--color-ctp-mantle);
   --color-zinc-200: var(--color-ctp-surface0);
+  --color-zinc-400: var(--color-ctp-subtext0);
   --color-zinc-700: var(--color-ctp-subtext0);
   --color-zinc-800: var(--color-ctp-subtext1);
   --color-zinc-900: var(--color-ctp-text);
@@ -210,8 +211,8 @@
 
   --color-emerald-400: var(--color-ctp-teal);
   --color-emerald-500: var(--color-ctp-teal);
-  --color-emerald-600: color-mix(in oklab, var(--color-ctp-teal) 40%, var(--color-ctp-base));
-  --color-emerald-700: color-mix(in oklab, var(--color-ctp-teal) 40%, var(--color-ctp-base));
+  --color-emerald-600: var(--color-ctp-teal);
+  --color-emerald-700: var(--color-ctp-teal);
 
   --color-red-400: var(--color-ctp-maroon);
   --color-red-500: var(--color-ctp-red);
@@ -304,6 +305,12 @@
 
 :root.macchiato nav a:not([class*="hover:bg-zinc"]):hover {
   color: var(--color-ctp-teal) !important;
+}
+
+:root.mocha [data-btn="nesting-add"],
+:root.frappe [data-btn="nesting-add"],
+:root.macchiato [data-btn="nesting-add"] {
+  color: var(--color-ctp-subtext1);
 }
 
 :root.mocha nav button[class*="hover:bg-zinc"]:hover,

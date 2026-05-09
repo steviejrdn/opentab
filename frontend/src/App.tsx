@@ -354,10 +354,11 @@ const EzHeaderItem: React.FC<{
           <button
             ref={addButtonRef}
             onClick={handleAddClick}
+            data-btn="nesting-add"
             className={`w-5 h-5 flex items-center justify-center rounded transition-colors text-xs ${
               isPickerOpen
                 ? 'text-blue-500 bg-blue-50 dark:text-blue-400 dark:bg-blue-900/30'
-                : 'text-zinc-400 dark:text-zinc-500 hover:text-blue-500 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30'
+                : 'text-zinc-400 dark:text-zinc-200 hover:text-blue-500 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30'
             }`}
             title="Add nested variable"
           >
@@ -698,7 +699,15 @@ const Navigation: React.FC = () => {
 
     const matched = currentKeys.filter(k => newKeys.includes(k) && !mergedVarNames.has(k)).length;
     const added = newKeys.filter(k => !currentKeys.includes(k));
-    const dropped = currentKeys.filter(k => !newKeys.includes(k) && !mergedVarNames.has(k));
+    const dropped = currentKeys.filter(k => {
+      if (newKeys.includes(k) || mergedVarNames.has(k)) return false;
+      const v = variables[k];
+      if (v?.isCustom) {
+        if (v.sourceKey) return !newKeys.includes(v.sourceKey) && !mergedVarNames.has(v.sourceKey);
+        return false;
+      }
+      return true;
+    });
     const typeChanged = currentKeys
       .filter(k => newKeys.includes(k) && variables[k].type !== newVars[k].type)
       .map(k => `${k} (${variables[k].type} → ${newVars[k].type})`);
@@ -955,7 +964,10 @@ const Navigation: React.FC = () => {
         </div>
       </div>
     )}
-    {updateConfirm && (
+    {updateConfirm && (() => {
+      const truncate = (items: string[], max = 5) =>
+        items.length <= max ? items.join(', ') : `${items.slice(0, max).join(', ')} ...+${items.length - max} more`;
+      return (
       <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/30">
         <div className="bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 shadow-lg p-5 w-80">
           <p className="text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-3">
@@ -964,17 +976,17 @@ const Navigation: React.FC = () => {
           <div className="text-xs text-zinc-500 dark:text-zinc-400 space-y-1 mb-4">
             <p>matched: <span className="text-zinc-700 dark:text-zinc-300">{updateConfirm.matched}</span></p>
             {updateConfirm.added.length > 0 && (
-              <p>new columns: <span className="text-zinc-700 dark:text-zinc-300">{updateConfirm.added.join(', ')}</span></p>
+              <p>new columns: <span className="text-zinc-700 dark:text-zinc-300">{truncate(updateConfirm.added)}</span></p>
             )}
             {updateConfirm.dropped.length > 0 && (
-              <p className="text-amber-600 dark:text-amber-400">dropped: {updateConfirm.dropped.join(', ')}</p>
+              <p className="text-amber-600 dark:text-amber-400">dropped: {truncate(updateConfirm.dropped)}</p>
             )}
             {updateConfirm.typeChanged.length > 0 && (
-              <p className="text-amber-600 dark:text-amber-400">type changed: {updateConfirm.typeChanged.join(', ')}</p>
+              <p className="text-amber-600 dark:text-amber-400">type changed: {truncate(updateConfirm.typeChanged)}</p>
             )}
             {updateConfirm.mergedVarsAffected.length > 0 && (
               <p className="text-amber-600 dark:text-amber-400">
-                merged variables at risk: {updateConfirm.mergedVarsAffected.join(', ')} (source columns missing)
+                merged variables at risk: {truncate(updateConfirm.mergedVarsAffected)} (source columns missing)
               </p>
             )}
             {Object.keys(updateConfirm.oldMergedVars).length > 0 && updateConfirm.mergedVarsAffected.length === 0 && (
@@ -996,7 +1008,7 @@ const Navigation: React.FC = () => {
           </div>
         </div>
       </div>
-    )}
+    )})()}
     </>
   );
 };
@@ -1870,7 +1882,8 @@ const NestingBuilderItem: React.FC<{
         {depth < 3 && !hasChildren && (
           <button
             onClick={() => onAddChild(item.id)}
-            className="w-6 h-6 flex items-center justify-center text-zinc-400 dark:text-zinc-500 hover:text-blue-500 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded transition-colors text-sm"
+            data-btn="nesting-add"
+            className="w-6 h-6 flex items-center justify-center text-zinc-400 dark:text-zinc-200 hover:text-blue-500 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded transition-colors text-sm"
             title="Add nested variable"
           >+</button>
         )}
@@ -2054,7 +2067,8 @@ const DraggableZoneItem: React.FC<{
                 setShowNestingBuilder(true);
               }}
               title="Build nesting structure"
-              className="text-zinc-400 dark:text-zinc-500 hover:text-blue-500 dark:hover:text-blue-400 text-sm leading-none px-0.5 transition-colors"
+              data-btn="nesting-add"
+              className="text-zinc-400 dark:text-zinc-200 hover:text-blue-500 dark:hover:text-blue-400 text-sm leading-none px-0.5 transition-colors"
             >+</button>
           </div>
         )}
@@ -2901,7 +2915,7 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
           <>
             {localTab === 'build' && (
               <div className="h-full flex flex-col gap-4">
-                <DropZone
+                {(!activeTable.grid_items || activeTable.grid_items.length === 0) && <DropZone
                   id="col-zone"
                   label="Header"
                   items={activeTable.col_items}
@@ -2953,7 +2967,7 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
                       )}
                     </div>
                   ) : undefined}
-                />
+                />}
                 {activeTable.grid_items && activeTable.grid_items.length > 0 && (
                   <DropZone
                     id="grid-zone"
@@ -3125,7 +3139,7 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
                       title="Select Weight Column"
                     >
                       <option value="">No weight</option>
-                      {Object.entries(variables).filter(([, info]) => info.type === 'numeric' || info.type === 'boolean').map(([varName]) => (
+                      {Object.entries(variables).filter(([varName]) => varName.toLowerCase().includes('weight')).map(([varName]) => (
                         <option key={varName} value={varName}>{varName}</option>
                       ))}
                     </select>
