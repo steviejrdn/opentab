@@ -10,7 +10,7 @@
 
 opentab_ is an open source interactive reporting tool for survey data. It has a clean, command-line-inspired interface that's straightforward to operate — no formulas, no pivot tables, just drag and drop.
 
-## opentab_ is now available in Catppuccin flavours
+## opentab_ is Now Available in Catppuccin Flavours!
 
 <p align="center">
   <img src="opentab-catppuccin-flavours.png" alt="opentab_" width="800" />
