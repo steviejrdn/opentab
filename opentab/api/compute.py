@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Optional
+import re
 import pandas as pd
 import numpy as np
 from ..core.tabulator import create_crosstab, calculate_base
@@ -207,7 +208,9 @@ async def compute_crosstab(request: CrosstabRequest):
                 score_map[m.variable] = m.codeScores
 
             score_vars = set(score_map.keys())
-            col_vars = {cd['name'] for cd in col_defs}
+            col_vars = set()
+            for cd in col_defs:
+                col_vars.update(re.findall(r'\$?([A-Za-z0-9_]+)/', cd['code_def']))
             needed_cols = list((score_vars | col_vars) & set(df.columns))
             if request.weight_col and request.weight_col in df.columns:
                 needed_cols.append(request.weight_col)
@@ -323,7 +326,9 @@ async def compute_crosstab(request: CrosstabRequest):
 
         scale_rows_data = None
         if scale_item_vars:
-            col_vars_for_scale = {cd['name'] for cd in col_defs}
+            col_vars_for_scale = set()
+            for cd in col_defs:
+                col_vars_for_scale.update(re.findall(r'\$?([A-Za-z0-9_]+)/', cd['code_def']))
             scale_cols_available = set(scale_item_vars) & set(df.columns)
             if scale_cols_available:
                 needed_cols = list((col_vars_for_scale | scale_cols_available) & set(df.columns))
@@ -340,6 +345,19 @@ async def compute_crosstab(request: CrosstabRequest):
                     from ..core.code_parser import evaluate_code_def
                     scale_col_masks.append((cd['label'], evaluate_code_def(cd['code_def'], scale_df)))
                 all_scale_mask = pd.Series([True] * len(scale_df), index=scale_df.index)
+
+                if not counts_dict:
+                    col_totals = {}
+                    for col_label, col_mask in scale_col_masks:
+                        if request.weight_col and request.weight_col in scale_df.columns:
+                            col_totals[col_label] = float(scale_df.loc[col_mask, request.weight_col].astype(float).sum())
+                        else:
+                            col_totals[col_label] = int(col_mask.sum())
+                    if request.weight_col and request.weight_col in scale_df.columns:
+                        col_totals['Total'] = float(scale_df[request.weight_col].astype(float).sum())
+                    else:
+                        col_totals['Total'] = len(scale_df)
+                    counts_dict = {'Total': col_totals}
 
                 scale_rows_data = {}
                 for var_name in scale_item_vars:
