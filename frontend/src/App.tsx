@@ -2912,6 +2912,7 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
                       <button
                         onClick={() => setShowSaveHeaderForm(v => !v)}
                         className="text-[10px] px-2 py-0.5 bg-indigo-600 text-white hover:bg-indigo-700 transition-colors"
+                        data-btn="add-header"
                       >
                         + header
                       </button>
