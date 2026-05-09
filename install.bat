@@ -54,7 +54,6 @@ REM ── Verify opentab command ──
 echo.
 echo Verifying installation...
 set "OPENTAB_EXE="
-set "OPENTAB_ARGS="
 set "SHORTCUT_ARGS="
 where opentab >nul 2>&1
 if %errorlevel% equ 0 (
@@ -66,7 +65,6 @@ if %errorlevel% equ 0 (
     echo [WARN] 'opentab' command not found in PATH.
     echo        Using 'python -m opentab' as fallback.
     for /f "delims=" %%i in ('where python 2^>nul') do if not defined OPENTAB_EXE set "OPENTAB_EXE=%%i"
-    set "OPENTAB_ARGS=-m opentab"
     set "SHORTCUT_ARGS=-m opentab --port 8001"
     set "OPENTAB_CMD=python -m opentab"
     echo [OK] python found at: !OPENTAB_EXE!
@@ -105,11 +103,20 @@ echo.
 echo ========================================
 echo  Starting opentab...
 echo  Your browser will open automatically.
-echo  Close this window to stop opentab.
+echo  Press Ctrl+C to stop opentab.
 echo ========================================
 echo.
 :loop
+echo [INFO] Starting opentab on port 8001...
 %OPENTAB_CMD% --port 8001
-echo [INFO] opentab closed. Auto-restarting in 3 seconds...
-timeout /t 3 >nul
+if !errorlevel! neq 0 (
+    echo.
+    echo [ERROR] opentab exited with code !errorlevel!.
+    echo          Check the output above for details.
+    echo          Restarting in 5 seconds...
+    timeout /t 5 >nul
+    goto loop
+)
+echo [INFO] opentab stopped. Restarting in 5 seconds...
+timeout /t 5 >nul
 goto loop
