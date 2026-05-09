@@ -83,17 +83,17 @@ if defined OPENTAB_EXE (
     if defined OPENTAB_DIR (
         set "ICON=!OPENTAB_DIR!\static\opentab_icon.ico"
         if exist "!ICON!" (
-            powershell -Command "$ws=New-Object -ComObject WScript.Shell; $s=$ws.CreateShortcut('%USERPROFILE%\Desktop\opentab.lnk'); $s.TargetPath='!OPENTAB_EXE!'; $s.Arguments='!SHORTCUT_ARGS!'; $s.WorkingDirectory='%USERPROFILE%'; $s.IconLocation='!ICON!'; $s.Save(); exit 0"
+            powershell -Command "$d=[Environment]::GetFolderPath('Desktop'); $ws=New-Object -ComObject WScript.Shell; $s=$ws.CreateShortcut([io.path]::Combine($d,'opentab.lnk')); $s.TargetPath='!OPENTAB_EXE!'; $s.Arguments='!SHORTCUT_ARGS!'; $s.WorkingDirectory=$d; $s.IconLocation='!ICON!'; $s.Save(); exit 0"
             if !errorlevel! equ 0 ( echo [OK] Shortcut created on your desktop with opentab icon. ) else ( echo [WARN] Shortcut created but icon may not display. )
         ) else (
             echo [WARN] Icon file not found at: !ICON!
             echo        Creating shortcut without icon.
-            powershell -Command "$ws=New-Object -ComObject WScript.Shell; $s=$ws.CreateShortcut('%USERPROFILE%\Desktop\opentab.lnk'); $s.TargetPath='!OPENTAB_EXE!'; $s.Arguments='!SHORTCUT_ARGS!'; $s.WorkingDirectory='%USERPROFILE%'; $s.Save(); exit 0"
+            powershell -Command "$d=[Environment]::GetFolderPath('Desktop'); $ws=New-Object -ComObject WScript.Shell; $s=$ws.CreateShortcut([io.path]::Combine($d,'opentab.lnk')); $s.TargetPath='!OPENTAB_EXE!'; $s.Arguments='!SHORTCUT_ARGS!'; $s.WorkingDirectory=$d; $s.Save(); exit 0"
             echo [OK] Shortcut created on your desktop.
         )
     ) else (
         echo [WARN] Could not determine opentab package path. Creating shortcut without icon.
-        powershell -Command "$ws=New-Object -ComObject WScript.Shell; $s=$ws.CreateShortcut('%USERPROFILE%\Desktop\opentab.lnk'); $s.TargetPath='!OPENTAB_EXE!'; $s.Arguments='!SHORTCUT_ARGS!'; $s.WorkingDirectory='%USERPROFILE%'; $s.Save(); exit 0"
+        powershell -Command "$d=[Environment]::GetFolderPath('Desktop'); $ws=New-Object -ComObject WScript.Shell; $s=$ws.CreateShortcut([io.path]::Combine($d,'opentab.lnk')); $s.TargetPath='!OPENTAB_EXE!'; $s.Arguments='!SHORTCUT_ARGS!'; $s.WorkingDirectory=$d; $s.Save(); exit 0"
         echo [OK] Shortcut created on your desktop.
     )
 ) else (
