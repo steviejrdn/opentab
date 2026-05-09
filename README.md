@@ -396,6 +396,14 @@ This app is vibe coded using [Claude Code](https://claude.ai/code) and [OpenCode
 
 ## Changelog
 
+### beta v0.3.2 *(10 May 2026)*
+- **Fix:** Auto-restart after `pip install --upgrade opentab` — the CLI now exits with code 42 and the launcher script restarts the process
+- **Fix:** Automatic port detection — if port 8001 is busy, opentab scans for the next available port and prints a message
+- **Fix:** Error details shown on crash screen before auto-restart pause
+- **Fix:** Desktop shortcut now uses `GetFolderPath('Desktop')` for OneDrive-compatible paths
+- **Fix:** Shortcut target uses full path to Python executable
+- **Refactor:** Installers renamed to `opentab_installer.bat` / `.sh` for consistency
+
 ### beta v0.3.1 *(9 May 2026)*
 
 - **Feature:** Auto-update check — on startup, opentab silently fetches the latest version from the main branch. If a newer version is available, a banner appears below the navigation bar showing the current and latest versions, with the pip install command ready to copy. The banner only appears for pip-installed users; dev mode is unaffected
