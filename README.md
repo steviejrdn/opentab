@@ -35,7 +35,7 @@ Powered by [@catppuccin/tailwindcss](https://github.com/catppuccin/tailwindcss).
 
 > **Latest release:** beta v0.3.2 — 10 May 2026
 
-- 🚀 **One-click installer** — Download `install.bat` (Windows) or `install.sh` (macOS) for a zero-terminal setup. The script checks for Python and Git, installs opentab, creates a desktop shortcut, and launches the app.
+- 🚀 **One-click installer** — Download `opentab_installer.bat` (Windows) or `opentab_installer.sh` (macOS) for a zero-terminal setup. The script checks for Python and Git, installs opentab, creates a desktop shortcut, and launches the app.
 - 🔘 **One-click update** — When a new version is detected, an "Update Now" button appears in the banner. Click it to upgrade and restart automatically.
 - 🔔 **Auto-update check** — opentab now silently checks for a newer version on startup. If one is available, a banner appears with the update command ready to copy — no need to check GitHub manually
 - 🔄 **Update dataset** — swap in a new file without losing tables, edits, or folder structure
@@ -106,16 +106,16 @@ git --version
 ### Option 1: One-Click Installer (Easiest — Recommended)
 
 **Windows:**
-1. Download **[install.bat](https://github.com/steviejrdn/opentab/raw/v0.3.2/install.bat)**
-2. Double-click `install.bat`
+1. Download **[opentab_installer.bat](https://github.com/steviejrdn/opentab/raw/v0.3.2/opentab_installer.bat)**
+2. Double-click `opentab_installer.bat`
 3. It checks for Python and Git (opens download pages if missing), installs opentab, creates a desktop shortcut, and launches the app
 4. Click the install icon in your browser's address bar to add opentab as a standalone desktop app (PWA)
 
 **macOS:**
-1. Download **[install.sh](https://github.com/steviejrdn/opentab/raw/v0.3.2/install.sh)**
+1. Download **[opentab_installer.sh](https://github.com/steviejrdn/opentab/raw/v0.3.2/opentab_installer.sh)**
 2. Open Terminal and run:
    ```bash
-   bash ~/Downloads/install.sh
+   bash ~/Downloads/opentab_installer.sh
    ```
 3. It checks for Python and Git, installs opentab, creates `~/Applications/opentab.app`, and launches the app
 
@@ -211,8 +211,8 @@ Then open http://localhost:8001 in your browser.
 **Easiest:** Click **"Update Now"** in the opentab banner when a new version is detected. The app upgrades and restarts itself automatically.
 
 **Or re-run the installer:**
-- **Windows:** Download and double-click `install.bat` again
-- **macOS:** Run `bash ~/Downloads/install.sh` again
+- **Windows:** Download and double-click `opentab_installer.bat` again
+- **macOS:** Run `bash ~/Downloads/opentab_installer.sh` again
 
 **Or use pip:**
 ```bash

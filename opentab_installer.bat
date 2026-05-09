@@ -1,10 +1,10 @@
 @echo off
 setlocal enabledelayedexpansion
-title opentab Installer
+title Opentab Quick Install
 cd /d "%~dp0"
 
 echo ========================================
-echo        opentab_ — One-Click Install
+echo        Opentab Quick Install
 echo ========================================
 echo.
 

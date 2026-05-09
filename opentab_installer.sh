@@ -2,7 +2,7 @@
 set -e
 
 echo "========================================"
-echo "       opentab_ — One-Click Install"
+echo "       Opentab Quick Install"
 echo "========================================"
 echo ""
 
