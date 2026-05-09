@@ -394,35 +394,107 @@ const EzHeaderItem: React.FC<{
   );
 };
 
-// ─── Theme Toggle ────────────────────────────────────────────────────────────
-const ThemeToggle: React.FC = () => {
-  const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains('dark'));
+// ─── Theme Modal ─────────────────────────────────────────────────────────────
+type Theme = 'light' | 'dark' | 'catppuccin-mocha' | 'catppuccin-frappe' | 'catppuccin-macchiato' | 'catppuccin-latte';
 
-  const toggle = () => {
-    const next = !isDark;
-    setIsDark(next);
-    document.documentElement.classList.toggle('dark', next);
-    localStorage.setItem('opentab-theme', next ? 'dark' : 'light');
+function applyTheme(theme: Theme) {
+  const root = document.documentElement;
+  root.classList.remove('dark', 'mocha', 'frappe', 'macchiato', 'latte');
+  if (theme === 'dark') root.classList.add('dark');
+  if (theme === 'catppuccin-mocha') root.classList.add('dark', 'mocha');
+  if (theme === 'catppuccin-frappe') root.classList.add('dark', 'frappe');
+  if (theme === 'catppuccin-macchiato') root.classList.add('dark', 'macchiato');
+  if (theme === 'catppuccin-latte') root.classList.add('latte');
+}
+
+function getStoredTheme(): Theme {
+  return (localStorage.getItem('opentab-theme') as Theme) ?? 'light';
+}
+
+const ThemeModal: React.FC = () => {
+  const [open, setOpen] = useState(false);
+  const [current, setCurrent] = useState<Theme>(getStoredTheme);
+  const [pending, setPending] = useState<Theme>(current);
+
+  const handleOpen = () => {
+    setPending(current);
+    setOpen(true);
+  };
+
+  const handleChange = (theme: Theme) => {
+    setPending(theme);
+    applyTheme(theme);
+  };
+
+  const handleApply = () => {
+    setCurrent(pending);
+    localStorage.setItem('opentab-theme', pending);
+    setOpen(false);
+  };
+
+  const handleCancel = () => {
+    applyTheme(current);
+    setOpen(false);
   };
 
   return (
-    <div className="flex items-center gap-2">
-      <span className="text-xs text-zinc-400 dark:text-zinc-600 select-none">☀</span>
+    <>
       <button
-        onClick={toggle}
-        aria-label="Toggle theme"
-        className={`relative inline-flex h-5 w-9 shrink-0 rounded-full transition-colors duration-200 focus:outline-none ${
-          isDark ? 'bg-zinc-600' : 'bg-zinc-300'
-        }`}
+        onClick={handleOpen}
+        className="px-2.5 py-1 text-xs text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
       >
-        <span
-          className={`pointer-events-none mt-0.5 inline-block h-4 w-4 rounded-full bg-white shadow-sm transition-transform duration-200 ${
-            isDark ? 'translate-x-[18px]' : 'translate-x-0.5'
-          }`}
-        />
+          theme
       </button>
-      <span className="text-xs text-zinc-400 dark:text-zinc-600 select-none">☾</span>
-    </div>
+      {open && (
+        <div
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40"
+          onClick={handleCancel}
+        >
+          <div
+            className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg shadow-xl w-64 flex flex-col"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-200 dark:border-zinc-700">
+              <span className="text-sm font-medium text-zinc-700 dark:text-zinc-200">Theme</span>
+              <button
+                onClick={handleCancel}
+                className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 text-lg leading-none"
+              >
+                ×
+              </button>
+            </div>
+            <div className="px-4 py-4">
+              <select
+                value={pending}
+                onChange={e => handleChange(e.target.value as Theme)}
+                className="w-full text-sm border border-zinc-200 dark:border-zinc-700 rounded bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-200 px-2 py-1.5"
+              >
+                <option value="light">Light</option>
+                <option value="dark">Dark</option>
+                <option value="catppuccin-latte">Catppuccin Latte</option>
+                <option value="catppuccin-frappe">Catppuccin Frappé</option>
+                <option value="catppuccin-macchiato">Catppuccin Macchiato</option>
+                <option value="catppuccin-mocha">Catppuccin Mocha</option>
+              </select>
+            </div>
+            <div className="flex justify-end gap-2 px-4 py-3 border-t border-zinc-200 dark:border-zinc-700">
+              <button
+                onClick={handleCancel}
+                className="px-3 py-1 text-xs text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleApply}
+                className="px-3 py-1 text-xs bg-zinc-800 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded hover:bg-zinc-700 dark:hover:bg-zinc-200"
+              >
+                Apply
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 };
 
@@ -853,7 +925,7 @@ const Navigation: React.FC = () => {
             feedback
           </a>
         </div>
-        <ThemeToggle />
+        <ThemeModal />
       </div>
     </nav>
     {restoreStatus && (
@@ -4308,12 +4380,12 @@ const EditVariablesPage: React.FC = () => {
                   </td>
                   <td className="border-b border-zinc-100 dark:border-zinc-800/60 px-3 py-2.5 text-zinc-400 dark:text-zinc-500 truncate">{info.label}</td>
                   <td className="border-b border-zinc-100 dark:border-zinc-800/60 px-3 py-2.5">
-                    <span className="inline-block px-1.5 py-0.5 rounded text-[10px] bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400">{info.type}</span>
+                    <span data-vtype={info.type} className="inline-block px-1.5 py-0.5 rounded text-[10px] bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400">{info.type}</span>
                   </td>
                   <td className="border-b border-zinc-100 dark:border-zinc-800/60 px-3 py-2.5">
                     {info.answerType === 'multiple_answer'
                       ? <span className="inline-block px-1.5 py-0.5 rounded text-[10px] bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400">MR</span>
-                      : <span className="inline-block px-1.5 py-0.5 rounded text-[10px] bg-zinc-100 dark:bg-zinc-800 text-zinc-400 dark:text-zinc-500">SA</span>
+                      : <span data-answer="SA" className="inline-block px-1.5 py-0.5 rounded text-[10px] bg-zinc-100 dark:bg-zinc-800 text-zinc-400 dark:text-zinc-500">SA</span>
                     }
                   </td>
                   <td className="border-b border-zinc-100 dark:border-zinc-800/60 px-3 py-2.5 text-right text-zinc-400 dark:text-zinc-500 tabular-nums">

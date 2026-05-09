@@ -37,7 +37,7 @@ opentab_ is an open source interactive reporting tool for survey data. It has a 
 - **Session Save / Load** — Export and restore the full workspace as an `.opentab` file
 - **Auto-save** — Changes are written back to the open `.opentab` file automatically 2 seconds after each edit (requires File System Access API — Chrome/Edge)
 - **Multiple Tables** — Manage many tables with folder organisation in the sidebar
-- **Dark Mode** — Built-in light/dark theme toggle
+- **Themes** — Light, Dark, and four [Catppuccin](https://github.com/catppuccin/catppuccin) flavours (Latte, Frappé, Macchiato, Mocha) — switch via the theme button in the navbar
 
 ## End User Install
 
@@ -345,6 +345,21 @@ Contributions welcome! Please:
 - 📖 [Project Docs](./CLAUDE.md) — Architecture & development guide
 - 🐛 [Issues](https://github.com/steviejrdn/opentab/issues) — Report bugs or request features
 - 💬 Discussions — Ask questions
+
+## Themes
+
+opentab supports **6 themes** switchable from the navbar:
+
+| Theme | Type |
+|---|---|
+| Light | Default light |
+| Dark | Default dark |
+| Catppuccin Latte | Light, pastel |
+| Catppuccin Frappé | Dark, warm |
+| Catppuccin Macchiato | Dark, cool |
+| Catppuccin Mocha | Dark, deep |
+
+Catppuccin themes are powered by the [@catppuccin/tailwindcss](https://github.com/catppuccin/tailwindcss) plugin. Colour palette © [Catppuccin](https://github.com/catppuccin/catppuccin) — MIT License.
 
 ## Built With
 

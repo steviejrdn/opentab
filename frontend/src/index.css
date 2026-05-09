@@ -1,8 +1,315 @@
 @import "tailwindcss";
+@import "@catppuccin/tailwindcss/mocha.css";
 
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
   --font-mono: "JetBrains Mono", ui-monospace, monospace;
   --font-sans: "JetBrains Mono", ui-monospace, monospace;
+}
+
+:root.mocha {
+  --color-zinc-950: var(--color-ctp-base);
+  --color-zinc-900: var(--color-ctp-mantle);
+  --color-zinc-800: var(--color-ctp-surface0);
+  --color-zinc-700: var(--color-ctp-surface1);
+  --color-zinc-600: var(--color-ctp-surface2);
+  --color-zinc-500: var(--color-ctp-overlay2);
+  --color-zinc-400: var(--color-ctp-subtext0);
+  --color-zinc-300: var(--color-ctp-overlay1);
+  --color-zinc-200: var(--color-ctp-overlay0);
+  --color-zinc-100: var(--color-ctp-text);
+
+  --color-blue-300: var(--color-ctp-blue);
+  --color-blue-400: var(--color-ctp-blue);
+  --color-blue-500: var(--color-ctp-blue);
+  --color-blue-600: var(--color-ctp-sapphire);
+  --color-blue-700: var(--color-ctp-sapphire);
+
+  --color-emerald-400: var(--color-ctp-green);
+  --color-emerald-500: var(--color-ctp-green);
+  --color-emerald-600: var(--color-ctp-teal);
+  --color-emerald-700: var(--color-ctp-teal);
+
+  --color-red-400: var(--color-ctp-red);
+  --color-red-500: var(--color-ctp-red);
+  --color-red-600: var(--color-ctp-maroon);
+
+  --color-amber-400: var(--color-ctp-yellow);
+  --color-amber-500: var(--color-ctp-peach);
+  --color-amber-600: var(--color-ctp-peach);
+
+  --color-purple-400: var(--color-ctp-mauve);
+  --color-purple-500: var(--color-ctp-mauve);
+  --color-purple-600: var(--color-ctp-pink);
+
+  --color-indigo-400: var(--color-ctp-lavender);
+  --color-indigo-500: var(--color-ctp-lavender);
+  --color-indigo-600: var(--color-ctp-blue);
+  --color-indigo-700: var(--color-ctp-blue);
+
+  --color-slate-500: var(--color-ctp-overlay2);
+  --color-slate-600: var(--color-ctp-overlay1);
+
+  --color-blue-900: var(--color-ctp-blue);
+  --color-red-900: var(--color-ctp-red);
+  --color-emerald-900: var(--color-ctp-green);
+  --color-purple-900: var(--color-ctp-mauve);
+}
+
+/* ── Catppuccin Frappé ───────────────────────────────────────────────────── */
+:root.frappe {
+  --color-zinc-950: var(--color-ctp-base);
+  --color-zinc-900: var(--color-ctp-mantle);
+  --color-zinc-800: var(--color-ctp-surface0);
+  --color-zinc-700: var(--color-ctp-surface1);
+  --color-zinc-600: var(--color-ctp-surface2);
+  --color-zinc-500: var(--color-ctp-overlay2);
+  --color-zinc-400: var(--color-ctp-subtext0);
+  --color-zinc-300: var(--color-ctp-overlay1);
+  --color-zinc-200: var(--color-ctp-overlay0);
+  --color-zinc-100: var(--color-ctp-text);
+
+  --color-blue-300: var(--color-ctp-pink);
+  --color-blue-400: var(--color-ctp-pink);
+  --color-blue-500: var(--color-ctp-pink);
+  --color-blue-600: var(--color-ctp-flamingo);
+  --color-blue-700: var(--color-ctp-flamingo);
+
+  --color-emerald-400: var(--color-ctp-teal);
+  --color-emerald-500: var(--color-ctp-teal);
+  --color-emerald-600: var(--color-ctp-green);
+  --color-emerald-700: var(--color-ctp-green);
+
+  --color-red-400: var(--color-ctp-maroon);
+  --color-red-500: var(--color-ctp-maroon);
+  --color-red-600: var(--color-ctp-red);
+
+  --color-amber-400: var(--color-ctp-peach);
+  --color-amber-500: var(--color-ctp-peach);
+  --color-amber-600: var(--color-ctp-yellow);
+
+  --color-purple-400: var(--color-ctp-flamingo);
+  --color-purple-500: var(--color-ctp-flamingo);
+  --color-purple-600: var(--color-ctp-pink);
+
+  --color-indigo-400: var(--color-ctp-rosewater);
+  --color-indigo-500: var(--color-ctp-rosewater);
+  --color-indigo-600: var(--color-ctp-pink);
+  --color-indigo-700: var(--color-ctp-pink);
+
+  --color-slate-500: var(--color-ctp-overlay2);
+  --color-slate-600: var(--color-ctp-overlay1);
+
+  --color-blue-900: var(--color-ctp-pink);
+  --color-red-900: var(--color-ctp-maroon);
+  --color-emerald-900: var(--color-ctp-teal);
+  --color-purple-900: var(--color-ctp-flamingo);
+}
+
+:root.frappe nav button[class*="hover:bg-zinc"]:hover,
+:root.frappe nav a[class*="hover:bg-zinc"]:hover {
+  background-color: var(--color-ctp-pink);
+  color: var(--color-ctp-base);
+}
+
+:root.frappe [data-vtype="scale"]       { background-color: color-mix(in oklab, var(--color-ctp-sapphire) 15%, transparent); color: var(--color-ctp-sapphire); }
+:root.frappe [data-vtype="categorical"] { background-color: color-mix(in oklab, var(--color-ctp-green) 15%, transparent); color: var(--color-ctp-green); }
+:root.frappe [data-vtype="boolean"]     { background-color: color-mix(in oklab, var(--color-ctp-peach) 15%, transparent); color: var(--color-ctp-peach); }
+:root.frappe [data-vtype="numeric"]     { background-color: color-mix(in oklab, var(--color-ctp-pink) 15%, transparent); color: var(--color-ctp-pink); }
+:root.frappe [data-vtype="text"]        { background-color: color-mix(in oklab, var(--color-ctp-rosewater) 15%, transparent); color: var(--color-ctp-rosewater); }
+
+:root.frappe [data-answer="SA"] {
+  background-color: color-mix(in oklab, var(--color-ctp-lavender) 15%, transparent);
+  color: var(--color-ctp-lavender);
+}
+
+/* ── Catppuccin Macchiato ────────────────────────────────────────────────── */
+:root.macchiato {
+  --color-zinc-950: var(--color-ctp-base);
+  --color-zinc-900: var(--color-ctp-mantle);
+  --color-zinc-800: var(--color-ctp-surface0);
+  --color-zinc-700: var(--color-ctp-surface1);
+  --color-zinc-600: var(--color-ctp-surface2);
+  --color-zinc-500: var(--color-ctp-overlay2);
+  --color-zinc-400: var(--color-ctp-subtext0);
+  --color-zinc-300: var(--color-ctp-overlay1);
+  --color-zinc-200: var(--color-ctp-overlay0);
+  --color-zinc-100: var(--color-ctp-text);
+
+  --color-blue-300: var(--color-ctp-teal);
+  --color-blue-400: var(--color-ctp-teal);
+  --color-blue-500: var(--color-ctp-teal);
+  --color-blue-600: var(--color-ctp-sapphire);
+  --color-blue-700: var(--color-ctp-sapphire);
+
+  --color-emerald-400: var(--color-ctp-sapphire);
+  --color-emerald-500: var(--color-ctp-sapphire);
+  --color-emerald-600: var(--color-ctp-sky);
+  --color-emerald-700: var(--color-ctp-sky);
+
+  --color-red-400: var(--color-ctp-flamingo);
+  --color-red-500: var(--color-ctp-flamingo);
+  --color-red-600: var(--color-ctp-maroon);
+
+  --color-amber-400: var(--color-ctp-rosewater);
+  --color-amber-500: var(--color-ctp-rosewater);
+  --color-amber-600: var(--color-ctp-peach);
+
+  --color-purple-400: var(--color-ctp-sky);
+  --color-purple-500: var(--color-ctp-sky);
+  --color-purple-600: var(--color-ctp-sapphire);
+
+  --color-indigo-400: var(--color-ctp-mauve);
+  --color-indigo-500: var(--color-ctp-mauve);
+  --color-indigo-600: var(--color-ctp-teal);
+  --color-indigo-700: var(--color-ctp-teal);
+
+  --color-slate-500: var(--color-ctp-overlay2);
+  --color-slate-600: var(--color-ctp-overlay1);
+
+  --color-blue-900: var(--color-ctp-teal);
+  --color-red-900: var(--color-ctp-flamingo);
+  --color-emerald-900: var(--color-ctp-sapphire);
+  --color-purple-900: var(--color-ctp-sky);
+}
+
+:root.macchiato nav button[class*="hover:bg-zinc"]:hover,
+:root.macchiato nav a[class*="hover:bg-zinc"]:hover {
+  background-color: var(--color-ctp-teal);
+  color: var(--color-ctp-base);
+}
+
+:root.macchiato [data-vtype="scale"]       { background-color: color-mix(in oklab, var(--color-ctp-lavender) 15%, transparent); color: var(--color-ctp-lavender); }
+:root.macchiato [data-vtype="categorical"] { background-color: color-mix(in oklab, var(--color-ctp-peach) 15%, transparent); color: var(--color-ctp-peach); }
+:root.macchiato [data-vtype="boolean"]     { background-color: color-mix(in oklab, var(--color-ctp-sapphire) 15%, transparent); color: var(--color-ctp-sapphire); }
+:root.macchiato [data-vtype="numeric"]     { background-color: color-mix(in oklab, var(--color-ctp-flamingo) 15%, transparent); color: var(--color-ctp-flamingo); }
+:root.macchiato [data-vtype="text"]        { background-color: color-mix(in oklab, var(--color-ctp-green) 15%, transparent); color: var(--color-ctp-green); }
+
+:root.macchiato [data-answer="SA"] {
+  background-color: color-mix(in oklab, var(--color-ctp-yellow) 15%, transparent);
+  color: var(--color-ctp-yellow);
+}
+
+/* ── Catppuccin Latte (light theme) ─────────────────────────────────────── */
+:root.latte {
+  --color-white: var(--color-ctp-base);
+  --color-zinc-50: var(--color-ctp-base);
+  --color-zinc-100: var(--color-ctp-mantle);
+  --color-zinc-200: var(--color-ctp-surface0);
+  --color-zinc-700: var(--color-ctp-subtext0);
+  --color-zinc-800: var(--color-ctp-subtext1);
+  --color-zinc-900: var(--color-ctp-text);
+  --color-zinc-950: var(--color-ctp-text);
+
+  --color-blue-300: var(--color-ctp-lavender);
+  --color-blue-400: var(--color-ctp-mauve);
+  --color-blue-500: var(--color-ctp-mauve);
+  --color-blue-600: var(--color-ctp-lavender);
+  --color-blue-700: var(--color-ctp-lavender);
+
+  --color-emerald-400: var(--color-ctp-teal);
+  --color-emerald-500: var(--color-ctp-teal);
+  --color-emerald-600: color-mix(in oklab, var(--color-ctp-teal) 40%, var(--color-ctp-base));
+  --color-emerald-700: color-mix(in oklab, var(--color-ctp-teal) 40%, var(--color-ctp-base));
+
+  --color-red-400: var(--color-ctp-maroon);
+  --color-red-500: var(--color-ctp-red);
+  --color-red-600: var(--color-ctp-maroon);
+
+  --color-amber-400: var(--color-ctp-peach);
+  --color-amber-500: var(--color-ctp-peach);
+  --color-amber-600: var(--color-ctp-yellow);
+
+  --color-purple-400: var(--color-ctp-blue);
+  --color-purple-500: var(--color-ctp-blue);
+  --color-purple-600: var(--color-ctp-sapphire);
+
+  --color-indigo-400: var(--color-ctp-lavender);
+  --color-indigo-500: var(--color-ctp-lavender);
+  --color-indigo-600: color-mix(in oklab, var(--color-ctp-mauve) 40%, var(--color-ctp-base));
+  --color-indigo-700: var(--color-ctp-mauve);
+
+  --color-slate-500: var(--color-ctp-overlay1);
+  --color-slate-600: var(--color-ctp-overlay2);
+}
+
+:root.latte nav button[class*="hover:bg-zinc"]:hover,
+:root.latte nav a[class*="hover:bg-zinc"]:hover {
+  background-color: var(--color-ctp-lavender);
+  color: var(--color-ctp-base);
+}
+
+:root.latte [data-vtype="scale"]       { background-color: color-mix(in oklab, var(--color-ctp-mauve) 12%, transparent); color: var(--color-ctp-mauve); }
+:root.latte [data-vtype="categorical"] { background-color: color-mix(in oklab, var(--color-ctp-teal) 12%, transparent); color: var(--color-ctp-teal); }
+:root.latte [data-vtype="boolean"]     { background-color: color-mix(in oklab, var(--color-ctp-green) 12%, transparent); color: var(--color-ctp-green); }
+:root.latte [data-vtype="numeric"]     { background-color: color-mix(in oklab, var(--color-ctp-blue) 12%, transparent); color: var(--color-ctp-blue); }
+:root.latte [data-vtype="text"]        { background-color: color-mix(in oklab, var(--color-ctp-sapphire) 12%, transparent); color: var(--color-ctp-sapphire); }
+
+:root.latte [data-answer="SA"] {
+  background-color: color-mix(in oklab, var(--color-ctp-teal) 12%, transparent);
+  color: var(--color-ctp-teal);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────── */
+:root.mocha [class*="bg-blue-5"],
+:root.mocha [class*="bg-blue-6"],
+:root.mocha [class*="bg-emerald-5"],
+:root.mocha [class*="bg-emerald-6"],
+:root.mocha [class*="bg-purple-5"],
+:root.mocha [class*="bg-purple-6"],
+:root.mocha [class*="bg-indigo-5"],
+:root.mocha [class*="bg-indigo-6"],
+:root.frappe [class*="bg-blue-5"],
+:root.frappe [class*="bg-blue-6"],
+:root.frappe [class*="bg-emerald-5"],
+:root.frappe [class*="bg-emerald-6"],
+:root.frappe [class*="bg-purple-5"],
+:root.frappe [class*="bg-purple-6"],
+:root.frappe [class*="bg-indigo-5"],
+:root.frappe [class*="bg-indigo-6"],
+:root.macchiato [class*="bg-blue-5"],
+:root.macchiato [class*="bg-blue-6"],
+:root.macchiato [class*="bg-emerald-5"],
+:root.macchiato [class*="bg-emerald-6"],
+:root.macchiato [class*="bg-purple-5"],
+:root.macchiato [class*="bg-purple-6"],
+:root.macchiato [class*="bg-indigo-5"],
+:root.macchiato [class*="bg-indigo-6"] {
+  color: var(--color-ctp-crust);
+}
+
+:root.mocha nav a:not([class*="hover:bg-zinc"]):hover,
+:root.latte nav a:not([class*="hover:bg-zinc"]):hover {
+  color: var(--color-ctp-lavender) !important;
+}
+
+:root.latte [class*="hover:bg-emerald"]:hover,
+:root.latte [class*="hover:bg-indigo"]:hover {
+  color: var(--color-ctp-text);
+}
+
+:root.frappe nav a:not([class*="hover:bg-zinc"]):hover {
+  color: var(--color-ctp-pink) !important;
+}
+
+:root.macchiato nav a:not([class*="hover:bg-zinc"]):hover {
+  color: var(--color-ctp-teal) !important;
+}
+
+:root.mocha nav button[class*="hover:bg-zinc"]:hover,
+:root.mocha nav a[class*="hover:bg-zinc"]:hover {
+  background-color: var(--color-ctp-lavender);
+  color: var(--color-ctp-base);
+}
+
+:root.mocha [data-vtype="scale"]       { background-color: color-mix(in oklab, var(--color-ctp-peach) 15%, transparent); color: var(--color-ctp-peach); }
+:root.mocha [data-vtype="categorical"] { background-color: color-mix(in oklab, var(--color-ctp-mauve) 15%, transparent); color: var(--color-ctp-mauve); }
+:root.mocha [data-vtype="boolean"]     { background-color: color-mix(in oklab, var(--color-ctp-green) 15%, transparent); color: var(--color-ctp-green); }
+:root.mocha [data-vtype="numeric"]     { background-color: color-mix(in oklab, var(--color-ctp-sapphire) 15%, transparent); color: var(--color-ctp-sapphire); }
+:root.mocha [data-vtype="text"]        { background-color: color-mix(in oklab, var(--color-ctp-sky) 15%, transparent); color: var(--color-ctp-sky); }
+
+:root.mocha [data-answer="SA"] {
+  background-color: color-mix(in oklab, var(--color-ctp-teal) 15%, transparent);
+  color: var(--color-ctp-teal);
 }
