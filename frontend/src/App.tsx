@@ -5,7 +5,7 @@ import { useStore } from './store/useStore';
 import { DndContext, useSensor, useSensors, PointerSensor, useDraggable, useDroppable, DragOverlay } from '@dnd-kit/core';
 import type { DragStartEvent, DragEndEvent as DndDragEndEvent } from '@dnd-kit/core';
 
-import { computeApi, dataApi } from './lib/api';
+import { computeApi, dataApi, updateApi } from './lib/api';
 import type { FilterItem, CrosstabResult, VariableInfo, DropItem, Table } from './lib/api';
 import FilterTab from './components/FilterTab';
 import { VariableEditPanel } from './components/VariableEditPanel';
@@ -2168,6 +2168,8 @@ const App: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
   const [updateInfo, setUpdateInfo] = useState<{ current: string; latest: string } | null>(null);
+  const [updateState, setUpdateState] = useState<'idle' | 'updating' | 'done' | 'error'>('idle');
+  const [updateMessage, setUpdateMessage] = useState<string | null>(null);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
   const handleDragStart = (event: DragStartEvent) => {
@@ -2287,6 +2289,8 @@ const App: React.FC = () => {
         const latest = match[1];
         if (current !== 'dev' && isNewerVersion(latest, current)) {
           setUpdateInfo({ current, latest });
+          setUpdateState('idle');
+          setUpdateMessage(null);
         }
       } catch {
         // no network or fetch failed — silently skip
@@ -2294,6 +2298,38 @@ const App: React.FC = () => {
     };
     checkUpdate();
   }, []);
+
+  const handleUpdate = async () => {
+    setUpdateState('updating');
+    setUpdateMessage(null);
+    try {
+      const res = await updateApi.run();
+      if (res.status === 'ok') {
+        setUpdateState('done');
+        setUpdateMessage('Update complete. Restarting...');
+        let attempts = 0;
+        const poll = setInterval(async () => {
+          try {
+            await fetch('/api/version');
+            clearInterval(poll);
+            window.location.reload();
+          } catch {
+            attempts++;
+            if (attempts > 30) {
+              clearInterval(poll);
+              setUpdateMessage('Server did not restart. Please run opentab manually.');
+            }
+          }
+        }, 1000);
+      } else {
+        setUpdateState('error');
+        setUpdateMessage(res.message || 'Update failed');
+      }
+    } catch {
+      setUpdateState('error');
+      setUpdateMessage('Update failed. Check your internet connection.');
+    }
+  };
 
   const handleLoadSample = async () => {
     setLoading(true);
@@ -2316,23 +2352,59 @@ const App: React.FC = () => {
       <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd} onDragCancel={handleDragCancel}>
         <div className="h-screen flex flex-col bg-white dark:bg-zinc-950 font-mono">
           <Navigation />
-          {updateInfo && (
+          {updateInfo && updateState === 'idle' && (
             <div className="flex items-center gap-3 px-4 py-1.5 bg-blue-50 dark:bg-blue-950 border-b border-blue-200 dark:border-blue-800 text-xs font-mono">
               <span className="text-blue-700 dark:text-blue-300">
                 ↑ update available: v{updateInfo.current} → v{updateInfo.latest}
               </span>
-              <code className="text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-900 px-1.5 py-0.5 rounded select-all">
-                pip install git+https://github.com/steviejrdn/opentab.git
-              </code>
+              <button
+                onClick={handleUpdate}
+                className="text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 px-2 py-0.5 rounded text-xs font-semibold"
+              >
+                Update Now
+              </button>
               <button
                 onClick={() => navigator.clipboard.writeText('pip install git+https://github.com/steviejrdn/opentab.git')}
                 className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-200 underline"
               >
-                copy
+                copy pip command
               </button>
               <button
                 onClick={() => setUpdateInfo(null)}
                 className="ml-auto text-blue-400 dark:text-blue-600 hover:text-blue-700 dark:hover:text-blue-300"
+              >
+                ✕
+              </button>
+            </div>
+          )}
+          {updateState === 'updating' && (
+            <div className="flex items-center gap-3 px-4 py-1.5 bg-yellow-50 dark:bg-yellow-950 border-b border-yellow-200 dark:border-yellow-800 text-xs font-mono">
+              <span className="text-yellow-700 dark:text-yellow-300">
+                ⏳ Updating to v{updateInfo?.latest}... This may take a minute.
+              </span>
+            </div>
+          )}
+          {updateState === 'done' && (
+            <div className="flex items-center gap-3 px-4 py-1.5 bg-green-50 dark:bg-green-950 border-b border-green-200 dark:border-green-800 text-xs font-mono">
+              <span className="text-green-700 dark:text-green-300">
+                ✓ {updateMessage}
+              </span>
+            </div>
+          )}
+          {updateState === 'error' && (
+            <div className="flex items-center gap-3 px-4 py-1.5 bg-red-50 dark:bg-red-950 border-b border-red-200 dark:border-red-800 text-xs font-mono">
+              <span className="text-red-700 dark:text-red-300">
+                ✗ {updateMessage || 'Update failed'}
+              </span>
+              <button
+                onClick={handleUpdate}
+                className="text-white bg-red-600 hover:bg-red-700 dark:bg-red-500 dark:hover:bg-red-600 px-2 py-0.5 rounded text-xs font-semibold"
+              >
+                Retry
+              </button>
+              <button
+                onClick={() => { setUpdateInfo(null); setUpdateState('idle'); }}
+                className="ml-auto text-red-400 dark:text-red-600 hover:text-red-700 dark:hover:text-red-300"
               >
                 ✕
               </button>

@@ -31,10 +31,12 @@ Powered by [@catppuccin/tailwindcss](https://github.com/catppuccin/tailwindcss).
 
 ---
 
-## What's New — beta v0.3.1
+## What's New — beta v0.3.2
 
-> **Latest release:** beta v0.3.1 — 9 May 2026
+> **Latest release:** beta v0.3.2 — 10 May 2026
 
+- 🚀 **One-click installer** — Download `install.bat` (Windows) or `install.sh` (macOS) for a zero-terminal setup. The script checks for Python and Git, installs opentab, creates a desktop shortcut, and launches the app.
+- 🔘 **One-click update** — When a new version is detected, an "Update Now" button appears in the banner. Click it to upgrade and restart automatically.
 - 🔔 **Auto-update check** — opentab now silently checks for a newer version on startup. If one is available, a banner appears with the update command ready to copy — no need to check GitHub manually
 - 🔄 **Update dataset** — swap in a new file without losing tables, edits, or folder structure
 - ⚡ **10,000+ variable support** — sidebar, Edit Variables page, EZ Tables, and Create Grid all virtualize their lists; the app stays responsive at any scale
@@ -64,9 +66,10 @@ Powered by [@catppuccin/tailwindcss](https://github.com/catppuccin/tailwindcss).
 ## End User Install
 
 > **🎯 Not sure which option to choose?**
-> - **Windows/Mac users, first time:** Use [Option 1: Quick Install](#option-1-quick-install-easiest---recommended)
-> - **Have other Python apps installed:** Use [Option 2: Virtual Environment](#option-2-using-virtual-environment-safer)
-> - **Already have Docker:** Use [Option 3: Docker](#option-3-docker-for-advanced-users)
+> - **Windows/Mac users, first time:** Use [Option 1: One-Click Installer](#option-1-one-click-installer-easiest---recommended)
+> - **Prefer the command line:** Use [Option 2: Quick Install](#option-2-quick-install)
+> - **Have other Python apps installed:** Use [Option 3: Virtual Environment](#option-3-virtual-environment)
+> - **Already have Docker:** Use [Option 4: Docker](#option-4-docker)
 
 ### Before You Start (Prerequisites)
 
@@ -100,7 +103,25 @@ You need **Python** and **Git** installed before installing opentab.
 git --version
 ```
 
-### Option 1: Quick Install (Easiest - Recommended)
+### Option 1: One-Click Installer (Easiest — Recommended)
+
+**Windows:**
+1. Download **[install.bat](https://github.com/steviejrdn/opentab/raw/v0.3.2/install.bat)**
+2. Double-click `install.bat`
+3. It checks for Python and Git (opens download pages if missing), installs opentab, creates a desktop shortcut, and launches the app
+4. Click the install icon in your browser's address bar to add opentab as a standalone desktop app (PWA)
+
+**macOS:**
+1. Download **[install.sh](https://github.com/steviejrdn/opentab/raw/v0.3.2/install.sh)**
+2. Open Terminal and run:
+   ```bash
+   bash ~/Downloads/install.sh
+   ```
+3. It checks for Python and Git, installs opentab, creates `~/Applications/opentab.app`, and launches the app
+
+The script keeps opentab running in the background and auto-restarts it if it closes (e.g. after an update).
+
+### Option 2: Quick Install
 
 **Windows (Command Prompt or PowerShell):**
 ```bash
@@ -133,7 +154,7 @@ Your browser will open automatically at http://localhost:8001.
 > python -m opentab --port 8080
 > ```
 
-### Option 2: Using Virtual Environment (Safer)
+### Option 3: Virtual Environment
 
 If you have other Python apps installed, use this method to avoid conflicts:
 
@@ -175,7 +196,7 @@ pip install git+https://github.com/steviejrdn/opentab.git
 opentab
 ```
 
-### Option 3: Docker (For Advanced Users)
+### Option 4: Docker
 
 If you already have Docker installed:
 
@@ -187,16 +208,15 @@ Then open http://localhost:8001 in your browser.
 
 ### Updating to a New Build
 
-When a new build is released, run this to update:
+**Easiest:** Click **"Update Now"** in the opentab banner when a new version is detected. The app upgrades and restarts itself automatically.
 
-**Windows:**
+**Or re-run the installer:**
+- **Windows:** Download and double-click `install.bat` again
+- **macOS:** Run `bash ~/Downloads/install.sh` again
+
+**Or use pip:**
 ```bash
 pip install --upgrade git+https://github.com/steviejrdn/opentab.git
-```
-
-**Mac:**
-```bash
-pip3 install --upgrade git+https://github.com/steviejrdn/opentab.git
 ```
 
 ---
