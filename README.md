@@ -13,7 +13,7 @@ opentab_ is an open source interactive reporting tool for survey data. It has a 
 ## opentab_ is now available in Catppuccin flavours
 
 <p align="center">
-  <img src="opentab-catppuccin-flavours" alt="opentab_" width="800" />
+  <img src="opentab-catppuccin-flavours.png" alt="opentab_" width="800" />
 </p>
 
 opentab now ships with full [Catppuccin](https://github.com/catppuccin/catppuccin) support — switch between all four flavours from the theme button in the navbar, alongside the classic light and dark modes.
