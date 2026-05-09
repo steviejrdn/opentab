@@ -53,43 +53,51 @@ echo [OK] opentab installed successfully.
 REM ── Verify opentab command ──
 echo.
 echo Verifying installation...
+set "OPENTAB_EXE="
+set "OPENTAB_ARGS="
+set "SHORTCUT_ARGS="
 where opentab >nul 2>&1
-if %errorlevel% neq 0 (
+if %errorlevel% equ 0 (
+    for /f "delims=" %%i in ('where opentab 2^>nul') do if not defined OPENTAB_EXE set "OPENTAB_EXE=%%i"
+    set "OPENTAB_CMD=opentab"
+    set "SHORTCUT_ARGS=--port 8001"
+    echo [OK] opentab found at: !OPENTAB_EXE!
+) else (
     echo [WARN] 'opentab' command not found in PATH.
     echo        Using 'python -m opentab' as fallback.
+    for /f "delims=" %%i in ('where python 2^>nul') do if not defined OPENTAB_EXE set "OPENTAB_EXE=%%i"
+    set "OPENTAB_ARGS=-m opentab"
+    set "SHORTCUT_ARGS=-m opentab --port 8001"
     set "OPENTAB_CMD=python -m opentab"
-) else (
-    set "OPENTAB_CMD=opentab"
+    echo [OK] python found at: !OPENTAB_EXE!
 )
+
+REM ── Find opentab package directory for icon ──
+set "OPENTAB_DIR="
+for /f "delims=" %%i in ('python -c "import opentab, os; print(os.path.dirname(opentab.__file__))" 2^>nul') do set "OPENTAB_DIR=%%i"
 
 REM ── Create Desktop Shortcut ──
 echo.
 echo Creating desktop shortcut...
-for /f "delims=" %%i in ('python -c "import opentab, os; print(os.path.dirname(opentab.__file__))"') do set "OPENTAB_DIR=%%i"
-if defined OPENTAB_DIR (
-    set "ICON=!OPENTAB_DIR!\static\opentab_icon.ico"
-    if exist "!ICON!" (
-        powershell -Command ^
-            $ws = New-Object -ComObject WScript.Shell; ^
-            $s = $ws.CreateShortcut('%USERPROFILE%\Desktop\opentab.lnk'); ^
-            $s.TargetPath = '!OPENTAB_CMD!'; ^
-            $s.WorkingDirectory = '%USERPROFILE%'; ^
-            $s.IconLocation = '!ICON!'; ^
-            $s.Save() > $null
-        echo [OK] Shortcut created on your desktop with opentab icon.
+if defined OPENTAB_EXE (
+    if defined OPENTAB_DIR (
+        set "ICON=!OPENTAB_DIR!\static\opentab_icon.ico"
+        if exist "!ICON!" (
+            powershell -Command "$ws=New-Object -ComObject WScript.Shell; $s=$ws.CreateShortcut('%USERPROFILE%\Desktop\opentab.lnk'); $s.TargetPath='!OPENTAB_EXE!'; $s.Arguments='!SHORTCUT_ARGS!'; $s.WorkingDirectory='%USERPROFILE%'; $s.IconLocation='!ICON!'; $s.Save(); exit 0"
+            if !errorlevel! equ 0 ( echo [OK] Shortcut created on your desktop with opentab icon. ) else ( echo [WARN] Shortcut created but icon may not display. )
+        ) else (
+            echo [WARN] Icon file not found at: !ICON!
+            echo        Creating shortcut without icon.
+            powershell -Command "$ws=New-Object -ComObject WScript.Shell; $s=$ws.CreateShortcut('%USERPROFILE%\Desktop\opentab.lnk'); $s.TargetPath='!OPENTAB_EXE!'; $s.Arguments='!SHORTCUT_ARGS!'; $s.WorkingDirectory='%USERPROFILE%'; $s.Save(); exit 0"
+            echo [OK] Shortcut created on your desktop.
+        )
     ) else (
-        echo [WARN] Icon file not found at: !ICON!
-        echo        Creating shortcut without icon.
-        powershell -Command ^
-            $ws = New-Object -ComObject WScript.Shell; ^
-            $s = $ws.CreateShortcut('%USERPROFILE%\Desktop\opentab.lnk'); ^
-            $s.TargetPath = '!OPENTAB_CMD!'; ^
-            $s.WorkingDirectory = '%USERPROFILE%'; ^
-            $s.Save() > $null
+        echo [WARN] Could not determine opentab package path. Creating shortcut without icon.
+        powershell -Command "$ws=New-Object -ComObject WScript.Shell; $s=$ws.CreateShortcut('%USERPROFILE%\Desktop\opentab.lnk'); $s.TargetPath='!OPENTAB_EXE!'; $s.Arguments='!SHORTCUT_ARGS!'; $s.WorkingDirectory='%USERPROFILE%'; $s.Save(); exit 0"
         echo [OK] Shortcut created on your desktop.
     )
 ) else (
-    echo [WARN] Could not determine opentab install path. Skipping shortcut.
+    echo [WARN] Could not find opentab or python executable. Skipping shortcut.
 )
 
 REM ── Launch opentab (auto-restart loop) ──
