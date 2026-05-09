@@ -846,7 +846,7 @@ const Navigation: React.FC = () => {
           beta
         </span>
         <span className="text-xs text-zinc-400 dark:text-zinc-600 leading-none">
-          v0.3.0
+          v0.3.1
         </span>
       </div>
       <div className="flex items-center gap-4">
