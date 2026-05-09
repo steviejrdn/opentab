@@ -42,6 +42,7 @@ Powered by [@catppuccin/tailwindcss](https://github.com/catppuccin/tailwindcss).
 - 🏷️ **SPSS file support improved** — variable labels from `.sav` files now display correctly across the build nesting zone and variable picker
 - 📊 **Scale variable support** — continuous/numeric variables (age, score, spend) are auto-detected and display summary stats in the variable panel; drop them to the sidebreak to output Mean, Std Dev, Std Error, and Variance rows in the crosstab
 - 🗂️ **Survey tool format support** — datasets from Dimensions, Confirmit, and similar tools using `{_N}` coded format are now loaded and detected correctly out of the box
+- 📲 **Install as app** — opentab can now be installed directly from the browser as a standalone desktop app via the address bar's install button
 
 ## Features
 
@@ -393,6 +394,7 @@ This app is vibe coded using [Claude Code](https://claude.ai/code) and [OpenCode
 - **Feature:** Survey tool coded format support (`{_N}`) — datasets exported from tools like Dimensions/Confirmit use `{_1}`, `{_2}` for single-answer codes and `{_1,_2,_3}` for multiple-answer. opentab now detects and normalizes this format automatically at load time — no manual conversion needed. Multiple-answer variables in this format are detected correctly without relying on semicolons
 - **Feature:** Open-ended/text column detection — free-text columns, date fields, and ID columns are now classified as `text` type and excluded from code-based analysis
 - **UX:** Version number (`v0.3.1`) now displayed in the navigation bar alongside the beta badge
+- **PWA:** opentab can now be installed as a standalone desktop app directly from the browser — click the install button in the address bar. Includes app manifest, favicon, and maskable icon
 - **Fix:** Build nesting items now correctly show SPSS variable labels for `.sav` files — variable key in green, SPSS label as grey sub-text (was showing the key twice when no distinct label was set)
 - **Fix:** Variable picker inside the nesting modal now shows SPSS labels in grey parentheses next to the variable key
 - **UX:** Loading screen now shows a progress bar with phase-aware text ("Twerking..." → "Loading variable list...") so it's clear the app is working and not frozen
