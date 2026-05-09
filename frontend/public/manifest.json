@@ -8,12 +8,12 @@
   "theme_color": "#18181b",
   "icons": [
     {
-      "src": "/favicon_white.svg",
+      "src": "/opentab_icon.svg",
       "sizes": "any",
       "type": "image/svg+xml"
     },
     {
-      "src": "/favicon_white.svg",
+      "src": "/opentab_icon.svg",
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "maskable"

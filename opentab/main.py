@@ -7,6 +7,7 @@ from fastapi.responses import FileResponse
 from .api.data import router as data_router
 from .api.tables import router as tables_router
 from .api.compute import router as compute_router
+from .update import run_update
 
 app = FastAPI(title="opentab_ API")
 
@@ -27,6 +28,12 @@ def get_version():
         return {"version": pkg_version("opentab")}
     except PackageNotFoundError:
         return {"version": "dev"}
+
+
+@app.post("/api/update")
+def perform_update():
+    ok, msg = run_update()
+    return {"status": "ok" if ok else "error", "message": msg}
 
 static_dir = Path(__file__).parent / "static"
 if static_dir.exists():

@@ -241,4 +241,11 @@ export const computeApi = {
   },
 };
 
+export const updateApi = {
+  run: async (): Promise<{ status: string; message: string }> => {
+    const response = await api.post('/api/update');
+    return response.data;
+  },
+};
+
 export default api;
