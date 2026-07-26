@@ -31,9 +31,13 @@ Powered by [@catppuccin/tailwindcss](https://github.com/catppuccin/tailwindcss).
 
 ---
 
-## What's New — beta v0.3.2
+## What's New — beta v0.3.3
 
-> **Latest release:** beta v0.3.2 — 10 May 2026
+> **Latest release:** beta v0.3.3 — 26 July 2026
+
+- **More accurate percentages** — crosstab percentage values now retain their full precision in API responses, so the frontend can correctly apply the selected number of decimal places.
+
+### Previously in beta v0.3.2
 
 - 🚀 **One-click installer** — Download `opentab_installer.bat` (Windows) or `opentab_installer.sh` (macOS) for a zero-terminal setup. The script checks for Python and Git, installs opentab, creates a desktop shortcut, and launches the app.
 - 🔘 **One-click update** — When a new version is detected, an "Update Now" button appears in the banner. Click it to upgrade and restart automatically.
@@ -106,13 +110,13 @@ git --version
 ### Option 1: One-Click Installer (Easiest — Recommended)
 
 **Windows:**
-1. Download **[opentab_installer.bat](https://github.com/steviejrdn/opentab/raw/v0.3.2/opentab_installer.bat)**
+1. Download **[opentab_installer.bat](https://github.com/steviejrdn/opentab/raw/v0.3.3/opentab_installer.bat)**
 2. Double-click `opentab_installer.bat`
 3. It checks for Python and Git (opens download pages if missing), installs opentab, creates a desktop shortcut, and launches the app
 4. Click the install icon in your browser's address bar to add opentab as a standalone desktop app (PWA)
 
 **macOS:**
-1. Download **[opentab_installer.sh](https://github.com/steviejrdn/opentab/raw/v0.3.2/opentab_installer.sh)**
+1. Download **[opentab_installer.sh](https://github.com/steviejrdn/opentab/raw/v0.3.3/opentab_installer.sh)**
 2. Open Terminal and run:
    ```bash
    bash ~/Downloads/opentab_installer.sh
@@ -396,7 +400,11 @@ This app is vibe coded using [Claude Code](https://claude.ai/code) and [OpenCode
 
 ## Changelog
 
+### beta v0.3.3 *(26 July 2026)*
+
+- **Fix:** Preserve full percentage precision in crosstab API responses so the frontend can correctly render the user's selected number of decimal places
 ### beta v0.3.2 *(10 May 2026)*
+
 - **Fix:** Auto-restart after `pip install --upgrade opentab` — the CLI now exits with code 42 and the launcher script restarts the process
 - **Fix:** Automatic port detection — if port 8001 is busy, opentab scans for the next available port and prints a message
 - **Fix:** Error details shown on crash screen before auto-restart pause

@@ -187,9 +187,11 @@ async def compute_crosstab(request: CrosstabRequest):
                 crosstab = create_crosstab(df, row_defs, col_defs, request.weight_col, request.filter_def)
             stats = calculate_frequencies(crosstab)
             counts_dict = stats['counts'].to_dict(orient='index')
-            row_pct_dict = stats['row_pct'].round(1).to_dict(orient='index')
-            col_pct_dict = stats['col_pct'].round(1).to_dict(orient='index')
-            total_pct_dict = stats['total_pct'].round(1).to_dict(orient='index')
+            # Keep percentage precision in the API response. The frontend applies
+            # the user's selected number of decimal places when rendering.
+            row_pct_dict = stats['row_pct'].to_dict(orient='index')
+            col_pct_dict = stats['col_pct'].to_dict(orient='index')
+            total_pct_dict = stats['total_pct'].to_dict(orient='index')
         else:
             counts_dict = {}
             row_pct_dict = {}
