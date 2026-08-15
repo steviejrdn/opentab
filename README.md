@@ -31,14 +31,14 @@ Powered by [@catppuccin/tailwindcss](https://github.com/catppuccin/tailwindcss).
 
 ---
 
-## What's New — beta v0.3.3
+## What's New — beta v0.4.0
 
-> **Latest release:** beta v0.3.3 — 26 July 2026
+> **Latest release:** beta v0.4.0 — 15 August 2026
 
-- **More accurate percentages** — crosstab percentage values now retain their full precision in API responses, so the frontend can correctly apply the selected number of decimal places.
-- 🐧 **Linux installer** — a one-click installer (`opentab_installer_linux.sh`) for Ubuntu/Kubuntu is now available. It installs opentab into an isolated virtual environment, adds a launcher and app menu entry, and creates a desktop shortcut.
+- 🧪 **Test suite** — added pytest coverage for the core logic (`code_parser`, `data_loader`, `tabulator`, `statistics`) and the API routers (`data`, `tables`, `compute`), plus a GitHub Actions CI workflow. Run with `pip install -e ".[dev]" && pytest tests/ -v`.
+- 🧹 **Cleanup** — removed dead code (`merge_codes_or_and`) and relaxed the over-strict variable check in the code-merge endpoint so it works with spread-format MA data.
 
-### Previously in beta v0.3.2
+### Previously in beta v0.3.3
 
 - 🚀 **One-click installer** — Download `opentab_installer.bat` (Windows), `opentab_installer.sh` (macOS), or `opentab_installer_linux.sh` (Linux) for a zero-terminal setup. The script checks for Python and Git, installs opentab, creates a desktop shortcut, and launches the app.
 - 🔘 **One-click update** — When a new version is detected, an "Update Now" button appears in the banner. Click it to upgrade and restart automatically.
@@ -448,6 +448,12 @@ This app is vibe coded using [Claude Code](https://claude.ai/code) and [OpenCode
 ---
 
 ## Changelog
+
+### beta v0.4.0 *(15 August 2026)*
+
+- **Feature:** Test suite — pytest coverage for core logic (`code_parser`, `data_loader`, `tabulator`, `statistics`) and API routers (`data`, `tables`, `compute`), plus a GitHub Actions CI workflow
+- **Fix:** Remove dead code (`merge_codes_or_and`) and relax the over-strict variable check in the code-merge endpoint so it works with spread-format MA data
+- **Chore:** Switch test dependency from `httpx` to `httpx2` (starlette migration)
 
 ### beta v0.3.3 *(26 July 2026)*
 
