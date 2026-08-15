@@ -3495,7 +3495,7 @@ function buildTableHtmlPure(p: {
   colPaths: string[];
   colHeaderRows: ColHeaderCell[][];
   numHeaderRows: number;
-  displayOptions: { counts: boolean; colPct: boolean; showPctSign: boolean; decimalPlaces: number; statDecimalPlaces: number };
+  displayOptions: { counts: boolean; colPct: boolean; showPctSign: boolean; decimalPlaces: number; statDecimalPlaces: number; sigTest: boolean; vsTotal: boolean };
   statRows: { key: string; label: string }[];
   getCodeLabel: (key: string, variable?: string, code?: string) => string;
   rowLabels?: string[];
@@ -3504,6 +3504,14 @@ function buildTableHtmlPure(p: {
   scaleStatRows?: { label: string; values: Record<string, number> }[];
 }): string {
   const { result, rowNames, colPaths, colHeaderRows, numHeaderRows, displayOptions, statRows, getCodeLabel, formatPct, statValue } = p;
+  const lettersFor = (row: string, col: string): string => result.significance?.letters?.[row]?.[col] ?? '';
+  const totalFor = (row: string, col: string): string => result.significance?.total?.[row]?.[col] ?? '';
+  const baseSuffix = (() => {
+    const parts: string[] = [];
+    if (result.weighted_base != null) parts.push(`w: ${result.weighted_base.toFixed(1)}`);
+    if (result.effective_base != null) parts.push(`eff: ${result.effective_base.toFixed(1)}`);
+    return parts.length > 0 ? ` (${parts.join(', ')})` : '';
+  })();
   const th = (label: string, colspan: number, rowspan: number, bg: string, bold: boolean, align = 'center') =>
     `<th${colspan > 1 ? ` colspan="${colspan}"` : ''}${rowspan > 1 ? ` rowspan="${rowspan}"` : ''} style="background:${bg};color:${bold ? '#333' : '#666'};font-weight:${bold ? 'bold' : 'normal'};text-align:${align};border:1px solid #ccc;padding:4px 8px;font-size:10pt;">${label}</th>`;
   const td = (value: string, bg: string, bold: boolean, align = 'center', color = '#666') =>
@@ -3542,18 +3550,18 @@ function buildTableHtmlPure(p: {
   }
 
   html += '<tbody>';
-  html += `<tr>${td('Base', '#F5F5F5', true, 'left', '#333')}${td(String(result.base), '#F3F4F6', false, 'center', '#333')}${colPaths.map(c => td(String(result.counts['Total']?.[c] ?? 0), '#F3F4F6', false)).join('')}</tr>`;
+  html += `<tr>${td('Base', '#F5F5F5', true, 'left', '#333')}${td(String(result.base) + baseSuffix, '#F3F4F6', false, 'center', '#333')}${colPaths.map(c => td(String(result.counts['Total']?.[c] ?? 0), '#F3F4F6', false)).join('')}</tr>`;
 
   rowNames.forEach((rname, i) => {
     const rowLabel = p.rowLabels?.[i] ?? getCodeLabel(rname);
     const rowTotal = result.counts[rname]?.['Total'] ?? 0;
     if (displayOptions.counts && displayOptions.colPct) {
       html += `<tr>${td(rowLabel, '#F5F5F5', true, 'left', '#333')}${td(String(rowTotal), '#F3F4F6', false)}${colPaths.map(c => td(String(result.counts[rname]?.[c] ?? 0), '#FFF', false)).join('')}</tr>`;
-      html += `<tr>${td('', '#F5F5F5', false)}${td(formatPct(result.col_pct[rname]?.['Total'] ?? 0), '#EFF6FF', false, 'center', '#2563EB')}${colPaths.map(c => td(formatPct(result.col_pct[rname]?.[c] ?? 0), '#EFF6FF', false, 'center', '#2563EB')).join('')}</tr>`;
+      html += `<tr>${td('', '#F5F5F5', false)}${td(formatPct(result.col_pct[rname]?.['Total'] ?? 0), '#EFF6FF', false, 'center', '#2563EB')}${colPaths.map(c => { const l = displayOptions.sigTest && result.significance ? lettersFor(rname, c) : ''; const t = displayOptions.sigTest && displayOptions.vsTotal && result.significance ? totalFor(rname, c) : ''; return td(formatPct(result.col_pct[rname]?.[c] ?? 0) + (l ? `<sup style="font-size:7pt;color:#2563EB;">${l}</sup>` : '') + (t ? `<sup style="font-size:7pt;color:#D97706;">${t}</sup>` : ''), '#EFF6FF', false, 'center', '#2563EB'); }).join('')}</tr>`;
     } else if (displayOptions.counts) {
       html += `<tr>${td(rowLabel, '#F5F5F5', true, 'left', '#333')}${td(String(rowTotal), '#F3F4F6', false)}${colPaths.map(c => td(String(result.counts[rname]?.[c] ?? 0), '#FFF', false)).join('')}</tr>`;
     } else if (displayOptions.colPct) {
-      html += `<tr>${td(rowLabel, '#F5F5F5', true, 'left', '#333')}${td(formatPct(result.col_pct[rname]?.['Total'] ?? 0), '#EFF6FF', false, 'center', '#2563EB')}${colPaths.map(c => td(formatPct(result.col_pct[rname]?.[c] ?? 0), '#EFF6FF', false, 'center', '#2563EB')).join('')}</tr>`;
+      html += `<tr>${td(rowLabel, '#F5F5F5', true, 'left', '#333')}${td(formatPct(result.col_pct[rname]?.['Total'] ?? 0), '#EFF6FF', false, 'center', '#2563EB')}${colPaths.map(c => { const l = displayOptions.sigTest && result.significance ? lettersFor(rname, c) : ''; const t = displayOptions.sigTest && displayOptions.vsTotal && result.significance ? totalFor(rname, c) : ''; return td(formatPct(result.col_pct[rname]?.[c] ?? 0) + (l ? `<sup style="font-size:7pt;color:#2563EB;">${l}</sup>` : '') + (t ? `<sup style="font-size:7pt;color:#D97706;">${t}</sup>` : ''), '#EFF6FF', false, 'center', '#2563EB'); }).join('')}</tr>`;
     }
   });
 
@@ -3654,6 +3662,9 @@ const ResultTab: React.FC = () => {
     const pct = val.toFixed(displayOptions.decimalPlaces);
     return displayOptions.showPctSign ? `${pct}%` : pct;
   };
+
+  const sigLetters = (row: string, col: string): string => result.significance?.letters?.[row]?.[col] ?? '';
+  const sigTotal = (row: string, col: string): string => result.significance?.total?.[row]?.[col] ?? '';
 
   const statRows: { key: 'mean' | 'std_error' | 'std_dev' | 'variance'; label: string }[] = [];
   if (hasStats) {
@@ -3759,7 +3770,11 @@ const ResultTab: React.FC = () => {
         (colHeaderRows[0] || []).forEach(cell => colHeaderLine.push(cell.label));
       }
       lines.push(colHeaderLine.join('\t'));
-      lines.push(['Base', String(result.base), ...colPaths.map(c => String(result.counts['Total']?.[c] ?? 0))].join('\t'));
+      const baseParts: string[] = [];
+      if (result.weighted_base != null) baseParts.push(`w: ${result.weighted_base.toFixed(1)}`);
+      if (result.effective_base != null) baseParts.push(`eff: ${result.effective_base.toFixed(1)}`);
+      const baseSuffix = baseParts.length > 0 ? ` (${baseParts.join(', ')})` : '';
+      lines.push(['Base', String(result.base) + baseSuffix, ...colPaths.map(c => String(result.counts['Total']?.[c] ?? 0))].join('\t'));
       rowNames.forEach((row, i) => {
         const rowLabel = rowLabels[i] ?? getCodeLabel(row);
         const parts: string[] = [rowLabel];
@@ -3767,14 +3782,14 @@ const ResultTab: React.FC = () => {
           parts.push(String(result.counts[row]?.['Total'] ?? 0));
           colPaths.forEach(c => parts.push(String(result.counts[row]?.[c] ?? 0)));
           lines.push(parts.join('\t'));
-          lines.push(['', ...colPaths.map(c => formatPct(result.col_pct[row]?.[c] ?? 0))].join('\t'));
+          lines.push(['', ...colPaths.map(c => formatPct(result.col_pct[row]?.[c] ?? 0) + (displayOptions.sigTest ? sigLetters(row, c) + (displayOptions.vsTotal ? sigTotal(row, c) : '') : ''))].join('\t'));
         } else if (displayOptions.counts) {
           parts.push(String(result.counts[row]?.['Total'] ?? 0));
           colPaths.forEach(c => parts.push(String(result.counts[row]?.[c] ?? 0)));
           lines.push(parts.join('\t'));
         } else if (displayOptions.colPct) {
           parts.push(formatPct(result.col_pct[row]?.['Total'] ?? 0));
-          colPaths.forEach(c => parts.push(formatPct(result.col_pct[row]?.[c] ?? 0)));
+          colPaths.forEach(c => parts.push(formatPct(result.col_pct[row]?.[c] ?? 0) + (displayOptions.sigTest ? sigLetters(row, c) + (displayOptions.vsTotal ? sigTotal(row, c) : '') : '')));
           lines.push(parts.join('\t'));
         }
       });
@@ -3889,7 +3904,11 @@ const ResultTab: React.FC = () => {
         : [];
       const lines: string[] = [];
       lines.push(['', 'Total', ...tColPaths.map(c => getCodeLabel(c))].join('\t'));
-      lines.push(['Base', String(tResult.base), ...tColPaths.map(c => String(tResult.counts['Total']?.[c] ?? 0))].join('\t'));
+      const baseParts: string[] = [];
+      if (tResult.weighted_base != null) baseParts.push(`w: ${tResult.weighted_base.toFixed(1)}`);
+      if (tResult.effective_base != null) baseParts.push(`eff: ${tResult.effective_base.toFixed(1)}`);
+      const baseSuffix = baseParts.length > 0 ? ` (${baseParts.join(', ')})` : '';
+      lines.push(['Base', String(tResult.base) + baseSuffix, ...tColPaths.map(c => String(tResult.counts['Total']?.[c] ?? 0))].join('\t'));
       tRowNames.forEach((row, i) => {
         const parts: string[] = [tRowLabels2[i] ?? getCodeLabel(row)];
         if (displayOptions.counts) {
@@ -3898,7 +3917,7 @@ const ResultTab: React.FC = () => {
           lines.push(parts.join('\t'));
         } else if (displayOptions.colPct) {
           parts.push(tFormatPct(tResult.col_pct[row]?.['Total'] ?? 0));
-          tColPaths.forEach(c => parts.push(tFormatPct(tResult.col_pct[row]?.[c] ?? 0)));
+          tColPaths.forEach(c => parts.push(tFormatPct(tResult.col_pct[row]?.[c] ?? 0) + (displayOptions.sigTest ? (tResult.significance?.letters?.[row]?.[c] ?? '') + (displayOptions.vsTotal ? (tResult.significance?.total?.[row]?.[c] ?? '') : '') : '')));
           lines.push(parts.join('\t'));
         }
       });
@@ -3951,6 +3970,16 @@ const ResultTab: React.FC = () => {
             </div>
           </>
         )}
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input type="checkbox" checked={displayOptions.sigTest} onChange={(e) => setDisplayOptions({ sigTest: e.target.checked, ...(e.target.checked ? { colPct: true } : {}) })} className="w-3.5 h-3.5 accent-blue-500" />
+          <span className="text-xs text-zinc-600 dark:text-zinc-400">sig</span>
+        </label>
+        {displayOptions.sigTest && (
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" checked={displayOptions.vsTotal} onChange={(e) => setDisplayOptions({ vsTotal: e.target.checked })} className="w-3.5 h-3.5 accent-amber-500" />
+            <span className="text-xs text-zinc-600 dark:text-zinc-400">vs total</span>
+          </label>
+        )}
         {hasStats && statRows.length > 0 && (
           <div className="flex items-center gap-2 pl-4 border-l border-zinc-200 dark:border-zinc-800">
             <span className="text-xs text-zinc-500">stats dec:</span>
@@ -4000,7 +4029,7 @@ const ResultTab: React.FC = () => {
       {/* Info */}
       <div className="flex flex-wrap gap-6 text-xs text-zinc-500 items-center">
         <span>row: <span className="text-zinc-700 dark:text-zinc-300">{rowVarLabel}</span></span>
-        <span>base: <span className="text-zinc-700 dark:text-zinc-300">{result.base}</span></span>
+        <span>base: <span className="text-zinc-700 dark:text-zinc-300">{result.base}{result.weighted_base != null ? ` · weighted: ${result.weighted_base.toFixed(1)}` : ''}{result.effective_base != null ? ` · eff base: ${result.effective_base.toFixed(1)}` : ''}</span></span>
       </div>
 
       {/* Table */}
@@ -4065,6 +4094,12 @@ const ResultTab: React.FC = () => {
                       {colPaths.map((col, ci) => (
                         <td key={ci} className="border border-zinc-200 dark:border-zinc-800 px-3 py-1 text-center text-blue-600 dark:text-blue-400/70">
                           {formatPct(result.col_pct[row]?.[col] ?? 0)}
+                          {displayOptions.sigTest && sigLetters(row, col) && (
+                            <sup className="ml-0.5 text-[9px] text-blue-600 dark:text-blue-400/70">{sigLetters(row, col)}</sup>
+                          )}
+                          {displayOptions.sigTest && displayOptions.vsTotal && sigTotal(row, col) && (
+                            <sup className="ml-0.5 text-[9px] text-amber-600 dark:text-amber-400/80">{sigTotal(row, col)}</sup>
+                          )}
                         </td>
                       ))}
                     </tr>
@@ -4090,6 +4125,12 @@ const ResultTab: React.FC = () => {
                     {colPaths.map((col, ci) => (
                       <td key={ci} className="border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-center text-blue-600 dark:text-blue-400/70">
                         {formatPct(result.col_pct[row]?.[col] ?? 0)}
+                        {displayOptions.sigTest && sigLetters(row, col) && (
+                          <sup className="ml-0.5 text-[9px] text-blue-600 dark:text-blue-400/70">{sigLetters(row, col)}</sup>
+                        )}
+                        {displayOptions.sigTest && displayOptions.vsTotal && sigTotal(row, col) && (
+                          <sup className="ml-0.5 text-[9px] text-amber-600 dark:text-amber-400/80">{sigTotal(row, col)}</sup>
+                        )}
                       </td>
                     ))}
                   </tr>

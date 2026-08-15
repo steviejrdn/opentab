@@ -116,3 +116,101 @@ def test_weighted_crosstab(loaded_client):
     counts = resp.json()['counts']
     # Gender/1 x Satisfaction/5 weighted: rows 0 (1.0) + 2 (1.5) = 2.5
     assert counts['Gender/1']['Satisfaction/5'] == 2.5
+
+
+def test_weighted_and_effective_base(loaded_client):
+    loaded_client.post('/api/data/upload-text', json={
+        'csv_text': 'Gender,Satisfaction,W\n1,5,1.0\n2,4,2.0\n1,5,1.5\n2,3,2.5\n',
+        'file_name': 'w.csv',
+    })
+    resp = loaded_client.post('/api/compute/crosstab', json={
+        'row_items': [{'variable': 'Gender', 'codeDef': 'Gender/1'}],
+        'col_items': [{'variable': 'Satisfaction', 'codeDef': 'Satisfaction/5'}],
+        'weight_col': 'W',
+    })
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body['base'] == 4
+    # Weights: 1.0 + 2.0 + 1.5 + 2.5 = 7.0
+    assert body['weighted_base'] == 7.0
+    # Effective base: 7.0^2 / (1^2 + 2^2 + 1.5^2 + 2.5^2) = 49 / 13.5 = 3.629...
+    assert body['effective_base'] == pytest.approx(3.6)
+
+
+def test_no_weight_yields_none_bases(loaded_client):
+    resp = loaded_client.post('/api/compute/crosstab', json={
+        'row_items': [{'variable': 'Gender', 'codeDef': 'Gender/1'}],
+        'col_items': [{'variable': 'Satisfaction', 'codeDef': 'Satisfaction/5'}],
+    })
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body['weighted_base'] is None
+    assert body['effective_base'] is None
+
+
+def test_weighted_base_respects_filter(loaded_client):
+    loaded_client.post('/api/data/upload-text', json={
+        'csv_text': 'Gender,Satisfaction,W\n1,5,1.0\n2,4,2.0\n1,5,1.5\n2,3,2.5\n',
+        'file_name': 'w.csv',
+    })
+    resp = loaded_client.post('/api/compute/crosstab', json={
+        'row_items': [{'variable': 'Gender', 'codeDef': 'Gender/1'}],
+        'col_items': [{'variable': 'Satisfaction', 'codeDef': 'Satisfaction/5'}],
+        'weight_col': 'W',
+        'filter_def': 'Gender/1',
+    })
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body['base'] == 2
+    # Only Gender/1 rows: weights 1.0 + 1.5 = 2.5
+    assert body['weighted_base'] == 2.5
+
+
+def test_significance_letters(loaded_client):
+    csv_text = (
+        'Gender,Q\n'
+        + ''.join('1,1\n' for _ in range(60))
+        + ''.join('1,2\n' for _ in range(40))
+        + ''.join('2,1\n' for _ in range(40))
+        + ''.join('2,2\n' for _ in range(60))
+    )
+    loaded_client.post('/api/data/upload-text', json={
+        'csv_text': csv_text,
+        'file_name': 'sig.csv',
+    })
+    resp = loaded_client.post('/api/compute/crosstab', json={
+        'row_items': [
+            {'variable': 'Gender', 'codeDef': 'Gender/1'},
+            {'variable': 'Gender', 'codeDef': 'Gender/2'},
+        ],
+        'col_items': [
+            {'variable': 'Q', 'codeDef': 'Q/1'},
+            {'variable': 'Q', 'codeDef': 'Q/2'},
+        ],
+        'sig_test': True,
+        'sig_level': 0.95,
+    })
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body['significance'] is not None
+    significance = body['significance']
+    assert significance['column_letters'] == {'Q/1': 'A', 'Q/2': 'B'}
+    letters = significance['letters']
+    # Only the significantly-higher cell gets a letter. 60% vs 40% at n=100
+    # is significant at 99% -> uppercase + "+".
+    assert letters['Gender/1']['Q/1'] == 'B+'
+    assert 'Q/2' not in letters['Gender/1']
+    assert letters['Gender/2']['Q/2'] == 'A+'
+    assert 'Q/1' not in letters['Gender/2']
+    # "vs total" arrows at 95%: higher -> '↑', lower -> '↓'
+    assert significance['total']['Gender/1']['Q/1'] == '↑'
+    assert significance['total']['Gender/1']['Q/2'] == '↓'
+    assert significance['total']['Gender/2']['Q/2'] == '↑'
+
+
+def test_significance_absent_without_columns(loaded_client):
+    resp = loaded_client.post('/api/compute/crosstab', json={
+        'row_items': [{'variable': 'Gender', 'codeDef': 'Gender/1'}],
+    })
+    assert resp.status_code == 200
+    assert resp.json()['significance'] is None

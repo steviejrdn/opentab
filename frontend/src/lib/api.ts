@@ -103,6 +103,13 @@ export interface CrosstabResult {
     std_error: Record<string, number>;
     variance: Record<string, number>;
   }> | null;
+  weighted_base?: number | null;
+  effective_base?: number | null;
+  significance?: {
+    column_letters: Record<string, string>;
+    letters: Record<string, Record<string, string>>;
+    total?: Record<string, Record<string, string>> | null;
+  } | null;
 }
 
 export interface NetCodeInfo {

@@ -28,6 +28,8 @@ class CrosstabRequest(BaseModel):
     filter_def: Optional[str] = None
     weight_col: Optional[str] = None
     mean_score_mappings: Optional[list[MeanScoreMapping]] = None
+    sig_test: bool = False
+    sig_level: float = 0.95
 
 
 class CrosstabResponse(BaseModel):
@@ -36,11 +38,14 @@ class CrosstabResponse(BaseModel):
     col_pct: dict
     total_pct: dict
     base: int
+    weighted_base: Optional[float] = None
+    effective_base: Optional[float] = None
     mean: Optional[dict] = None
     std_error: Optional[dict] = None
     std_dev: Optional[dict] = None
     variance: Optional[dict] = None
     scale_rows: Optional[dict] = None
+    significance: Optional[dict] = None
 
 
 def _assign_scores(working_df, var_name, sm_codes):
@@ -198,6 +203,36 @@ async def compute_crosstab(request: CrosstabRequest):
             col_pct_dict = {}
             total_pct_dict = {}
         base = calculate_base(df, request.filter_def)
+
+        # Weighted / effective base on the same filtered population used by the
+        # crosstab (mirrors create_crosstab's filter application).
+        weighted_base = None
+        effective_base = None
+        if request.filter_def:
+            from ..core.code_parser import parse_code_def
+            filter_mask = parse_code_def(request.filter_def, df)
+            filtered = df[filter_mask]
+        else:
+            filtered = df
+        if request.weight_col and request.weight_col in df.columns:
+            w = filtered[request.weight_col].astype(float)
+            weighted_base = round(float(w.sum()), 1)
+            sq = float((w ** 2).sum())
+            effective_base = round((weighted_base ** 2) / sq, 1) if sq > 0 else 0.0
+
+        # Significance testing (higher-only column-comparison letters). Always
+        # computed on unweighted counts; weights inflate apparent precision.
+        # A letter appears only where this column is significantly HIGHER than
+        # the compared column. Letter style encodes confidence: lowercase =
+        # 90%, UPPERCASE = 95%, UPPERCASE+"+" = 99%.
+        significance = None
+        if col_defs and not request.is_grid_mode:
+            from ..core.significance import compute_proportion_significance, compute_total_significance
+            unweighted = create_crosstab(df, row_defs, col_defs, weight_col=None, filter_def=request.filter_def)
+            col_bases = {c: float(unweighted.loc['Total', c]) for c in unweighted.columns if c != 'Total'}
+            column_letters, letters = compute_proportion_significance(unweighted, col_bases)
+            total_markers = compute_total_significance(unweighted, col_bases)
+            significance = {"column_letters": column_letters, "letters": letters, "total": total_markers}
 
         mean_data = None
         std_error_data = None
@@ -385,11 +420,14 @@ async def compute_crosstab(request: CrosstabRequest):
             col_pct=col_pct_dict,
             total_pct=total_pct_dict,
             base=int(base),
+            weighted_base=weighted_base,
+            effective_base=effective_base,
             mean=mean_data,
             std_error=std_error_data,
             std_dev=std_dev_data,
             variance=variance_data,
             scale_rows=scale_rows_data,
+            significance=significance,
         )
     except ValueError as e:
         print(f"ERROR ValueError: {e}")

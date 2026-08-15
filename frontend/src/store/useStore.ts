@@ -14,6 +14,8 @@ export interface DisplayOptions {
   showPctSign: boolean;
   decimalPlaces: number;
   statDecimalPlaces: number;
+  sigTest: boolean;
+  vsTotal: boolean;
 }
 
 interface AppState {
@@ -134,6 +136,8 @@ export const useStore = create<AppState>()((set, get) => ({
     showPctSign: true,
     decimalPlaces: 1,
     statDecimalPlaces: 2,
+    sigTest: false,
+    vsTotal: false,
   },
   sidebarWidth: 256,
   sidebarVisible: false,
@@ -703,7 +707,7 @@ export const useStore = create<AppState>()((set, get) => ({
     folders: [],
     activeTab: 'build',
     sidebarVisible: false,
-    displayOptions: { counts: true, colPct: false, showPctSign: true, decimalPlaces: 1, statDecimalPlaces: 2 },
+    displayOptions: { counts: true, colPct: false, showPctSign: true, decimalPlaces: 1, statDecimalPlaces: 2, sigTest: false, vsTotal: false },
   }),
 
 }));
