@@ -39,7 +39,7 @@ Powered by [@catppuccin/tailwindcss](https://github.com/catppuccin/tailwindcss).
 
 ### Previously in beta v0.3.2
 
-- 🚀 **One-click installer** — Download `opentab_installer.bat` (Windows) or `opentab_installer.sh` (macOS) for a zero-terminal setup. The script checks for Python and Git, installs opentab, creates a desktop shortcut, and launches the app.
+- 🚀 **One-click installer** — Download `opentab_installer.bat` (Windows), `opentab_installer.sh` (macOS), or `opentab_installer_linux.sh` (Linux) for a zero-terminal setup. The script checks for Python and Git, installs opentab, creates a desktop shortcut, and launches the app.
 - 🔘 **One-click update** — When a new version is detected, an "Update Now" button appears in the banner. Click it to upgrade and restart automatically.
 - 🔔 **Auto-update check** — opentab now silently checks for a newer version on startup. If one is available, a banner appears with the update command ready to copy — no need to check GitHub manually
 - 🔄 **Update dataset** — swap in a new file without losing tables, edits, or folder structure
@@ -70,7 +70,7 @@ Powered by [@catppuccin/tailwindcss](https://github.com/catppuccin/tailwindcss).
 ## End User Install
 
 > **🎯 Not sure which option to choose?**
-> - **Windows/Mac users, first time:** Use [Option 1: One-Click Installer](#option-1-one-click-installer-easiest---recommended)
+> - **Windows/Mac/Linux users, first time:** Use [Option 1: One-Click Installer](#option-1-one-click-installer-easiest---recommended)
 > - **Prefer the command line:** Use [Option 2: Quick Install](#option-2-quick-install)
 > - **Have other Python apps installed:** Use [Option 3: Virtual Environment](#option-3-virtual-environment)
 > - **Already have Docker:** Use [Option 4: Docker](#option-4-docker)
@@ -107,6 +107,11 @@ You need **Python** and **Git** installed before installing opentab.
 git --version
 ```
 
+**Linux (Ubuntu/Kubuntu):**
+```bash
+sudo apt install python3 python3-venv git
+```
+
 ### Option 1: One-Click Installer (Easiest — Recommended)
 
 **Windows:**
@@ -122,6 +127,14 @@ git --version
    bash ~/Downloads/opentab_installer.sh
    ```
 3. It checks for Python and Git, installs opentab, creates `~/Applications/opentab.app`, and launches the app
+
+**Linux (Ubuntu/Kubuntu):**
+1. Download **[opentab_installer_linux.sh](https://github.com/steviejrdn/opentab/raw/v0.3.3/opentab_installer_linux.sh)**
+2. Open a terminal and run:
+   ```bash
+   bash ~/Downloads/opentab_installer_linux.sh
+   ```
+3. It checks for Python and Git, installs opentab into an isolated virtual environment at `~/.local/share/opentab`, adds a launcher and app menu entry (with icon), creates a desktop shortcut, and launches the app
 
 The script keeps opentab running in the background and auto-restarts it if it closes (e.g. after an update).
 
@@ -144,6 +157,18 @@ pip3 install git+https://github.com/steviejrdn/opentab.git
 opentab
 ```
 
+> **If `opentab` is not recognized**, run this instead:
+> ```bash
+> python3 -m opentab
+> ```
+
+**Linux (Ubuntu/Kubuntu):**
+```bash
+pip3 install --user git+https://github.com/steviejrdn/opentab.git
+opentab
+```
+
+> **Note:** On Ubuntu 23.04+ / Kubuntu 24.04+, system `pip` is externally-managed. Prefer the one-click installer (Option 1) or a virtual environment (Option 3).
 > **If `opentab` is not recognized**, run this instead:
 > ```bash
 > python3 -m opentab
@@ -200,6 +225,25 @@ pip install git+https://github.com/steviejrdn/opentab.git
 opentab
 ```
 
+**Linux (Ubuntu/Kubuntu):**
+```bash
+# Create a folder for opentab
+mkdir ~/opentab-app
+cd ~/opentab-app
+
+# Create virtual environment
+python3 -m venv venv
+
+# Activate it
+source venv/bin/activate
+
+# Install opentab
+pip install git+https://github.com/steviejrdn/opentab.git
+
+# Run it
+opentab
+```
+
 ### Option 4: Docker
 
 If you already have Docker installed:
@@ -217,6 +261,7 @@ Then open http://localhost:8001 in your browser.
 **Or re-run the installer:**
 - **Windows:** Download and double-click `opentab_installer.bat` again
 - **macOS:** Run `bash ~/Downloads/opentab_installer.sh` again
+- **Linux:** Run `bash ~/Downloads/opentab_installer_linux.sh` again
 
 **Or use pip:**
 ```bash
@@ -239,6 +284,9 @@ pip install --upgrade git+https://github.com/steviejrdn/opentab.git
 
 **"Permission denied" error (Mac)**
 - Use `pip3 install --user git+https://github.com/steviejrdn/opentab.git` instead
+
+**"externally-managed-environment" error (Linux)**
+- Your system Python is locked by the OS. Use the one-click installer (Option 1) or a virtual environment (Option 3) instead of system `pip`
 
 **Port 8001 already in use**
 - Another app is using port 8001. Use a different port:
