@@ -35,8 +35,8 @@ Powered by [@catppuccin/tailwindcss](https://github.com/catppuccin/tailwindcss).
 
 > **Latest release:** beta v0.4.0 — 15 August 2026
 
+- 💾 **Session persistence** — opentab now auto-saves your workspace server-side, so a restart, update, or crash no longer loses your data, tables, or edits. A "Restore previous session?" banner appears on the next launch.
 - 🧪 **Test suite** — added pytest coverage for the core logic (`code_parser`, `data_loader`, `tabulator`, `statistics`) and the API routers (`data`, `tables`, `compute`), plus a GitHub Actions CI workflow. Run with `pip install -e ".[dev]" && pytest tests/ -v`.
-- 🧹 **Cleanup** — removed dead code (`merge_codes_or_and`) and relaxed the over-strict variable check in the code-merge endpoint so it works with spread-format MA data.
 
 ### Previously in beta v0.3.3
 
@@ -451,6 +451,7 @@ This app is vibe coded using [Claude Code](https://claude.ai/code) and [OpenCode
 
 ### beta v0.4.0 *(15 August 2026)*
 
+- **Feature:** Session persistence — the workspace is auto-saved server-side and can be restored via a "Restore previous session?" prompt after a restart, update, or crash
 - **Feature:** Test suite — pytest coverage for core logic (`code_parser`, `data_loader`, `tabulator`, `statistics`) and API routers (`data`, `tables`, `compute`), plus a GitHub Actions CI workflow
 - **Fix:** Remove dead code (`merge_codes_or_and`) and relax the over-strict variable check in the code-merge endpoint so it works with spread-format MA data
 - **Chore:** Switch test dependency from `httpx` to `httpx2` (starlette migration)
