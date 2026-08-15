@@ -1,11 +1,19 @@
 import { create } from 'zustand';
-import type { VariableInfo, Table, CrosstabResult, DropItem, FilterItem } from '../lib/api';
+import type { VariableInfo, VariableCode, Table, CrosstabResult, DropItem, FilterItem } from '../lib/api';
 import { dataApi } from '../lib/api';
 
 export interface Folder {
   id: string;
   name: string;
   isOpen: boolean;
+}
+
+export interface DisplayOptions {
+  counts: boolean;
+  colPct: boolean;
+  showPctSign: boolean;
+  decimalPlaces: number;
+  statDecimalPlaces: number;
 }
 
 interface AppState {
@@ -21,13 +29,7 @@ interface AppState {
   savedHeaders: Record<string, { name: string; items: DropItem[] }>;
 
   activeTab: 'build' | 'filter' | 'result' | 'edit-variables';
-  displayOptions: {
-    counts: boolean;
-    colPct: boolean;
-    showPctSign: boolean;
-    decimalPlaces: number;
-    statDecimalPlaces: number;
-  };
+  displayOptions: DisplayOptions;
 
   sidebarWidth: number;
   sidebarVisible: boolean;
@@ -364,7 +366,8 @@ export const useStore = create<AppState>()((set, get) => ({
         children: item.children?.map(updateDropItem),
       });
 
-      const { [oldKey]: _, ...rest } = state.variables;
+      const rest: Record<string, VariableInfo> = { ...state.variables };
+      delete rest[oldKey];
       const newVariables: Record<string, VariableInfo> = {
         ...Object.fromEntries(
           Object.entries(rest).map(([k, v]) => [k, {
@@ -633,7 +636,7 @@ export const useStore = create<AppState>()((set, get) => ({
     for (const [key, newInfo] of Object.entries(incoming)) {
       const existing = state.variables[key];
       // Sort codes by numeric value if possible, otherwise alphabetical
-      const sortCodes = (codes: any[]) => {
+      const sortCodes = (codes: VariableCode[]) => {
         return [...codes].sort((a, b) => {
           const aCode = String(a.code);
           const bCode = String(b.code);
@@ -685,7 +688,8 @@ export const useStore = create<AppState>()((set, get) => ({
 
   removeSavedHeader: (key) =>
     set(state => {
-      const { [key]: _, ...rest } = state.savedHeaders;
+      const rest = { ...state.savedHeaders };
+      delete rest[key];
       return { savedHeaders: rest };
     }),
 

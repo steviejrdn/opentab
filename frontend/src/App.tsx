@@ -2,11 +2,12 @@ import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { BrowserRouter as Router, Routes, Route, Navigate, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useStore } from './store/useStore';
+import type { Folder } from './store/useStore';
 import { DndContext, useSensor, useSensors, PointerSensor, useDraggable, useDroppable, DragOverlay } from '@dnd-kit/core';
 import type { DragStartEvent, DragEndEvent as DndDragEndEvent } from '@dnd-kit/core';
 
-import { computeApi, dataApi, updateApi } from './lib/api';
-import type { FilterItem, CrosstabResult, VariableInfo, DropItem, Table } from './lib/api';
+import { computeApi, dataApi, updateApi, sessionApi } from './lib/api';
+import type { FilterItem, CrosstabResult, VariableInfo, VariableCode, DropItem, Table, SessionPayload, MergedVariableMeta } from './lib/api';
 import FilterTab from './components/FilterTab';
 import { VariableEditPanel } from './components/VariableEditPanel';
 import { v4 as uuidv4 } from 'uuid';
@@ -24,6 +25,45 @@ function isNewerVersion(remote: string, local: string): boolean {
   return false;
 }
 
+function getErrorMessage(err: unknown, fallback: string): string {
+  if (err && typeof err === 'object') {
+    const e = err as { response?: { data?: { detail?: string } }; message?: string };
+    return e.response?.data?.detail || e.message || fallback;
+  }
+  return fallback;
+}
+
+function resolveCodeLabel(
+  key: string,
+  variable: string | undefined,
+  code: string | undefined,
+  variables: Record<string, VariableInfo>,
+  resolveCode: (variable: string, code: string) => string,
+): string {
+  if (variable && code) {
+    const codeObj = variables[variable]?.codes.find((c) => c.code === code);
+    if (codeObj) return codeObj.label || code;
+  }
+  for (const [varKey, vInfo] of Object.entries(variables)) {
+    const m = vInfo.codes.find((c) => c.syntax && (c.isNew || c.isCustom) && resolveCode(varKey, c.code) === key);
+    if (m) return m.label;
+  }
+  for (const [varKey, vInfo] of Object.entries(variables)) {
+    const m = vInfo.codes.find((c) => c.syntax && resolveCode(varKey, c.code) === key);
+    if (m) return m.label;
+  }
+  if (key.includes('.')) {
+    return key.split('.').map((part) => resolveCodeLabel(part, undefined, undefined, variables, resolveCode)).join(' › ');
+  }
+  const parts = key.split('/');
+  if (parts.length !== 2) return key;
+  const [rawVarName, code_] = parts;
+  const variable_ = variables[rawVarName.startsWith('$') ? rawVarName.slice(1) : rawVarName];
+  if (!variable_) return code_;
+  const codeObj = variable_.codes.find((c) => c.code === code_);
+  return codeObj?.label || code_;
+}
+
 function buildNameToKeyMap(vars: Record<string, VariableInfo>): Record<string, string> {
   const map: Record<string, string> = {};
   Object.entries(vars).forEach(([key, info]) => {
@@ -36,7 +76,7 @@ function buildNameToKeyMap(vars: Record<string, VariableInfo>): Record<string, s
 function buildNetRegistry(vars: Record<string, VariableInfo>): Record<string, { variable: string; label: string; netOf: string[]; syntax: string }> {
   const registry: Record<string, { variable: string; label: string; netOf: string[]; syntax: string }> = {};
   Object.entries(vars).forEach(([varKey, info]) => {
-    info.codes.forEach((code: any) => {
+    info.codes.forEach((code) => {
       if (code.isNet && code.code) {
         registry[code.code] = { variable: varKey, label: code.label || code.code, netOf: code.netOf || [], syntax: code.syntax || '' };
       }
@@ -48,7 +88,7 @@ function buildNetRegistry(vars: Record<string, VariableInfo>): Record<string, { 
 function buildCodeRegistry(vars: Record<string, VariableInfo>): Record<string, { variable: string; code: string; syntax: string }> {
   const registry: Record<string, { variable: string; code: string; syntax: string }> = {};
   Object.entries(vars).forEach(([varKey, info]) => {
-    info.codes.forEach((code: any) => {
+    info.codes.forEach((code) => {
       if (!code.isNet && code.syntax && code.code) {
         registry[`${varKey}/${code.code}`] = { variable: varKey, code: code.code, syntax: code.syntax };
       }
@@ -198,6 +238,7 @@ const EzHeaderDropZone: React.FC<{
   const [searchQuery, setSearchQuery] = useState('');
   const pickerRef = useRef<HTMLDivElement>(null);
   const pickerButtonRef = useRef<HTMLButtonElement>(null);
+  const [pickerPos, setPickerPos] = useState<{ top: number; left: number } | null>(null);
 
   // Close picker when clicking outside
   useEffect(() => {
@@ -218,6 +259,10 @@ const EzHeaderDropZone: React.FC<{
     setSearchQuery('');
     if (buttonRef) {
       pickerButtonRef.current = buttonRef;
+      const rect = buttonRef.getBoundingClientRect();
+      setPickerPos({ top: rect.bottom + 4, left: rect.left });
+    } else {
+      setPickerPos(null);
     }
   };
 
@@ -226,8 +271,8 @@ const EzHeaderDropZone: React.FC<{
     const varInfo = variables[varName];
     if (varInfo?.codes?.length) {
       const visibleCodes = varInfo.codes
-        .filter((c: any) => c.visibility !== 'removed' && c.visibility !== 'hidden')
-        .map((c: any) => c.code);
+        .filter((c) => c.visibility !== 'removed' && c.visibility !== 'hidden')
+        .map((c) => c.code);
       const newItem: DropItem = {
         id: uuidv4(),
         variable: varName,
@@ -285,8 +330,8 @@ const EzHeaderDropZone: React.FC<{
           ref={pickerRef}
           className="fixed z-[60] w-64 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg shadow-xl"
           style={{
-            top: pickerButtonRef.current ? pickerButtonRef.current.getBoundingClientRect().bottom + 4 : '50%',
-            left: pickerButtonRef.current ? pickerButtonRef.current.getBoundingClientRect().left : '50%',
+            top: pickerPos ? pickerPos.top : '50%',
+            left: pickerPos ? pickerPos.left : '50%',
           }}
         >
           <div className="p-2 border-b border-zinc-200 dark:border-zinc-700">
@@ -499,6 +544,40 @@ const ThemeModal: React.FC = () => {
   );
 };
 
+// ─── Session restore helper ───────────────────────────────────────────────────
+async function buildSessionPayload(): Promise<SessionPayload> {
+  const state = useStore.getState();
+  const [rawCsv, mergedVars] = await Promise.all([
+    dataApi.getRawCsv(),
+    dataApi.getMergedVariables(),
+  ]);
+  return {
+    version: 2,
+    fileName: state.fileName, rowCount: state.rowCount,
+    variables: state.variables, tables: state.tables,
+    folders: state.folders, displayOptions: state.displayOptions,
+    activeTableId: state.activeTableId,
+    csvData: rawCsv,
+    mergedVariables: mergedVars,
+  };
+}
+
+async function applySessionPayload(data: SessionPayload): Promise<void> {
+  const uploadResult = await dataApi.uploadText(data.csvData, data.fileName || 'restored.csv');
+  const mergedEntries = Object.entries(data.mergedVariables || {});
+  for (const [name, meta] of mergedEntries) {
+    try { await dataApi.registerMerged(name, meta); } catch { /* skip bad entry */ }
+  }
+  // Use saved variables directly - don't fetch from backend which loses custom codes
+  useStore.getState().importState({
+    variables: data.variables, tables: data.tables,
+    displayOptions: data.displayOptions, activeTableId: data.activeTableId ?? null,
+    fileName: data.fileName ?? null, rowCount: uploadResult.row_count,
+    folders: data.folders ?? [],
+  });
+  useStore.getState().setDataLoaded(true);
+}
+
 // ─── Navigation ──────────────────────────────────────────────────────────────
 const Navigation: React.FC = () => {
   const location = useLocation();
@@ -507,12 +586,13 @@ const Navigation: React.FC = () => {
           importState, setDataLoaded, resetSession, mergeAndSetVariables, setDataInfo, setVariables } = useStore();
   const openFileRef = useRef<HTMLInputElement>(null);
   const opentabHandle = useRef<FileSystemFileHandle | null>(null);
+  const [hasFileHandle, setHasFileHandle] = useState(false);
   const [restoreStatus, setRestoreStatus] = useState<{ loading: boolean; message: string } | null>(null);
   const [autoSavedAt, setAutoSavedAt] = useState<Date | null>(null);
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const updateDatasetRef = useRef<HTMLInputElement>(null);
   const [updating, setUpdating] = useState(false);
-  const [updatePendingFile, setUpdatePendingFile] = useState<{ file: File; oldCsv: string; oldMergedVars: Record<string, any> } | null>(null);
+  const [updatePendingFile, setUpdatePendingFile] = useState<{ file: File; oldCsv: string; oldMergedVars: Record<string, MergedVariableMeta> } | null>(null);
   const [updateSheetOptions, setUpdateSheetOptions] = useState<string[] | null>(null);
   const [updateConfirm, setUpdateConfirm] = useState<{
     file: File;
@@ -520,7 +600,7 @@ const Navigation: React.FC = () => {
     newVars: Record<string, VariableInfo>;
     oldCsv: string;
     oldFileName: string | null;
-    oldMergedVars: Record<string, any>;
+    oldMergedVars: Record<string, MergedVariableMeta>;
     oldMergedVarState: Record<string, VariableInfo>;
     matched: number;
     added: string[];
@@ -541,7 +621,6 @@ const Navigation: React.FC = () => {
       mergedVariables: mergedVars,
     };
   };
-
   const writeToHandle = async (handle: FileSystemFileHandle, payload: object) => {
     const writable = await handle.createWritable();
     await writable.write(JSON.stringify(payload, null, 2));
@@ -571,6 +650,7 @@ const Navigation: React.FC = () => {
             suggestedName: `${fileName?.replace(/\.[^.]+$/, '') || 'session'}.opentab`,
             types: [{ description: 'opentab session', accept: { 'application/json': ['.opentab'] } }],
           });
+          setHasFileHandle(true);
         }
         await performSave(false);
       } else {
@@ -598,6 +678,7 @@ const Navigation: React.FC = () => {
         types: [{ description: 'opentab session', accept: { 'application/json': ['.opentab'] } }],
       });
       opentabHandle.current = handle;
+      setHasFileHandle(true);
       await performSave(false);
     } catch (err: unknown) {
       if (err instanceof Error && err.name === 'AbortError') return;
@@ -616,25 +697,43 @@ const Navigation: React.FC = () => {
     };
   }, [tables, variables, folders, displayOptions, activeTableId]);
 
+  const backendSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (!dataLoaded) return;
+    if (backendSaveTimerRef.current) clearTimeout(backendSaveTimerRef.current);
+    backendSaveTimerRef.current = setTimeout(() => {
+      buildSessionPayload().then((payload) => sessionApi.save(payload)).catch(() => {});
+    }, 2000);
+    return () => {
+      if (backendSaveTimerRef.current) clearTimeout(backendSaveTimerRef.current);
+    };
+  }, [tables, variables, folders, displayOptions, activeTableId, dataLoaded]);
+
+  useEffect(() => {
+    const flush = () => {
+      if (!useStore.getState().dataLoaded) return;
+      buildSessionPayload().then((payload) => sessionApi.saveFlush(payload)).catch(() => {});
+    };
+    const onPageHide = () => flush();
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') flush();
+    };
+    window.addEventListener('pagehide', onPageHide);
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      window.removeEventListener('pagehide', onPageHide);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, []);
+
   const restoreFromText = async (jsonText: string, fallbackName: string) => {
     const data = JSON.parse(jsonText);
     if (!data.variables || !data.tables) throw new Error('Invalid .opentab file');
 
     if (data.version === 2 && data.csvData) {
       setRestoreStatus({ loading: true, message: 'Restoring session...' });
-      const uploadResult = await dataApi.uploadText(data.csvData, data.fileName || 'restored.csv');
-      const mergedEntries = Object.entries(data.mergedVariables || {});
-      for (const [name, meta] of mergedEntries) {
-        try { await dataApi.registerMerged(name, meta as object); } catch { /* skip bad entry */ }
-      }
-      // Use saved variables directly - don't fetch from backend which loses custom codes
-      importState({
-        variables: data.variables, tables: data.tables,
-        displayOptions: data.displayOptions ?? {}, activeTableId: data.activeTableId ?? null,
-        fileName: data.fileName ?? null, rowCount: uploadResult.row_count,
-        folders: data.folders ?? [],
-      });
-      setDataLoaded(true);
+      await applySessionPayload(data);
       setRestoreStatus({ loading: false, message: `Restored: ${data.fileName || fallbackName}` });
       setTimeout(() => setRestoreStatus(null), 3000);
     } else {
@@ -649,6 +748,7 @@ const Navigation: React.FC = () => {
 
   const handleOpen = async () => {
     opentabHandle.current = null;
+    setHasFileHandle(false);
     if (fsaSupported) {
       try {
         const showOpenFilePicker = (window as unknown as { showOpenFilePicker: (o: object) => Promise<FileSystemFileHandle[]> }).showOpenFilePicker;
@@ -656,6 +756,7 @@ const Navigation: React.FC = () => {
           types: [{ description: 'opentab session', accept: { 'application/json': ['.opentab'] } }],
         });
         opentabHandle.current = handle;
+        setHasFileHandle(true);
         const file = await handle.getFile();
         const text = await file.text();
         await restoreFromText(text, file.name);
@@ -690,7 +791,7 @@ const Navigation: React.FC = () => {
     file: File,
     result: { row_count: number },
     oldCsv: string,
-    oldMergedVars: Record<string, any>
+    oldMergedVars: Record<string, MergedVariableMeta>
   ) => {
     const newVars = await dataApi.getVariables();
     const mergedVarNames = new Set(Object.keys(oldMergedVars));
@@ -713,7 +814,7 @@ const Navigation: React.FC = () => {
       .map(k => `${k} (${variables[k].type} → ${newVars[k].type})`);
 
     const mergedVarsAffected = Object.entries(oldMergedVars)
-      .filter(([, meta]: [string, any]) => {
+      .filter(([, meta]: [string, MergedVariableMeta]) => {
         const sources: string[] = meta.source_columns || meta.source_variables || [];
         return sources.some(s => dropped.includes(s));
       })
@@ -750,8 +851,8 @@ const Navigation: React.FC = () => {
         return;
       }
       await prepareUpdateConfirm(file, result, oldCsv, oldMergedVars);
-    } catch (err: any) {
-      setRestoreStatus({ loading: false, message: 'Update failed: ' + (err.response?.data?.detail || err.message || 'Upload failed.') });
+    } catch (err: unknown) {
+      setRestoreStatus({ loading: false, message: 'Update failed: ' + getErrorMessage(err, 'Upload failed.') });
       setTimeout(() => setRestoreStatus(null), 5000);
       setUpdating(false);
     }
@@ -766,8 +867,8 @@ const Navigation: React.FC = () => {
     try {
       const result = await dataApi.uploadFile(file, sheet);
       await prepareUpdateConfirm(file, result, oldCsv, oldMergedVars);
-    } catch (err: any) {
-      setRestoreStatus({ loading: false, message: 'Update failed: ' + (err.response?.data?.detail || err.message || 'Upload failed.') });
+    } catch (err: unknown) {
+      setRestoreStatus({ loading: false, message: 'Update failed: ' + getErrorMessage(err, 'Upload failed.') });
       setTimeout(() => setRestoreStatus(null), 5000);
       setUpdating(false);
     }
@@ -786,11 +887,11 @@ const Navigation: React.FC = () => {
     for (const [name, meta] of Object.entries(oldMergedVars)) {
       try {
         if (meta.merge_operator) {
-          await dataApi.mergeCodes({ variables: meta.source_variables, new_variable_name: name, merge_operator: meta.merge_operator, description: meta.label });
+          await dataApi.mergeCodes({ variables: meta.source_variables ?? [], new_variable_name: name, merge_operator: meta.merge_operator, description: meta.label });
         } else if (!meta.syntax) {
-          await dataApi.mergeMR(name, meta.source_columns, meta.label);
+          await dataApi.mergeMR(name, meta.source_columns ?? [], meta.label);
         } else {
-          await dataApi.mergeVariables({ columns: meta.source_columns, new_variable_name: name, merge_type: 'binary' });
+          await dataApi.mergeVariables({ columns: meta.source_columns ?? [], new_variable_name: name, merge_type: 'binary' });
         }
       } catch {
         failedMergedVars.push(name);
@@ -835,7 +936,7 @@ const Navigation: React.FC = () => {
       <div className="flex items-center gap-3">
         {/* Logo — click to reset session */}
         <button
-          onClick={() => { if (window.confirm('Start a new session? All tables and data will be cleared.')) { resetSession(); opentabHandle.current = null; navigate('/build'); } }}
+          onClick={() => { if (window.confirm('Start a new session? All tables and data will be cleared.')) { resetSession(); opentabHandle.current = null; setHasFileHandle(false); sessionApi.clear().catch(() => {}); navigate('/build'); } }}
           className="flex items-center focus:outline-none"
           title="New session"
         >
@@ -879,12 +980,12 @@ const Navigation: React.FC = () => {
             <>
               <button
                 onClick={handleSave}
-                title={fsaSupported ? (opentabHandle.current ? 'Save (overwrite)' : 'Save') : 'Save (download)'}
+                title={fsaSupported ? (hasFileHandle ? 'Save (overwrite)' : 'Save') : 'Save (download)'}
                 className="px-2.5 py-1 text-xs text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
               >
                 save
               </button>
-              {fsaSupported && opentabHandle.current && (
+              {fsaSupported && hasFileHandle && (
                 <button
                   onClick={handleSaveAs}
                   title="Save as new file"
@@ -1129,7 +1230,7 @@ const WelcomeScreen: React.FC<{ onLoadSample: () => void; loading: boolean }> = 
             const uploadResult = await dataApi.uploadText(data.csvData, data.fileName || 'restored.csv');
             const mergedEntries = Object.entries(data.mergedVariables || {});
             for (const [name, meta] of mergedEntries) {
-              try { await dataApi.registerMerged(name, meta as object); } catch { /* skip bad entry */ }
+              try { await dataApi.registerMerged(name, meta as MergedVariableMeta); } catch { /* skip bad entry */ }
             }
             const { importState } = useStore.getState();
             importState({
@@ -1171,8 +1272,8 @@ const WelcomeScreen: React.FC<{ onLoadSample: () => void; loading: boolean }> = 
       mergeAndSetVariables(vars);
       setDataInfo(file.name, result.row_count);
       setDataLoaded(true);
-    } catch (e: any) {
-      const detail = e.response?.data?.detail || e.message || 'Upload failed.';
+    } catch (e: unknown) {
+      const detail = getErrorMessage(e, 'Upload failed.');
       setStatus({ type: 'error', message: detail });
     } finally {
       setUploading(false);
@@ -1193,8 +1294,8 @@ const WelcomeScreen: React.FC<{ onLoadSample: () => void; loading: boolean }> = 
       mergeAndSetVariables(vars);
       setDataInfo(file.name, result.row_count);
       setDataLoaded(true);
-    } catch (e: any) {
-      const detail = e.response?.data?.detail || e.message || 'Upload failed.';
+    } catch (e: unknown) {
+      const detail = getErrorMessage(e, 'Upload failed.');
       setStatus({ type: 'error', message: detail });
     } finally {
       setUploading(false);
@@ -1449,13 +1550,13 @@ const VariableList: React.FC = () => {
 
 // ─── Table List ───────────────────────────────────────────────────────────────
 const TableRow: React.FC<{
-  table: any;
+  table: Table;
   isActive: boolean;
   onActivate: () => void;
   onDelete: (e: React.MouseEvent) => void;
   onRename: (name: string) => void;
   onDuplicate: () => void;
-  folders: any[];
+  folders: Folder[];
   onMoveToFolder: (folderId: string | null) => void;
 }> = ({ table, isActive, onActivate, onDelete, onRename, onDuplicate, folders, onMoveToFolder }) => {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: `tbl-${table.id}` });
@@ -1479,7 +1580,7 @@ const TableRow: React.FC<{
     setEditing(false);
   };
 
-  const otherFolders = folders.filter((f: any) => f.id !== table.folderId);
+  const otherFolders = folders.filter((f) => f.id !== table.folderId);
 
   return (
     <div
@@ -1525,7 +1626,7 @@ const TableRow: React.FC<{
                 ⧉ duplicate
               </button>
               <div className="border-t border-zinc-200 dark:border-zinc-700 my-1" />
-              {otherFolders.map((f: any) => (
+              {otherFolders.map((f) => (
                 <button key={f.id} className="w-full text-left px-3 py-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-600 dark:text-zinc-400" onClick={() => { onMoveToFolder(f.id); setShowMenu(false); }}>
                   → {f.name}
                 </button>
@@ -1548,18 +1649,18 @@ const TableRow: React.FC<{
 };
 
 const FolderRow: React.FC<{
-  folder: any;
-  tables: any[];
+  folder: Folder;
+  tables: Table[];
   activeTableId: string | null;
   onActivate: (id: string) => void;
   onDeleteTable: (id: string, e: React.MouseEvent) => void;
   onRenameTable: (id: string, name: string) => void;
-  onDuplicateTable: (table: any) => void;
+  onDuplicateTable: (table: Table) => void;
   onMoveTable: (tableId: string, folderId: string | null) => void;
   onToggle: () => void;
   onRenameFolder: (name: string) => void;
   onDeleteFolder: () => void;
-  allFolders: any[];
+  allFolders: Folder[];
 }> = ({ folder, tables, activeTableId, onActivate, onDeleteTable, onRenameTable, onDuplicateTable, onMoveTable, onToggle, onRenameFolder, onDeleteFolder, allFolders }) => {
   const { isOver, setNodeRef } = useDroppable({ id: `fldr-${folder.id}` });
   const [editing, setEditing] = useState(false);
@@ -1610,7 +1711,7 @@ const FolderRow: React.FC<{
               drag tables here
             </div>
           ) : (
-            tables.map((t: any) => (
+            tables.map((t) => (
               <TableRow
                 key={t.id}
                 table={t}
@@ -1619,7 +1720,7 @@ const FolderRow: React.FC<{
                 onDelete={(e) => onDeleteTable(t.id, e)}
                 onRename={(name) => onRenameTable(t.id, name)}
                 onDuplicate={() => onDuplicateTable(t)}
-                folders={allFolders.filter((f: any) => f.id !== folder.id)}
+                folders={allFolders.filter((f) => f.id !== folder.id)}
                 onMoveToFolder={(fid) => onMoveTable(t.id, fid)}
               />
             ))
@@ -1632,17 +1733,17 @@ const FolderRow: React.FC<{
 
 // RootDropZone must be a child component so useDroppable registers with the inner DndContext
 const RootDropZone: React.FC<{
-  tables: any[];
+  tables: Table[];
   activeTableId: string | null;
   setActiveTable: (id: string) => void;
   deleteTable: (id: string) => void;
-  duplicateTable: (table: any) => void;
-  updateTable: (id: string, u: any) => void;
-  folders: any[];
+  duplicateTable: (table: Table) => void;
+  updateTable: (id: string, u: Partial<Table>) => void;
+  folders: Folder[];
   isDraggingAny: boolean;
 }> = ({ tables, activeTableId, setActiveTable, deleteTable, duplicateTable, updateTable, folders, isDraggingAny }) => {
   const { isOver, setNodeRef } = useDroppable({ id: 'fldr-root' });
-  const ungrouped = tables.filter((t: any) => !t.folderId);
+  const ungrouped = tables.filter((t) => !t.folderId);
   const showPlaceholder = isDraggingAny && ungrouped.length === 0;
 
   return (
@@ -1656,7 +1757,7 @@ const RootDropZone: React.FC<{
       {isOver && ungrouped.length === 0 && (
         <div className="text-xs text-blue-400 italic px-2 py-1.5">drop here to ungroup</div>
       )}
-      {ungrouped.map((t: any) => (
+      {ungrouped.map((t) => (
         <TableRow
           key={t.id}
           table={t}
@@ -1752,29 +1853,30 @@ const TableList: React.FC = () => {
       filter_items: [],
       weight_col: null,
       filter_def: null,
-      result: null as any,
+      result: null,
     };
     addTable(newTable);
     setActiveTable(newTable.id);
   };
 
-  const handleDuplicate = (table: any) => {
-    const deepClone = (obj: any): any => {
+  const handleDuplicate = (table: Table) => {
+    const deepClone = <T,>(obj: T): T => {
       if (obj === null || typeof obj !== 'object') return obj;
-      if (Array.isArray(obj)) return obj.map(deepClone);
-      const cloned: any = {};
-      for (const key in obj) {
+      if (Array.isArray(obj)) return obj.map(deepClone) as T;
+      const cloned: Record<string, unknown> = {};
+      for (const key of Object.keys(obj)) {
         if (key !== 'id' && key !== 'result') {
-          cloned[key] = deepClone(obj[key]);
+          cloned[key] = deepClone((obj as Record<string, unknown>)[key]);
         }
       }
-      return cloned;
+      return cloned as T;
     };
 
-    const duplicatedTable = {
+    const duplicatedTable: Table = {
+      ...deepClone(table),
       id: uuidv4().slice(0, 8),
       name: `${table.name} (copy)`,
-      ...deepClone(table),
+      result: null,
     };
     addTable(duplicatedTable);
     setActiveTable(duplicatedTable.id);
@@ -1932,7 +2034,7 @@ const NestingBuilderModal: React.FC<NestingBuilderModalProps> = ({ item, zoneTyp
     if (!activeTableId || !selectedParent) return;
     const varInfo = variables[varName];
     if (!varInfo?.codes?.length) return;
-    const allCodes = varInfo.codes.map((c: any) => c.code).join(',');
+    const allCodes = varInfo.codes.map((c) => c.code).join(',');
     nestItem(activeTableId, zoneType, selectedParent, { id: uuidv4(), variable: varName, codeDef: allCodes });
     setShowPicker(false);
     setSelectedParent(null);
@@ -1950,7 +2052,7 @@ const NestingBuilderModal: React.FC<NestingBuilderModalProps> = ({ item, zoneTyp
 
   const q = nestSearch.toLowerCase();
   const matches = Object.entries(variables).filter(([name, info]) =>
-    name.toLowerCase().includes(q) || ((info as any).name || '').toLowerCase().includes(q)
+    name.toLowerCase().includes(q) || (info.name || '').toLowerCase().includes(q)
   );
 
   return (
@@ -1991,8 +2093,8 @@ const NestingBuilderModal: React.FC<NestingBuilderModalProps> = ({ item, zoneTyp
                     className="w-full text-left px-3 py-1.5 text-xs hover:bg-blue-50 dark:hover:bg-blue-900/30 text-zinc-700 dark:text-zinc-300"
                   >
                     <span className="font-medium text-emerald-700 dark:text-emerald-400">{name}</span>
-                    {(info as any).label && (info as any).label !== name && (
-                      <span className="text-zinc-400 ml-1">({(info as any).label})</span>
+                    {info.label && info.label !== name && (
+                      <span className="text-zinc-400 ml-1">({info.label})</span>
                     )}
                   </button>
                 ))
@@ -2093,7 +2195,7 @@ const DraggableZoneItem: React.FC<{
 const DropZone: React.FC<{
   id: string;
   label: string;
-  items: any[];
+  items: DropItem[];
   onRemove: (id: string) => void;
   orientation: 'horizontal' | 'vertical';
   footer?: React.ReactNode;
@@ -2170,6 +2272,7 @@ const App: React.FC = () => {
   const [updateInfo, setUpdateInfo] = useState<{ current: string; latest: string } | null>(null);
   const [updateState, setUpdateState] = useState<'idle' | 'updating' | 'done' | 'error'>('idle');
   const [updateMessage, setUpdateMessage] = useState<string | null>(null);
+  const [restorePrompt, setRestorePrompt] = useState<{ fileName: string; payload: SessionPayload } | null>(null);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
   const handleDragStart = (event: DragStartEvent) => {
@@ -2178,7 +2281,7 @@ const App: React.FC = () => {
   };
   const handleDragCancel = () => setActiveDragId(null);
 
-  const handleDragEnd = (event: any) => {
+  const handleDragEnd = (event: DndDragEndEvent) => {
     setActiveDragId(null);
     const { active, over } = event;
     if (!over) return;
@@ -2207,8 +2310,8 @@ const App: React.FC = () => {
       const varInfo = variables[varName];
       if (varInfo?.codes?.length) {
         const visibleCodes = varInfo.codes
-          .filter((c: any) => c.visibility !== 'removed' && c.visibility !== 'hidden')
-          .map((c: any) => c.code);
+          .filter((c) => c.visibility !== 'removed' && c.visibility !== 'hidden')
+          .map((c) => c.code);
         const newItem: DropItem = {
           id: uuidv4(),
           variable: varName,
@@ -2230,10 +2333,10 @@ const App: React.FC = () => {
       const activeTable = tables.find(t => t.id === activeTableId);
       if (!activeTable) return;
       if (sourceZone === 'row' && targetZone === 'col') {
-        const item = activeTable.row_items.find((i: any) => i.id === itemId);
+        const item = activeTable.row_items.find((i) => i.id === itemId);
         if (item) { removeRowItem(activeTableId, itemId); addColItem(activeTableId, item); }
       } else if (sourceZone === 'col' && targetZone === 'row') {
-        const item = activeTable.col_items.find((i: any) => i.id === itemId);
+        const item = activeTable.col_items.find((i) => i.id === itemId);
         if (item) { removeColItem(activeTableId, itemId); addRowItem(activeTableId, item); }
       }
       return;
@@ -2249,7 +2352,7 @@ const App: React.FC = () => {
     }
 
     if (!varInfo.codes?.length) return;
-    const allCodes = varInfo.codes.map((c: any) => c.code).join(',');
+    const allCodes = varInfo.codes.map((c) => c.code).join(',');
 
     if (over.id === 'row-zone') addRowItem(activeTableId, { id: uuidv4(), variable: varName, codeDef: allCodes });
     else if (over.id === 'col-zone') addColItem(activeTableId, { id: uuidv4(), variable: varName, codeDef: allCodes });
@@ -2298,6 +2401,39 @@ const App: React.FC = () => {
     };
     checkUpdate();
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const checkSession = async () => {
+      try {
+        const { exists, session } = await sessionApi.load();
+        if (cancelled) return;
+        if (exists && session && !useStore.getState().dataLoaded) {
+          setRestorePrompt({ fileName: session.fileName || 'session', payload: session });
+        }
+      } catch {
+        // backend unavailable or load failed — silently skip
+      }
+    };
+    checkSession();
+    return () => { cancelled = true; };
+  }, []);
+
+  const handleRestoreSession = async () => {
+    if (!restorePrompt) return;
+    const { payload } = restorePrompt;
+    setRestorePrompt(null);
+    try {
+      await applySessionPayload(payload);
+    } catch (err) {
+      console.error('Restore failed', err);
+    }
+  };
+
+  const handleDismissSession = async () => {
+    setRestorePrompt(null);
+    sessionApi.clear().catch(() => {});
+  };
 
   const handleUpdate = async () => {
     setUpdateState('updating');
@@ -2360,6 +2496,25 @@ const App: React.FC = () => {
       <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd} onDragCancel={handleDragCancel}>
         <div className="h-screen flex flex-col bg-white dark:bg-zinc-950 font-mono">
           <Navigation />
+          {restorePrompt && (
+            <div className="flex items-center gap-3 px-4 py-1.5 bg-emerald-50 dark:bg-emerald-950 border-b border-emerald-200 dark:border-emerald-800 text-xs font-mono">
+              <span className="text-emerald-700 dark:text-emerald-300">
+                ↺ Restore previous session: {restorePrompt.fileName}
+              </span>
+              <button
+                onClick={handleRestoreSession}
+                className="text-white bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-600 px-2 py-0.5 rounded text-xs font-semibold"
+              >
+                Restore
+              </button>
+              <button
+                onClick={handleDismissSession}
+                className="text-emerald-600 dark:text-emerald-400 hover:text-emerald-800 dark:hover:text-emerald-200 underline"
+              >
+                Dismiss
+              </button>
+            </div>
+          )}
           {updateInfo && updateState === 'idle' && (
             <div className="flex items-center gap-3 px-4 py-1.5 bg-blue-50 dark:bg-blue-950 border-b border-blue-200 dark:border-blue-800 text-xs font-mono">
               <span className="text-blue-700 dark:text-blue-300">
@@ -2439,8 +2594,8 @@ const App: React.FC = () => {
               const itemId = parts[2];
               const activeTable = tables.find((t) => t.id === activeTableId);
               const item = zoneType === 'row'
-                ? activeTable?.row_items.find((i: any) => i.id === itemId)
-                : activeTable?.col_items.find((i: any) => i.id === itemId);
+                ? activeTable?.row_items.find((i) => i.id === itemId)
+                : activeTable?.col_items.find((i) => i.id === itemId);
               if (!item) return null;
               const displayName = variables[item.variable]?.label || item.variable;
               return (
@@ -2758,7 +2913,7 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
   const activeTable = tables.find((t) => t.id === activeTableId);
 
   const resolveCode = useCallback((variable: string, code: string): string => {
-    const codeObj = variables[variable]?.codes.find((c: any) => c.code === code);
+    const codeObj = variables[variable]?.codes.find((c) => c.code === code);
     const raw = codeObj?.syntax ?? `$${variable}/${code}`;
     return raw.replace(/\$([A-Za-z_][A-Za-z0-9_]*)\//g, (_, vn) => {
       let v = vn, depth = 0;
@@ -2771,34 +2926,13 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
     const v = variables[variable];
     if (!v) return [];
     return v.codes
-      .filter((c: any) => c.visibility !== 'removed' && c.visibility !== 'hidden')
-      .map((c: any) => c.code);
+      .filter((c) => c.visibility !== 'removed' && c.visibility !== 'hidden')
+      .map((c) => c.code);
   }, [variables]);
 
-  const getCodeLabel = useCallback((key: string, variable?: string, code?: string): string => {
-    if (variable && code) {
-      const codeObj = variables[variable]?.codes.find((c: any) => c.code === code);
-      if (codeObj) return codeObj.label || code;
-    }
-    for (const [varKey, vInfo] of Object.entries(variables)) {
-      const m = (vInfo.codes as any[]).find((c) => c.syntax && (c.isNew || c.isCustom) && resolveCode(varKey, c.code) === key);
-      if (m) return m.label;
-    }
-    for (const [varKey, vInfo] of Object.entries(variables)) {
-      const m = (vInfo.codes as any[]).find((c) => c.syntax && resolveCode(varKey, c.code) === key);
-      if (m) return m.label;
-    }
-    if (key.includes('.')) {
-      return key.split('.').map((part) => getCodeLabel(part)).join(' › ');
-    }
-    const parts = key.split('/');
-    if (parts.length !== 2) return key;
-    const [rawVarName, code_] = parts;
-    const variable_ = variables[rawVarName.startsWith('$') ? rawVarName.slice(1) : rawVarName];
-    if (!variable_) return code_;
-    const codeObj = variable_.codes.find((c: any) => c.code === code_);
-    return codeObj?.label || code_;
-  }, [variables, resolveCode]);
+  const getCodeLabel = useCallback((key: string, variable?: string, code?: string): string =>
+    resolveCodeLabel(key, variable, code, variables, resolveCode),
+    [variables, resolveCode]);
 
   const netRegistry = useMemo(() => buildNetRegistry(variables), [variables]);
   const codeRegistry = useMemo(() => buildCodeRegistry(variables), [variables]);
@@ -2850,16 +2984,16 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
           v = variables[v.sourceKey];
         }
         if (meanMappings.find(m => m.variable === targetName)) continue;
-        const scoredCodes = originalVar.codes.filter((c: any) => c.factor != null);
+        const scoredCodes = originalVar.codes.filter((c) => c.factor != null);
         if (scoredCodes.length > 0) {
           const codeScores: Record<string, number> = {};
-          scoredCodes.forEach((c: any) => { codeScores[c.code] = c.factor; });
+          scoredCodes.forEach((c) => { codeScores[c.code] = c.factor ?? 0; });
           meanMappings.push({ variable: targetName, codeScores });
         }
       }
 
       if (isGridMode && targetTable.grid_items) {
-        const gridVarNames = targetTable.grid_items.map((g: any) => g.variable);
+        const gridVarNames = targetTable.grid_items.map((g) => g.variable);
         const refMapping = meanMappings.find(m => gridVarNames.includes(m.variable));
         if (refMapping) {
           for (const varName of gridVarNames) {
@@ -2872,7 +3006,7 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
 
       const removedParts: string[] = [];
       Object.entries(variables).forEach(([varKey, info]) => {
-        const removed = info.codes.filter((c: any) => c.visibility === 'removed' && !c.isNet).map((c: any) => c.code);
+        const removed = info.codes.filter((c) => c.visibility === 'removed' && !c.isNet).map((c) => c.code);
         if (removed.length > 0) removedParts.push(`!${varKey}/${removed.join(',')}`);
       });
       const baseFilter = buildFilterDef(targetTable.filter_items);
@@ -2888,10 +3022,10 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
         colItemsForBackend = flattenItemsForBackend(effectiveColItems, getVisibleCodesList, '', resolveCode);
       }
 
-      const regularRowItems = effectiveRowItems.filter((item: any) => variables[item.variable]?.type !== 'scale');
-      const scaleRowItems = effectiveRowItems.filter((item: any) => variables[item.variable]?.type === 'scale');
+      const regularRowItems = effectiveRowItems.filter((item) => variables[item.variable]?.type !== 'scale');
+      const scaleRowItems = effectiveRowItems.filter((item) => variables[item.variable]?.type === 'scale');
       const flatRegularRows = flattenItemsForBackend(regularRowItems, getVisibleCodesList, '', resolveCode);
-      const scaleRows = scaleRowItems.map((item: any) => ({ variable: item.variable, codeDef: '__scale__' }));
+      const scaleRows = scaleRowItems.map((item) => ({ variable: item.variable, codeDef: '__scale__' }));
 
       const result = await computeApi.crosstab({
         row_items: [...flatRegularRows, ...scaleRows],
@@ -2906,8 +3040,8 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
       });
       setTableResult(targetId!, result);
       if (isActiveTable) setLocalTab('result');
-    } catch (e: any) {
-      if (!tableId) alert(`Error: ${e.message}`);
+    } catch (e: unknown) {
+      if (!tableId) alert(`Error: ${getErrorMessage(e, 'Unknown error')}`);
       else throw e;
     } finally {
       if (isActiveTable) setIsComputing(false);
@@ -2924,7 +3058,7 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
     for (let i = 0; i < runnable.length; i++) {
       const table = runnable[i];
       setRunAllMessage(`computing ${i + 1} of ${runnable.length}: ${table.name}`);
-      try { await handleGenerate(table.id); success++; } catch (e: any) { errors.push(`${table.name}: ${e.message}`); }
+      try { await handleGenerate(table.id); success++; } catch (e: unknown) { errors.push(`${table.name}: ${getErrorMessage(e, 'Unknown error')}`); }
     }
     setIsRunningAll(false);
     if (errors.length) alert(`${success} table(s) done. Failed:\n` + errors.join('\n'));
@@ -3073,7 +3207,7 @@ const BuildPage: React.FC<{ onLoadSample: () => void; loading: boolean }> = ({ o
                       const isGridMode = activeTable.grid_items && activeTable.grid_items.length > 0 && activeTable.row_items.length === 0;
 
                       let colHeaderRows, previewColPaths, previewRowPaths, previewRowLabels: string[], numHeaderRows;
-                      let scalePreviewRows: { label: string }[] = [];
+                      const scalePreviewRows: { label: string }[] = [];
 
                       if (isGridMode) {
                         // Grid mode: columns = grid items (show variable labels), rows = codes from first grid var
@@ -3446,7 +3580,7 @@ const ResultTab: React.FC = () => {
   const result = activeTable?.result;
 
   const resolveCode = useCallback((variable: string, code: string): string => {
-    const codeObj = variables[variable]?.codes.find((c: any) => c.code === code);
+    const codeObj = variables[variable]?.codes.find((c) => c.code === code);
     const raw = codeObj?.syntax ?? `$${variable}/${code}`;
     return raw.replace(/\$([A-Za-z_][A-Za-z0-9_]*)\//g, (_, vn) => {
       let v = vn, depth = 0;
@@ -3459,47 +3593,26 @@ const ResultTab: React.FC = () => {
     const v = variables[variable];
     if (!v) return [];
     return v.codes
-      .filter((c: any) => c.visibility !== 'removed' && c.visibility !== 'hidden')
-      .map((c: any) => c.code);
+      .filter((c) => c.visibility !== 'removed' && c.visibility !== 'hidden')
+      .map((c) => c.code);
   }, [variables]);
 
-  const getCodeLabel = useCallback((key: string, variable?: string, code?: string): string => {
-    if (variable && code) {
-      const codeObj = variables[variable]?.codes.find((c: any) => c.code === code);
-      if (codeObj) return codeObj.label || code;
-    }
-    for (const [varKey, vInfo] of Object.entries(variables)) {
-      const m = (vInfo.codes as any[]).find((c) => c.syntax && (c.isNew || c.isCustom) && resolveCode(varKey, c.code) === key);
-      if (m) return m.label;
-    }
-    for (const [varKey, vInfo] of Object.entries(variables)) {
-      const m = (vInfo.codes as any[]).find((c) => c.syntax && resolveCode(varKey, c.code) === key);
-      if (m) return m.label;
-    }
-    if (key.includes('.')) {
-      return key.split('.').map((part) => getCodeLabel(part)).join(' › ');
-    }
-    const parts = key.split('/');
-    if (parts.length !== 2) return key;
-    const [rawVarName, code_] = parts;
-    const variable_ = variables[rawVarName.startsWith('$') ? rawVarName.slice(1) : rawVarName];
-    if (!variable_) return code_;
-    const codeObj = variable_.codes.find((c: any) => c.code === code_);
-    return codeObj?.label || code_;
-  }, [variables, resolveCode]);
+  const getCodeLabel = useCallback((key: string, variable?: string, code?: string): string =>
+    resolveCodeLabel(key, variable, code, variables, resolveCode),
+    [variables, resolveCode]);
 
   const colAxisResult = useMemo(() =>
     activeTable?.col_items?.length
       ? buildAxisStructure(activeTable.col_items, getVisibleCodesList, getCodeLabel, resolveCode)
       : null,
-    [activeTable?.col_items, getVisibleCodesList, getCodeLabel, resolveCode]
+    [activeTable, getVisibleCodesList, getCodeLabel, resolveCode]
   );
 
   const rowLabels = useMemo(() =>
     activeTable?.row_items?.length
       ? buildAxisStructure(activeTable.row_items, getVisibleCodesList, getCodeLabel, resolveCode).axisLabels
       : [],
-    [activeTable?.row_items, getVisibleCodesList, getCodeLabel, resolveCode]
+    [activeTable, getVisibleCodesList, getCodeLabel, resolveCode]
   );
 
   if (!result) return (
@@ -4070,7 +4183,7 @@ const MergeVariablesModal: React.FC<MergeVariablesModalProps> = ({ onClose }) =>
           label: result.label,
           type: result.type,
           answerType: 'multiple_answer',
-          codes: result.codes.map((c: any) => ({
+          codes: (result.codes as VariableCode[]).map((c) => ({
             code: c.code,
             label: c.label,
             factor: null,
@@ -4100,7 +4213,7 @@ const MergeVariablesModal: React.FC<MergeVariablesModalProps> = ({ onClose }) =>
           label: result.label,
           type: result.type,
           answerType: 'multiple_answer',
-          codes: result.codes.map((c: any) => ({
+          codes: (result.codes as VariableCode[]).map((c) => ({
             code: c.code,
             label: c.label,
             factor: null,
@@ -4120,8 +4233,8 @@ const MergeVariablesModal: React.FC<MergeVariablesModalProps> = ({ onClose }) =>
         setVariables({ ...variables, [newVarName.trim()]: newVarInfo });
       }
       onClose();
-    } catch (err: any) {
-      setError(err?.response?.data?.detail || 'Merge failed');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Merge failed'));
     } finally {
       setLoading(false);
     }
@@ -4458,7 +4571,7 @@ const EditVariablesPage: React.FC = () => {
             <tr><td style={{ height: tableVirtualizer.getVirtualItems()[0]?.start ?? 0 }} /></tr>
             {tableVirtualizer.getVirtualItems().map((vi) => {
               const [key, info] = filteredEntries[vi.index];
-              const hiddenCount = info.codes.filter((c: any) => c.visibility === 'hidden').length;
+              const hiddenCount = info.codes.filter((c) => c.visibility === 'hidden').length;
               const isCustom = info.isCustom;
               const isSelected = selectedVariableKey === key;
               return (

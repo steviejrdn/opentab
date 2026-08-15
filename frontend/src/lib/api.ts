@@ -1,4 +1,5 @@
 import axios from 'axios';
+import type { Folder, DisplayOptions } from '../store/useStore';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8001';
 
@@ -104,6 +105,47 @@ export interface CrosstabResult {
   }> | null;
 }
 
+export interface NetCodeInfo {
+  variable: string;
+  label: string;
+  netOf: string[];
+  syntax: string;
+}
+
+export interface MergedVariableMeta {
+  label?: string;
+  type?: string;
+  answer_type?: string;
+  codes?: VariableCode[];
+  syntax?: string;
+  code_syntax?: string[];
+  merge_operator?: 'AND' | 'OR';
+  source_columns?: string[];
+  source_variables?: string[];
+  [key: string]: unknown;
+}
+
+export interface SessionPayload {
+  version?: number;
+  fileName?: string | null;
+  rowCount?: number;
+  csvData: string;
+  variables: Record<string, VariableInfo>;
+  tables: Table[];
+  folders?: Folder[];
+  displayOptions?: DisplayOptions;
+  activeTableId?: string | null;
+  mergedVariables?: Record<string, MergedVariableMeta>;
+}
+
+interface RawVariableInfo {
+  answer_type?: string;
+  response_count?: number;
+  base_count?: number;
+  is_valid?: boolean;
+  [key: string]: unknown;
+}
+
 export const dataApi = {
   uploadFile: async (file: File, sheet?: string) => {
     const formData = new FormData();
@@ -129,7 +171,7 @@ export const dataApi = {
     // Transform snake_case to camelCase for new fields
     const transformed: Record<string, VariableInfo> = {};
     for (const [key, varData] of Object.entries(variables)) {
-      const v = varData as any;
+      const v = varData as RawVariableInfo;
       transformed[key] = {
         ...v,
         answerType: v.answer_type || 'single_answer',
@@ -151,7 +193,7 @@ export const dataApi = {
     return response.data;
   },
 
-  getMergedVariables: async () => {
+  getMergedVariables: async (): Promise<Record<string, MergedVariableMeta>> => {
     const response = await api.get('/api/data/merged-variables');
     return response.data.variables;
   },
@@ -201,7 +243,7 @@ export const dataApi = {
     return response.data;
   },
 
-  getNetRegistry: async (): Promise<{ net_registry: Record<string, any>; name_to_key: Record<string, string> }> => {
+  getNetRegistry: async (): Promise<{ net_registry: Record<string, NetCodeInfo>; name_to_key: Record<string, string> }> => {
     const response = await api.get('/api/data/net-registry');
     return response.data;
   },
@@ -245,6 +287,32 @@ export const updateApi = {
   run: async (): Promise<{ status: string; message: string }> => {
     const response = await api.post('/api/update');
     return response.data;
+  },
+};
+
+export const sessionApi = {
+  save: async (session: unknown) => {
+    const response = await api.post('/api/session/save', session);
+    return response.data;
+  },
+
+  load: async (): Promise<{ exists: boolean; session: SessionPayload | null }> => {
+    const response = await api.get('/api/session/load');
+    return response.data;
+  },
+
+  clear: async () => {
+    const response = await api.delete('/api/session');
+    return response.data;
+  },
+
+  saveFlush: (session: unknown) => {
+    return fetch(`${API_URL}/api/session/save`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(session),
+      keepalive: true,
+    }).catch(() => {});
   },
 };
 
