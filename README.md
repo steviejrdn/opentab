@@ -36,6 +36,7 @@ Powered by [@catppuccin/tailwindcss](https://github.com/catppuccin/tailwindcss).
 > **Latest release:** beta v0.3.3 — 26 July 2026
 
 - **More accurate percentages** — crosstab percentage values now retain their full precision in API responses, so the frontend can correctly apply the selected number of decimal places.
+- 🐧 **Linux installer** — a one-click installer (`opentab_installer_linux.sh`) for Ubuntu/Kubuntu is now available. It installs opentab into an isolated virtual environment, adds a launcher and app menu entry, and creates a desktop shortcut.
 
 ### Previously in beta v0.3.2
 
@@ -115,13 +116,13 @@ sudo apt install python3 python3-venv git
 ### Option 1: One-Click Installer (Easiest — Recommended)
 
 **Windows:**
-1. Download **[opentab_installer.bat](https://github.com/steviejrdn/opentab/raw/v0.3.3/opentab_installer.bat)**
+1. Download **[opentab_installer.bat](https://github.com/steviejrdn/opentab/releases/download/beta_v0.3.3/opentab_installer.bat)**
 2. Double-click `opentab_installer.bat`
 3. It checks for Python and Git (opens download pages if missing), installs opentab, creates a desktop shortcut, and launches the app
 4. Click the install icon in your browser's address bar to add opentab as a standalone desktop app (PWA)
 
 **macOS:**
-1. Download **[opentab_installer.sh](https://github.com/steviejrdn/opentab/raw/v0.3.3/opentab_installer.sh)**
+1. Download **[opentab_installer.sh](https://github.com/steviejrdn/opentab/releases/download/beta_v0.3.3/opentab_installer.sh)**
 2. Open Terminal and run:
    ```bash
    bash ~/Downloads/opentab_installer.sh
@@ -129,7 +130,7 @@ sudo apt install python3 python3-venv git
 3. It checks for Python and Git, installs opentab, creates `~/Applications/opentab.app`, and launches the app
 
 **Linux (Ubuntu/Kubuntu):**
-1. Download **[opentab_installer_linux.sh](https://github.com/steviejrdn/opentab/raw/v0.3.3/opentab_installer_linux.sh)**
+1. Download **[opentab_installer_linux.sh](https://github.com/steviejrdn/opentab/releases/download/beta_v0.3.3/opentab_installer_linux.sh)**
 2. Open a terminal and run:
    ```bash
    bash ~/Downloads/opentab_installer_linux.sh
