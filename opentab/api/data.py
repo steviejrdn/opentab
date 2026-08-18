@@ -252,9 +252,6 @@ async def merge_codes(request: MergeCodesRequest):
         raise HTTPException(status_code=400, detail="merge_operator must be 'OR' or 'AND'.")
 
     df = data_store['df']
-    for var in request.variables:
-        if var not in df.columns:
-            raise HTTPException(status_code=400, detail=f"Variable '{var}' not found in data.")
 
     first_var = request.variables[0]
     first_cols = [c for c in df.columns if c.startswith(first_var + "_")]

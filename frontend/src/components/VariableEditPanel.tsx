@@ -112,11 +112,11 @@ const SyntaxBuilderModal: React.FC<SyntaxBuilderModalProps> = ({ variables, init
     if (cleanCodePart === '*') codeLabel = '* (any)';
     else if (cleanCodePart.includes('..')) {
       const [from, to] = cleanCodePart.split('..');
-      const fromCode = vInfo.codes?.find((c: any) => c.code === from);
-      const toCode = vInfo.codes?.find((c: any) => c.code === to);
+      const fromCode = vInfo.codes?.find((c) => c.code === from);
+      const toCode = vInfo.codes?.find((c) => c.code === to);
       codeLabel = `${fromCode?.label || from} .. ${toCode?.label || to}`;
     } else {
-      const code = vInfo.codes?.find((c: any) => c.code === cleanCodePart);
+      const code = vInfo.codes?.find((c) => c.code === cleanCodePart);
       codeLabel = code?.label || cleanCodePart;
     }
     return { varLabel, codeLabel };
@@ -172,7 +172,7 @@ const SyntaxBuilderModal: React.FC<SyntaxBuilderModalProps> = ({ variables, init
                     </button>
                     {isExpanded && (
                       <div className="px-3 pb-2 flex flex-wrap gap-1">
-                        {vInfo.codes?.filter((c: any) => c.visibility !== 'removed').map((c: any) => (
+                        {vInfo.codes?.filter((c) => c.visibility !== 'removed').map((c) => (
                           <button key={c.code} onClick={() => insertCode(key, vInfo.name || key, c.code)} className={`text-[10px] px-2 py-1 border rounded transition-colors ${notMode ? 'bg-red-50 dark:bg-red-900/30 border-red-200 dark:border-red-800 text-red-600 dark:text-red-400' : 'bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-800 text-blue-600 dark:text-blue-400'}`} title={`${c.code} — ${c.label}`}>
                             {notMode ? <span className="flex items-center gap-1"><span>{c.label}</span><span className="text-[8px] font-bold">NOT</span></span> : c.label}
                           </button>
@@ -262,7 +262,6 @@ const SyntaxBuilderModal: React.FC<SyntaxBuilderModalProps> = ({ variables, init
 const SortableCodeRow: React.FC<SortableCodeRowProps> = ({
   code,
   varKey,
-  varName: _varName,
   dataKey,
   isSelected,
   sortableId,
@@ -412,7 +411,14 @@ export const VariableEditPanel: React.FC<VariableEditPanelProps> = ({
 
   const [localDisplayName, setLocalDisplayName] = useState(variable.name || '');
   const [displayNameError, setDisplayNameError] = useState('');
-  useEffect(() => { setLocalDisplayName(variable.name || ''); setDisplayNameError(''); }, [variableKey, variable.name]);
+  const [prevVariableKey, setPrevVariableKey] = useState(variableKey);
+  const [prevVariableName, setPrevVariableName] = useState(variable.name);
+  if (prevVariableKey !== variableKey || prevVariableName !== variable.name) {
+    setPrevVariableKey(variableKey);
+    setPrevVariableName(variable.name);
+    setLocalDisplayName(variable.name || '');
+    setDisplayNameError('');
+  }
 
   const [selectedCodes, setSelectedCodes] = useState<string[]>([]);
   const [showNetInput, setShowNetInput] = useState(false);
@@ -646,7 +652,7 @@ export const VariableEditPanel: React.FC<VariableEditPanelProps> = ({
               <input
                 type="text"
                 value={variable.isCustom ? localDisplayName : (variable.name || '')}
-                onChange={(e) => { variable.isCustom && setLocalDisplayName(e.target.value); setDisplayNameError(''); }}
+                onChange={(e) => { if (variable.isCustom) setLocalDisplayName(e.target.value); setDisplayNameError(''); }}
                 onBlur={() => {
                   if (variable.isCustom && localDisplayName.trim() && localDisplayName !== variable.name) {
                     if (variables[localDisplayName.trim()]) {

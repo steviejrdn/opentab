@@ -31,14 +31,16 @@ Powered by [@catppuccin/tailwindcss](https://github.com/catppuccin/tailwindcss).
 
 ---
 
-## What's New — beta v0.3.3
+## What's New — beta v0.4.0
 
-> **Latest release:** beta v0.3.3 — 26 July 2026
+> **Latest release:** beta v0.4.0 — 16 August 2026
 
-- **More accurate percentages** — crosstab percentage values now retain their full precision in API responses, so the frontend can correctly apply the selected number of decimal places.
-- 🐧 **Linux installer** — a one-click installer (`opentab_installer_linux.sh`) for Ubuntu/Kubuntu is now available. It installs opentab into an isolated virtual environment, adds a launcher and app menu entry, and creates a desktop shortcut.
+- 💾 **Session persistence** — opentab now auto-saves your workspace server-side, so a restart, update, or crash no longer loses your data, tables, or edits. A "Restore previous session?" banner appears on the next launch.
+- 🧪 **Test suite** — added pytest coverage for the core logic (`code_parser`, `data_loader`, `tabulator`, `statistics`) and the API routers (`data`, `tables`, `compute`), plus a GitHub Actions CI workflow. Run with `pip install -e ".[dev]" && pytest tests/ -v`.
+- 📊 **Significance testing** — column-comparison letters (A/B/C) mark cells that are significantly *higher* than another banner column, with confidence tiers: lowercase = 90%, uppercase = 95%, uppercase + "+" = 99%. A **vs total** toggle adds ↑/↓ arrows for columns significantly higher/lower than the total (95%).
+- ⚖️ **Weighted & effective base** — when a weight column is set, tables report the weighted base (sum of weights) and effective sample size alongside the unweighted base.
 
-### Previously in beta v0.3.2
+### Previously in beta v0.3.3
 
 - 🚀 **One-click installer** — Download `opentab_installer.bat` (Windows), `opentab_installer.sh` (macOS), or `opentab_installer_linux.sh` (Linux) for a zero-terminal setup. The script checks for Python and Git, installs opentab, creates a desktop shortcut, and launches the app.
 - 🔘 **One-click update** — When a new version is detected, an "Update Now" button appears in the banner. Click it to upgrade and restart automatically.
@@ -61,6 +63,8 @@ Powered by [@catppuccin/tailwindcss](https://github.com/catppuccin/tailwindcss).
 - **Statistical Summaries** — Per-variable mean, standard error, standard deviation, and variance alongside frequency counts; scale/continuous variables output stat rows directly in the crosstab
 - **Filters** — Apply complex AND/OR filter expressions directly to any table
 - **Survey Weights** — Weight counts and statistics by any numeric column
+- **Significance testing** — column-comparison letters (higher-only) with 90/95/99% tiers, plus ↑/↓ arrows vs Total
+- **Weighted / effective base** — unweighted base, weighted base, and effective sample size
 - **Grid Mode** — Display a set of variables as a compact variable-grid table
 - **Export** — Copy or download results as `.xls` (single table or all tables at once)
 - **Session Save / Load** — Export and restore the full workspace as an `.opentab` file
@@ -448,6 +452,15 @@ This app is vibe coded using [Claude Code](https://claude.ai/code) and [OpenCode
 ---
 
 ## Changelog
+
+### beta v0.4.0 *(16 August 2026)*
+
+- **Feature:** Session persistence — the workspace is auto-saved server-side and can be restored via a "Restore previous session?" prompt after a restart, update, or crash
+- **Feature:** Test suite — pytest coverage for core logic (`code_parser`, `data_loader`, `tabulator`, `statistics`) and API routers (`data`, `tables`, `compute`), plus a GitHub Actions CI workflow
+- **Feature:** Significance testing — higher-only column-comparison letters with confidence tiers (lowercase = 90%, uppercase = 95%, uppercase + "+" = 99%), plus a "vs total" toggle showing ↑/↓ arrows (95%) for columns significantly higher/lower than the total
+- **Feature:** Weighted & effective base — crosstab responses now report weighted base (sum of weights) and effective base ((Σw)² / Σw²) when a weight column is set
+- **Fix:** Remove dead code (`merge_codes_or_and`) and relax the over-strict variable check in the code-merge endpoint so it works with spread-format MA data
+- **Chore:** Switch test dependency from `httpx` to `httpx2` (starlette migration)
 
 ### beta v0.3.3 *(26 July 2026)*
 

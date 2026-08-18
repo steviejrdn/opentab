@@ -7,6 +7,7 @@ from fastapi.responses import FileResponse
 from .api.data import router as data_router
 from .api.tables import router as tables_router
 from .api.compute import router as compute_router
+from .api.session import router as session_router
 from .update import run_update
 
 app = FastAPI(title="opentab_ API")
@@ -21,6 +22,7 @@ app.add_middleware(
 app.include_router(data_router, prefix="/api/data")
 app.include_router(tables_router, prefix="/api/tables")
 app.include_router(compute_router, prefix="/api/compute")
+app.include_router(session_router, prefix="/api/session")
 
 @app.get("/api/version")
 def get_version():

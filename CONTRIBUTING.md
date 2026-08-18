@@ -63,7 +63,7 @@ git commit -m "feat: add code validation for crosstabs"
 ### Backend
 Backend tests use pytest:
 ```bash
-pip install pytest pytest-asyncio
+pip install -e ".[dev]"
 pytest tests/ -v
 ```
 
