@@ -74,25 +74,44 @@ REM ── Find opentab package directory for icon ──
 set "OPENTAB_DIR="
 for /f "delims=" %%i in ('python -c "import opentab, os; print(os.path.dirname(opentab.__file__))" 2^>nul') do set "OPENTAB_DIR=%%i"
 
-REM ── Create Desktop Shortcut ──
+REM ── Create hidden launcher and Desktop Shortcut ──
 echo.
 echo Creating desktop shortcut...
 if defined OPENTAB_EXE (
-    if defined OPENTAB_DIR (
-        set "ICON=!OPENTAB_DIR!\static\opentab_icon.ico"
-        if exist "!ICON!" (
-            powershell -Command "$d=[Environment]::GetFolderPath('Desktop'); $ws=New-Object -ComObject WScript.Shell; $s=$ws.CreateShortcut([io.path]::Combine($d,'opentab.lnk')); $s.TargetPath='!OPENTAB_EXE!'; $s.Arguments='!SHORTCUT_ARGS!'; $s.WorkingDirectory=$d; $s.IconLocation='!ICON!'; $s.Save(); exit 0"
-            if !errorlevel! equ 0 ( echo [OK] Shortcut created on your desktop with opentab icon. ) else ( echo [WARN] Shortcut created but icon may not display. )
+    if defined LOCALAPPDATA (
+        set "LAUNCHER_DIR=!LOCALAPPDATA!\OpenTab"
+        set "LAUNCHER_VBS=!LAUNCHER_DIR!\opentab_hidden_launcher.vbs"
+        if not exist "!LAUNCHER_DIR!\" mkdir "!LAUNCHER_DIR!" >nul 2>&1
+        if exist "!LAUNCHER_DIR!\" (
+            REM Pass values through the environment so paths containing spaces or
+            REM PowerShell metacharacters are not interpolated into the script.
+            set "OPENTAB_LAUNCH_EXE=!OPENTAB_EXE!"
+            set "OPENTAB_LAUNCH_ARGS=!SHORTCUT_ARGS!"
+            set "OPENTAB_LAUNCHER=!LAUNCHER_VBS!"
+            powershell -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference='Stop'; $exe=$env:OPENTAB_LAUNCH_EXE; $argLine=$env:OPENTAB_LAUNCH_ARGS; $q=[string][char]34; $vbsExe=$exe.Replace($q,$q+$q); $vbsArgs=$argLine.Replace($q,$q+$q); $commandLine='commandLine = '+$q+$q+$q+$q+' & '+$q+$vbsExe+$q+' & '+$q+$q+$q+$q+' & '+$q+' '+$q+' & '+$q+$vbsArgs+$q; $lines=@('Option Explicit','Dim shell, commandLine, exitCode','Set shell = CreateObject('+$q+'WScript.Shell'+$q+')',$commandLine,'Do','    exitCode = shell.Run(commandLine, 0, True)','    WScript.Sleep 5000','Loop'); Set-Content -LiteralPath $env:OPENTAB_LAUNCHER -Value $lines -Encoding ASCII"
+            if !errorlevel! neq 0 (
+                echo [WARN] Could not create hidden launcher. Skipping shortcut.
+            ) else (
+                set "ICON="
+                if defined OPENTAB_DIR set "ICON=!OPENTAB_DIR!\static\opentab_icon.ico"
+                set "OPENTAB_LAUNCH_ICON=!ICON!"
+                set "OPENTAB_LAUNCHER=!LAUNCHER_VBS!"
+                powershell -NoProfile -Command "$ErrorActionPreference='Stop'; $d=[Environment]::GetFolderPath('Desktop'); $ws=New-Object -ComObject WScript.Shell; $s=$ws.CreateShortcut([IO.Path]::Combine($d,'opentab.lnk')); $s.TargetPath=(Join-Path $env:WINDIR 'System32\wscript.exe'); $s.Arguments='//nologo ' + [char]34 + $env:OPENTAB_LAUNCHER + [char]34; $s.WorkingDirectory=$d; if ($env:OPENTAB_LAUNCH_ICON -and (Test-Path -LiteralPath $env:OPENTAB_LAUNCH_ICON)) { $s.IconLocation=$env:OPENTAB_LAUNCH_ICON }; $s.Save(); exit 0"
+                if !errorlevel! equ 0 (
+                    if defined ICON (
+                        if exist "!ICON!" (echo [OK] Shortcut created on your desktop with opentab icon.) else (echo [WARN] Shortcut created but icon may not display.)
+                    ) else (
+                        echo [OK] Shortcut created on your desktop.
+                    )
+                ) else (
+                    echo [WARN] Could not create the desktop shortcut.
+                )
+            )
         ) else (
-            echo [WARN] Icon file not found at: !ICON!
-            echo        Creating shortcut without icon.
-            powershell -Command "$d=[Environment]::GetFolderPath('Desktop'); $ws=New-Object -ComObject WScript.Shell; $s=$ws.CreateShortcut([io.path]::Combine($d,'opentab.lnk')); $s.TargetPath='!OPENTAB_EXE!'; $s.Arguments='!SHORTCUT_ARGS!'; $s.WorkingDirectory=$d; $s.Save(); exit 0"
-            echo [OK] Shortcut created on your desktop.
+            echo [WARN] Could not create launcher directory. Skipping shortcut.
         )
     ) else (
-        echo [WARN] Could not determine opentab package path. Creating shortcut without icon.
-        powershell -Command "$d=[Environment]::GetFolderPath('Desktop'); $ws=New-Object -ComObject WScript.Shell; $s=$ws.CreateShortcut([io.path]::Combine($d,'opentab.lnk')); $s.TargetPath='!OPENTAB_EXE!'; $s.Arguments='!SHORTCUT_ARGS!'; $s.WorkingDirectory=$d; $s.Save(); exit 0"
-        echo [OK] Shortcut created on your desktop.
+        echo [WARN] LOCALAPPDATA is not set. Skipping shortcut.
     )
 ) else (
     echo [WARN] Could not find opentab or python executable. Skipping shortcut.
