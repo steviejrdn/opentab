@@ -120,13 +120,13 @@ sudo apt install python3 python3-venv git
 ### Option 1: One-Click Installer (Easiest — Recommended)
 
 **Windows:**
-1. Download **[opentab_installer.bat](https://github.com/steviejrdn/opentab/releases/download/beta_v0.3.3/opentab_installer.bat)**
+1. Download **[opentab_installer.bat](https://github.com/steviejrdn/opentab/releases/download/beta_v0.4.0/opentab_installer.bat)**
 2. Double-click `opentab_installer.bat`
 3. It checks for Python and Git (opens download pages if missing), installs opentab, creates a desktop shortcut, and launches the app
 4. Click the install icon in your browser's address bar to add opentab as a standalone desktop app (PWA)
 
 **macOS:**
-1. Download **[opentab_installer.sh](https://github.com/steviejrdn/opentab/releases/download/beta_v0.3.3/opentab_installer.sh)**
+1. Download **[opentab_installer.sh](https://github.com/steviejrdn/opentab/releases/download/beta_v0.4.0/opentab_installer.sh)**
 2. Open Terminal and run:
    ```bash
    bash ~/Downloads/opentab_installer.sh
@@ -134,7 +134,7 @@ sudo apt install python3 python3-venv git
 3. It checks for Python and Git, installs opentab, creates `~/Applications/opentab.app`, and launches the app
 
 **Linux (Ubuntu/Kubuntu):**
-1. Download **[opentab_installer_linux.sh](https://github.com/steviejrdn/opentab/releases/download/beta_v0.3.3/opentab_installer_linux.sh)**
+1. Download **[opentab_installer_linux.sh](https://github.com/steviejrdn/opentab/releases/download/beta_v0.4.0/opentab_installer_linux.sh)**
 2. Open a terminal and run:
    ```bash
    bash ~/Downloads/opentab_installer_linux.sh
