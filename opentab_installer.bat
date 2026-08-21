@@ -88,7 +88,9 @@ if defined OPENTAB_EXE (
             set "OPENTAB_LAUNCH_EXE=!OPENTAB_EXE!"
             set "OPENTAB_LAUNCH_ARGS=!SHORTCUT_ARGS!"
             set "OPENTAB_LAUNCHER=!LAUNCHER_VBS!"
-            powershell -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference='Stop'; $exe=$env:OPENTAB_LAUNCH_EXE; $argLine=$env:OPENTAB_LAUNCH_ARGS; $q=[string][char]34; $vbsExe=$exe.Replace($q,$q+$q); $vbsArgs=$argLine.Replace($q,$q+$q); $commandLine='commandLine = '+$q+$q+$q+$q+' & '+$q+$vbsExe+$q+' & '+$q+$q+$q+$q+' & '+$q+' '+$q+' & '+$q+$vbsArgs+$q; $lines=@('Option Explicit','Dim shell, commandLine, exitCode','Set shell = CreateObject('+$q+'WScript.Shell'+$q+')',$commandLine,'Do','    exitCode = shell.Run(commandLine, 0, True)','    WScript.Sleep 5000','Loop'); Set-Content -LiteralPath $env:OPENTAB_LAUNCHER -Value $lines -Encoding ASCII"
+            REM Keep this VBScript line literal instead of assembling its quotes in PowerShell.
+            set "OPENTAB_VBS_CREATE_OBJECT=Set shell = CreateObject("WScript.Shell")"
+            powershell -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference='Stop'; $exe=$env:OPENTAB_LAUNCH_EXE; $argLine=$env:OPENTAB_LAUNCH_ARGS; $q=[string][char]34; $vbsExe=$exe.Replace($q,$q+$q); $vbsArgs=$argLine.Replace($q,$q+$q); $commandLine='commandLine = '+$q+$q+$q+$q+' & '+$q+$vbsExe+$q+' & '+$q+$q+$q+$q+' & '+$q+' '+$q+' & '+$q+$vbsArgs+$q; $lines=@('Option Explicit','Dim shell, commandLine, exitCode',$env:OPENTAB_VBS_CREATE_OBJECT,$commandLine,'Do','    exitCode = shell.Run(commandLine, 0, True)','    WScript.Sleep 5000','Loop'); Set-Content -LiteralPath $env:OPENTAB_LAUNCHER -Value $lines -Encoding ASCII"
             if !errorlevel! neq 0 (
                 echo [WARN] Could not create hidden launcher. Skipping shortcut.
             ) else (
